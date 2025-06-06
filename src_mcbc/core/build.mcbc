@@ -1,0 +1,60 @@
+# MCCP Behavior Code
+
+## Module: mccp_toolchain.core.build
+
+### Overview
+- Purpose: Manage and orchestrate the core transformation processes within the MCCP toolchain, facilitating the flow of information and code generation between different architectural layers.
+- Responsibilities:
+    - Define and manage the steps involved in the forward build process (requirements -> behavior -> pseudo -> target code).
+    - Define and manage the steps involved in the reverse build process (target code -> pseudo -> behavior -> requirements).
+    - Coordinate the use of various services (file manager, symbol manager, configuration manager, LLM client, parsers) for each transformation step.
+    - Execute layer-specific transformations.
+- Interactions: Heavily interacts with `mccp.config` for build rules and layer mappings, `mccp.file_manager` for file access, `mccp.symbols` for symbol management, `core.llm` for AI-driven transformations, and `mccp.parsers` for content parsing and generation.
+
+### Components
+
+#### Class: BuildOrchestrator
+- Description: Acts as the central controller for build operations. It defines the sequence of transformations required to move from one layer to another and ensures that each step is executed correctly, coordinating the activities of other modules.
+- Behaviors:
+    - Initialization (`__init__`):
+        - Purpose: Configure the orchestrator with access to all necessary services required to perform build steps.
+        - Process: Accepts instances of core managers and clients (config, file, symbol, LLM) and a collection of parser instances. Stores these references for later use in coordinating build tasks.
+        - Dependencies: Requires instances of `mccp_toolchain.mccp.config.ConfigManager`, `mccp_toolchain.mccp.file_manager.FileManager`, `mccp_toolchain.mccp.symbols.SymbolTableManager`, `mccp_toolchain.core.llm.LLMClient`, and a collection of `mccp_toolchain.mccp.parsers` instances.
+    - Run Forward Build (`run_forward_build`):
+        - Purpose: Execute the structured sequence of transformations from a higher-level layer to a lower-level layer, typically starting from requirements or behavior code and moving towards target code.
+        - Process: Determines the necessary intermediate steps based on the specified start and end layers and the configured build rules. For each step (e.g., `.mcbc` to `.mcpc`), it identifies the relevant input files, output files, build rule, and necessary services (parsers, LLM). It then delegates the actual transformation for each file to a `LayerTransformer` instance. Manages the overall flow, including loading/saving symbols and configuration as needed between steps. Reports success or failure of the overall process.
+        - Input: Project root path (`project_path`), the starting layer identifier (`start_layer`), and the ending layer identifier (`end_layer`).
+        - Output: A boolean indicating whether the build process completed successfully.
+        - Interactions: Coordinates multiple calls to `mccp_toolchain.core.build.LayerTransformer` and potentially file/symbol management operations.
+    - Run Reverse Build (`run_reverse_build`):
+        - Purpose: Execute the sequence of transformations from a lower-level layer to a higher-level layer, typically starting from target code and moving towards behavior code or requirements. (Note: Marked as frozen/pending implementation in symbols).
+        - Process: (Planned) Similar to forward build, but follows the reverse sequence of layers. Identifies necessary steps (e.g., target code to `.mcpc`, `.mcpc` to `.mcbc`). Delegates transformations to `LayerTransformer` instances. Coordinates file and symbol management updates based on reverse engineering insights. Reports success or failure.
+        - Input: Project root path (`project_path`), the starting layer identifier (`start_layer`), and the ending layer identifier (`end_layer`).
+        - Output: A boolean indicating whether the reverse build process completed successfully (when implemented).
+        - Interactions: (Planned) Coordinates calls to `mccp_toolchain.core.build.LayerTransformer` and file/symbol management operations, focusing on extracting structure and meaning.
+
+#### Class: LayerTransformer
+- Description: Performs the concrete task of transforming content from a single source file in one layer to a target file in another layer, typically involving an LLM call.
+- Behaviors:
+    - Initialization (`__init__`):
+        - Purpose: Set up the transformer with the specific services and parsers needed for a particular layer-to-layer conversion.
+        - Process: Accepts instances of the config, file, symbol, and LLM clients, along with specific parsers for the source and target file formats. Stores these references.
+        - Dependencies: Requires instances of `mccp_toolchain.mccp.config.ConfigManager`, `mccp_toolchain.mccp.file_manager.FileManager`, `mccp_toolchain.mccp.symbols.SymbolTableManager`, `mccp_toolchain.core.llm.LLMClient`, and appropriate parser instances (from `mccp_toolchain.mccp.parsers`).
+    - Transform (`transform`):
+        - Purpose: Execute the complete process of reading a source file, preparing context, invoking the LLM for transformation, processing the LLM's response, potentially updating symbols, and writing the result to a target file.
+        - Process: Reads the `source_file_path` using the file manager. Uses the configured build rule key to get LLM prompt instructions, input/output formats, etc. from the config manager. Retrieves relevant symbol data from the symbol manager. Constructs a detailed prompt including source content, symbols, config, and formatting requirements. Calls the LLM client's `generate_content` method with the prompt and context. Receives and potentially parses the LLM response. Updates the symbol table manager based on changes requested by the LLM or inferred from the generated content (respecting `is_frozen`). Writes the generated content to the `target_file_path` using the file manager. Reports success or failure of the transformation.
+        - Input: Paths for the source file (`source_file_path`) and target file (`target_file_path`), and a key identifying the specific build rule from the configuration (`build_rule_key`).
+        - Output: A boolean indicating whether the transformation was successful.
+        - Interactions: Orchestrates calls to `file_manager` (read/write), `config_manager` (get rules), `symbol_manager` (get/update symbols), `llm_client` (generate/parse), and potentially `parsers` (for source/target content processing).
+
+### Constants
+
+#### Constant: BUILD_LAYERS
+- Description: Defines the sequence and mapping of the distinct architectural layers recognized by the build system (e.g., requirements, behavior code, pseudo code, target code).
+- Usage: Used by the `BuildOrchestrator` to understand the flow and identify intermediate steps during forward and reverse builds.
+- Relation: Directly corresponds to the `layer_mapping` section in `mccp_config.json`.
+
+#### Constant: BUILD_RULES
+- Description: Defines the keys used to identify specific transformation rules within the configuration (e.g., `md_to_mcbc`, `mcbc_to_mcpc`, `mcpc_to_py`).
+- Usage: Used by the `BuildOrchestrator` and `LayerTransformer` to look up the correct prompts, input/output extensions, and other settings for a given transformation step from the `mccp_config.json`.
+- Relation: Directly corresponds to the keys within the `build_rules` and `reverse_build_rules` sections in `mccp_config.json`.

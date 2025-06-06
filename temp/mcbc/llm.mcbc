@@ -1,0 +1,46 @@
+# MCCP行为代码
+
+## 模块：mccp_toolchain.core.llm
+
+### 概述
+- 目的：将mccp-toolchain与大型语言模型（LLMs）集成，以实现架构层之间内容的AI驱动转换。
+- 职责：
+    - 管理与配置的LLM服务的连接和交互。
+    - 生成包含LLM所需所有上下文的结构化提示。
+    - 向LLM发送提示并接收响应。
+    - 解析或验证LLM文本响应的格式。
+- 交互：主要与`mccp.config`交互以获取LLM设置，并与`mccp.symbols`交互以在提示中包含符号信息。由`core.build.LayerTransformer`使用以执行实际转换。依赖Langchain库以实现底层LLM通信。
+
+### 组件
+
+#### 类：LLMClient
+- 描述：封装与大型语言模型通信逻辑的服务客户端，抽象底层LLM框架（Langchain）的细节。
+- 行为：
+    - 初始化（`__init__`）：
+        - 目的：根据项目设置配置LLM客户端，并准备连接到特定的LLM模型。
+        - 过程：从提供的配置管理器中读取LLM特定的配置（如模型名称、API URL、API密钥）。使用指定的框架（Langchain）设置底层LLM交互对象。
+        - 依赖项：需要`mccp_toolchain.mccp.config.ConfigManager`实例以获取设置，并使用`langchain`框架的库。
+    - 生成内容（`generate_content`）：
+        - 目的：向LLM发送结构化提示和附加上下文，并获取生成的文本响应。
+        - 过程：将准备好的提示和上下文（可能包括源内容、配置、符号）传递给通过底层框架（Langchain）配置的LLM。处理通信协议并等待LLM的输出。
+        - 输入：要发送的提示字符串（`prompt`）以及包含补充上下文数据的字典（`context`）。
+        - 输出：从LLM接收到的原始文本响应（`str`）。
+        - 依赖项：使用`langchain`框架的提示和链对象（`langchain.prompts`、`langchain.chains`）。
+    - 解析响应（`parse_response`）：
+        - 目的：处理LLM的原始文本输出，以验证其格式或根据预期目标格式提取结构化数据。
+        - 过程：根据指定的目标格式（例如，'mcbc'、'mcpc'、'python_code'）检查`response_text`。这可能涉及检查特定的Markdown结构、JSON格式（对于MCBC/MCPC）或解析代码语法。它还可能涉及对预期结构的基本验证。
+        - 输入：来自LLM的原始文本响应（`response_text`）以及指示预期格式的字符串（`target_format`）。
+        - 输出：解析内容的结构化表示（例如，字典或代码AST）或经过验证的文本本身。返回一个对象，可能是字符串、字典或其他结构，具体取决于格式。
+
+#### 类：PromptGenerator
+- 描述：负责组装将发送给LLM的完整详细提示字符串，包含转换任务所需的所有信息。
+- 行为：
+    - 初始化（`__init__`）：
+        - 目的：通过提供对配置管理器的访问来准备提示生成器。
+        - 过程：存储对配置管理器的引用，其中包含提示模板和其他提示构建所需的设置。
+    - 生成提示（`generate_prompt`）：
+        - 目的：通过将配置中的基础指令模板与当前转换步骤相关的特定上下文数据相结合，创建一个全面的提示。
+        - 过程：从配置管理器中检索给定`build_rule_key`的基础提示模板。将`source_content`、相关的`symbols`数据和整体`config`纳入模板。将这些片段格式化为一个连贯的提示字符串，旨在引导LLM的生成朝着期望的输出格式和内容方向发展。
+        - 输入：识别构建规则的键（`build_rule_key`）、源文件的内容（`source_content`）、相关的符号数据（`symbols`）以及完整的项目配置（`config`）。
+        - 输出：准备发送给LLM的完整格式化提示字符串（`str`）。
+        - 依赖项：依赖于`mccp_toolchain.mccp.config.ConfigManager`以检索提示模板和配置详细信息。

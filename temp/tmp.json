@@ -1,0 +1,52 @@
+{
+    "project_name": "mccp-toolchain",
+    "project_version": "0.1.0",
+    "target_language": "python",
+    "layer_mapping": {
+        "requirements_dir": "requirements",
+        "behavior_code_dir": "src_mcbc",
+        "pseudo_code_dir": "src_mcpc",
+        "target_code_dir": "mccp_toolchain"
+    },
+    "symbol_table_root": "mccp_symbols",
+    "file_naming_convention": "snake_case",
+    "build_rules": {
+        "md_to_mcbc": {
+            "input_extension": ".md",
+            "output_extension": ".mcbc",
+            "llm_prompt": "你是一个专业的软件需求分析师和结构化语言专家。你的任务是将用户提供的自然语言软件需求文档（Markdown格式）转换为MCCP行为描述代码（.mcbc格式）。从Markdown文档中提取核心功能、模块划分、每个模块或组件的职责、关键行为以及非功能性需求。将这些信息结构化地组织到.mcbc文件中。\n\n.mcbc文件应该清晰地描述系统的各个组成部分（模块、组件）以及它们的功能或行为。\n\n关注点：\n1.  **模块/组件识别:** 根据需求文档识别主要的功能区或技术组件（如UI、核心逻辑、解析器、符号管理器等）。\n2.  **行为/功能描述:** 为每个模块或组件提炼出具体的行为或功能点。描述应该清晰、简洁。\n3.  **输入/输出（初步）:** 如果需求文档中暗示了某个行为的输入或输出，请在描述中初步提及。\n4.  **非功能性需求:** 识别性能、安全性、代码规范、可维护性等非功能性需求，并在适当的部分或单独列出。\n5.  **结构化:** 按照.mcbc预期的结构进行组织。保持一致性。\n6.  **命名:** 遵循 snake_case 命名约定。\n\n提供源Markdown内容作为输入，输出结构化的.mcbc内容。"
+        },
+        "mcbc_to_mcpc": {
+            "input_extension": ".mcbc",
+            "output_extension": ".mcpc",
+            "llm_prompt": "你是一个高级软件设计师和符号逻辑专家。你的任务是将用户提供的MCCP行为描述代码（.mcbc格式）转换为MCCP符号-伪代码（.mcpc格式）。此过程需要严格参考并利用分布式符号表。\n\n从.mcbc文件中提取行为描述，并将其转化为更接近代码结构的伪代码。\n\n关键要求：\n1.  **符号集成:** 查阅提供的符号表（`mccp_symbols_*.json`）。如果某个行为、数据类型、变量或函数在符号表中已有定义（特别是已标记 `is_frozen: true` 的符号），必须优先使用其对应的符号名。如果需要新的符号，请在伪代码中明确表示其意图，以便后续工具更新符号表。\n2.  **符号定义:** 在伪代码中清晰地表达函数签名（使用符号名）、数据结构（使用符号名）和关键变量（使用符号名）。新的概念或结构应使用临时的、描述性的符号名，或在伪代码中明确标注需要新符号。\n3.  **逻辑流程:** 将行为描述转化为明确的伪代码步骤，包括条件判断、循环、函数调用、对象交互等。确保逻辑流程清晰、易于理解。\n4.  **错误处理:** 根据.mcbc中可能暗示的错误处理需求，在伪代码中设计基本的错误处理机制（如检查输入、处理异常情况）。\n5.  **结构化:** 按照.mcpc预期的结构进行组织，通常对应模块、类、函数等层级。保持与.mcbc模块结构的对应关系。\n6.  **命名:** 遵循 snake_case 命名约定，尤其是在定义新的符号或伪代码结构时。\n\n提供源.mcbc内容、相关的符号表内容（JSON格式）作为输入，输出结构化的.mcpc内容。"
+        },
+        "mcpc_to_py": {
+            "input_extension": ".mcpc",
+            "output_extension": ".py",
+            "llm_prompt": "你是一个资深的Python软件工程师。你的任务是将用户提供的MCCP符号-伪代码（.mcpc格式）转换为高质量、符合规范的Python源代码。此过程需要严格参考分布式符号表，并且必须遵守Python的最佳实践和规范。\n\n关键要求：\n1.  **代码翻译:** 将.mcpc中的伪代码逻辑精确地翻译成功能性的Python代码。\n2.  **符号使用:** 正确使用符号表中定义的符号来命名函数、变量、类、常量等。确保符号与代码中的实现一致。\n3.  **代码规范:** 严格遵循PEP8规范。代码必须格式整洁、可读性强、符合Python习惯用法。\n4.  **注释与文档:** 为生成的Python代码添加详细、准确的Docstrings（针对模块、类、函数）和必要的行内注释，解释复杂的逻辑或关键的设计选择。Docstrings应遵循 reST 或 Google 风格。\n5.  **模块化与可测试性:** 按照.mcpc和符号表中体现的结构，将Python代码组织为独立的模块和类，以提高可维护性和可测试性。考虑单元测试的设计。\n6.  **框架集成:** 如果伪代码涉及UI（如通过符号引用的 PyQt 组件）或LLM交互（如通过符号引用的 Langchain 调用），请生成使用对应框架的代码结构和调用。例如，生成继承自 QWidget 的类，或使用 Langchain 库的函数。\n7.  **符号冻结:** 绝对不能修改符号表中标记为 `is_frozen: true` 的符号对应的现有代码段。只生成或修改非冻结部分的代码，并确保与冻结代码的接口兼容。\n8.  **文件结构:** 根据.mcpc和mccp_config.json中的文件映射（`layer_mapping` -> `target_code_dir`）和命名约定（`file_naming_convention`，即 snake_case），确定生成的Python代码应放置的文件和文件名。\n\n提供源.mcpc内容、相关的符号表内容（JSON格式）以及mccp_config.json配置作为输入，输出Python源代码。"
+        }
+    },
+    "reverse_build_rules": {
+        "py_to_mcpc": {
+            "input_extension": ".py",
+            "output_extension": ".mcpc",
+            "llm_prompt": "将Python源代码反向转换为MCCP符号-伪代码（.mcpc格式）。从Python代码结构中提取函数/方法、类、数据结构的定义、核心逻辑流程和关键变量。使用符号表示这些元素，并尝试匹配和更新符号表中的现有符号。关注代码功能而非具体实现细节。"
+        },
+        "mcpc_to_mcbc": {
+            "input_extension": ".mcpc",
+            "output_extension": ".mcbc",
+            "llm_prompt": "将MCCP符号-伪代码（.mcpc格式）反向转换为MCCP行为描述代码（.mcbc格式）。从伪代码结构和符号信息中提炼出更抽象的行为描述、模块职责和功能点。更新或创建对应的行为描述条目。忽略具体的实现细节，专注于'做什么'而不是'如何做'。"
+        },
+        "mcbc_to_md": {
+            "input_extension": ".mcbc",
+            "output_extension": ".md",
+            "llm_prompt": "将MCCP行为描述代码（.mcbc格式）反向转换为自然语言描述（Markdown格式）。总结模块功能、关键行为和已实现的功能点，用于更新或生成需求文档摘要。确保描述清晰、准确地反映.mcbc中的内容。"
+        }
+    },
+    "llm_settings": {
+        "model": "your-preferred-llm-model",
+        "api_url": "your-llm-api-endpoint",
+        "api_key": "your-llm-api-key"
+    }
+}

@@ -1,0 +1,46 @@
+# MCCP Behavior Code
+
+## Module: mccp_toolchain.core.llm
+
+### Overview
+- Purpose: Integrate the mccp-toolchain with large language models (LLMs) to facilitate the AI-driven transformation of content between architectural layers.
+- Responsibilities:
+    - Manage the connection and interaction with the configured LLM service.
+    - Generate structured prompts containing all necessary context for the LLM.
+    - Send prompts to the LLM and receive responses.
+    - Parse or validate the format of the LLM's textual responses.
+- Interactions: Primarily interacts with `mccp.config` to get LLM settings and `mccp.symbols` to include symbol information in prompts. Used by `core.build.LayerTransformer` to perform actual transformations. Relies on the Langchain library for underlying LLM communication.
+
+### Components
+
+#### Class: LLMClient
+- Description: A service client that encapsulates the logic for communicating with a large language model, abstracting the details of the underlying LLM framework (Langchain).
+- Behaviors:
+    - Initialization (`__init__`):
+        - Purpose: Configure the LLM client based on the project settings and prepare the connection to the specific LLM model.
+        - Process: Reads LLM-specific configuration (like model name, API URL, API key) from the provided configuration manager. Sets up the underlying LLM interaction object using the specified framework (Langchain).
+        - Dependencies: Requires an instance of `mccp_toolchain.mccp.config.ConfigManager` to fetch settings and uses libraries from the `langchain` framework.
+    - Generate Content (`generate_content`):
+        - Purpose: Send a structured prompt and additional context to the LLM and obtain a generated textual response.
+        - Process: Takes the prepared prompt and context (which may include source content, configuration, symbols) and passes them to the configured LLM via the underlying framework (Langchain). Handles the communication protocol and waits for the LLM's output.
+        - Input: The prompt string to send (`prompt`), and a dictionary containing supplementary context data (`context`).
+        - Output: The raw textual response received from the LLM (`str`).
+        - Dependencies: Uses prompt and chain objects from the `langchain` framework (`langchain.prompts`, `langchain.chains`).
+    - Parse Response (`parse_response`):
+        - Purpose: Process the raw text output from the LLM to validate its format or extract structured data based on the expected target format.
+        - Process: Examines the `response_text` based on the specified `target_format` (e.g., 'mcbc', 'mcpc', 'python_code'). This might involve checking for specific Markdown structures, JSON format (for MCBC/MCPC), or parsing code syntax. It could also involve basic validation against expected structures.
+        - Input: The raw text response from the LLM (`response_text`) and a string indicating the expected format (`target_format`).
+        - Output: A structured representation of the parsed content (e.g., a dictionary or code AST) or the validated text itself. Returns an object, which might be a string, dict, or other structure depending on the format.
+
+#### Class: PromptGenerator
+- Description: Responsible for assembling the complete, detailed prompt string that will be sent to the LLM, incorporating all necessary information for the transformation task.
+- Behaviors:
+    - Initialization (`__init__`):
+        - Purpose: Prepare the prompt generator by providing access to the configuration manager.
+        - Process: Stores a reference to the configuration manager, which contains prompt templates and other settings required for prompt construction.
+    - Generate Prompt (`generate_prompt`):
+        - Purpose: Create a comprehensive prompt by combining a base instruction template (from config) with specific context data relevant to the current transformation step.
+        - Process: Retrieves the base prompt template for the given `build_rule_key` from the configuration manager. Incorporates the `source_content`, relevant `symbols` data, and the overall `config` into the template. Formats these pieces together into a single, coherent prompt string designed to guide the LLM's generation towards the desired output format and content.
+        - Input: A key identifying the build rule (`build_rule_key`), the content of the source file (`source_content`), relevant symbol data (`symbols`), and the full project configuration (`config`).
+        - Output: The complete, formatted prompt string ready to be sent to the LLM (`str`).
+        - Dependencies: Relies on the `mccp_toolchain.mccp.config.ConfigManager` to retrieve prompt templates and configuration details.

@@ -1,0 +1,54 @@
+# MCCP Behavior Code
+
+## Module: mccp_toolchain.ui
+
+### Overview
+- Purpose: Provide the graphical user interface for the mccp-toolchain, enabling user interaction and visualization of the project state.
+- Responsibilities:
+    - Display the project's file structure.
+    - Capture user commands for project management (new, open) and build processes.
+    - Present feedback, progress, errors, and warnings to the user.
+    - Integrate with core backend services for action execution.
+- Interactions: Primarily interacts with `core.build` to trigger transformations and with `mccp.file_manager` for project file system representation and management.
+
+### Components
+
+#### Class: MainWindow
+- Description: The main application window component, serving as the central hub for the user interface and interaction points. Inherits from a standard window class (e.g., PyQt QMainWindow).
+- Behaviors:
+    - Initialization (`__init__`):
+        - Purpose: Establish the foundational state of the main window and inject necessary dependencies from the core system.
+        - Process: Sets up initial window properties. Accepts and stores instances of core orchestrator and file management services. Prepares the UI structure but does not necessarily populate it with data yet.
+        - Dependencies: Relies on external instances of `mccp_toolchain.core.build.BuildOrchestrator` and `mccp_toolchain.mccp.file_manager.FileManager` being provided upon creation.
+    - Setup UI (`setup_ui`):
+        - Purpose: Construct and arrange all visual elements that make up the user interface within the main window.
+        - Process: Creates UI controls such as the file tree view area, menu bar, toolbars, buttons for actions, and a status or log display area. Configures their layout and appearance using the UI framework (PyQt).
+        - Output: A fully laid out, but not yet functional (signal-connected), user interface within the window.
+        - Dependencies: Utilizes components from the PyQt5 framework (`PyQt5.QtWidgets`, `PyQt5.QtGui`, `PyQt5.QtCore`).
+    - Connect Signals (`connect_signals`):
+        - Purpose: Link user-generated events from UI controls (like button clicks or menu selections) to the corresponding internal methods that handle these actions.
+        - Process: Establishes the connections required by the UI framework's signal/slot mechanism. Maps specific signals (e.g., button `clicked`) to designated handler methods within this class.
+        - Interactions: This step enables the UI to trigger operations managed by other core modules, such as initiating builds or managing files.
+    - Update File Tree (`update_file_tree`):
+        - Purpose: Refresh and populate the file structure tree view with the current contents of the specified project directory.
+        - Process: Configures a file system model to point to the project's root directory. Associates this model with the tree view widget to display the directory and file hierarchy dynamically.
+        - Input: The absolute path to the root directory of the currently open project (`project_root`).
+        - Output: A visual representation of the project's file system structure displayed in the UI.
+        - Dependencies: Specifically uses `PyQt5.QtWidgets.QFileSystemModel` to interface with the file system.
+    - Log Message (`log_message`):
+        - Purpose: Provide textual feedback to the user regarding ongoing operations, status updates, or issues encountered by the toolchain.
+        - Process: Accepts a message string and displays it in a designated area of the UI, such as the status bar at the bottom of the window or within a dedicated log panel.
+        - Input: The message string to be displayed (`message`).
+    - Handle New Project (`handle_new_project`):
+        - Purpose: Respond to the user's intent to create a new MCCP project.
+        - Process: Typically involves prompting the user via a dialog for details like the project name and location. Delegates the actual creation of the project's standard directory structure and initial configuration files to the file manager service. Updates the UI upon successful creation to display the new project.
+        - Interactions: Initiates a `create_project_structure` operation on the injected `FileManager` instance.
+    - Handle Open Project (`handle_open_project`):
+        - Purpose: Respond to the user's intent to open an existing MCCP project.
+        - Process: Presents a file selection dialog allowing the user to choose the project's root directory. Upon selection, it instructs the file manager to load project-specific data (like config and symbols) and updates the file tree view to display the opened project's structure.
+        - Interactions: Interacts with the `FileManager` (e.g., `get_project_root_from_path`, potentially triggering config and symbol loading via managers), and uses file dialogs from the UI framework.
+    - Handle Run Build (`handle_run_build`):
+        - Purpose: Respond to the user's command to execute a build or transformation process between MCCP layers.
+        - Process: Determines the desired transformation target layer (e.g., from requirements to behavior code, or pseudo-code to target code) based on the UI context or user selection. Delegates the complex orchestration of this process to the Build Orchestrator service. Provides user feedback during the build process via logging.
+        - Input: An identifier specifying the target layer for the build process (`target_layer`).
+        - Interactions: Calls the `run_forward_build` method on the injected `BuildOrchestrator` instance.
