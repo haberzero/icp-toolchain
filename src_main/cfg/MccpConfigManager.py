@@ -99,7 +99,7 @@ if __name__ == "__main__":
     temp_dir = tempfile.mkdtemp()
     try:
         print(f"测试配置管理器，使用临时目录: {temp_dir}")
-        config_manager = MCCPConfigManager(temp_dir)
+        config_manager = MccpConfigManager(temp_dir)
 
         # 测试写入参数
         print("测试写入参数...")
