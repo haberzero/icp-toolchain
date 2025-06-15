@@ -35,15 +35,15 @@ class MainWindow(QMainWindow):
         
         # Function selector (left narrow panel)
         self.function_selector = FunctionSelector()
-        main_layout.addWidget(self.function_selector, 1)  # 10% width
+        main_layout.addWidget(self.function_selector, 5)
         
         # Left side browser (wider panel)
         self.left_side_browser = LeftSideBrowser()
-        main_layout.addWidget(self.left_side_browser, 3)  # 30% width
+        main_layout.addWidget(self.left_side_browser, 15)
         
         # Main functional area
         self.main_functional_area = MainFunctionalArea()
-        main_layout.addWidget(self.main_functional_area, 6)  # 60% width
+        main_layout.addWidget(self.main_functional_area, 80)
         
         # Show initialization popup
         self.show_init_popup()
@@ -77,6 +77,7 @@ class MainWindow(QMainWindow):
         if self.popup.result() == InitPopup.Accepted:
             self.project_loaded = True
             self.project_path = self.popup.get_project_path()
+            # self.project_path = self.popup.get_project_path().replace('\\', '/')
             self.load_project()
         else:
             # Keep window blank if canceled

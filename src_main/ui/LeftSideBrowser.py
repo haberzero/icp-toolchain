@@ -26,6 +26,8 @@ class LeftSideBrowser(QWidget):
     def set_root_path(self, path):
         """Set the root path for the file browser"""
         if path:
+            print("current path: \n" + path)
+            self.file_model.setRootPath(path)  # 添加这行来设置模型的根路径
             self.tree_view.setRootIndex(self.file_model.index(path))
             self.tree_view.setColumnWidth(0, 250)
 

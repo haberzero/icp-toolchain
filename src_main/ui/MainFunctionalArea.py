@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QSplitter, QTextEdit, QPlainTextEdit, 
-    QGroupBox, QPushButton, QVBoxLayout, QWidget
+    QGroupBox, QPushButton, QVBoxLayout, QWidget, QGridLayout
 )
 from PyQt5.QtCore import Qt
 
@@ -27,25 +27,30 @@ class MainFunctionalArea(QWidget):
         
         top_area.addWidget(self.editable_text)
         top_area.addWidget(self.output_text)
-        top_area.setSizes([400, 400])
+        top_area.setSizes([600, 200])
         
         # Bottom area (buttons and terminal)
         bottom_area = QSplitter(Qt.Horizontal)
         
         # Button panel
         button_panel = QGroupBox("工具链功能")
-        button_layout = QVBoxLayout(button_panel)
+        button_layout = QGridLayout(button_panel)
+        button_layout.setSpacing(5)  # 设置按钮间距
+        button_layout.setContentsMargins(5, 5, 5, 5)  # 设置内边距
         
-        # Create 8 tool buttons
+        # Create 8 tool buttons in 2 columns
         self.tool_buttons = []
         for i in range(1, 9):
-            btn = QPushButton(f"工具 {i}")
-            btn.setFixedSize(100, 30)  # 设置固定尺寸
+            btn = QPushButton(f"func {i}")
+            btn.setFixedSize(70, 25)  # 保持按钮尺寸
             self.tool_buttons.append(btn)
-            button_layout.addWidget(btn)
+            # 计算行列位置（2列布局）
+            row = (i-1) // 2
+            col = (i-1) % 2
+            button_layout.addWidget(btn, row, col)
 
         # 添加弹性空间，设置伸缩因子为2（保持底部栏占比小）
-        button_layout.addStretch(2)
+        button_layout.rowStretch(2)
         
         # Terminal placeholder
         terminal_placeholder = QWidget()
@@ -53,12 +58,12 @@ class MainFunctionalArea(QWidget):
         
         bottom_area.addWidget(button_panel)
         bottom_area.addWidget(terminal_placeholder)
-        bottom_area.setSizes([100, 500])
+        bottom_area.setSizes([150, 550])  # 调整按钮面板宽度 (原为[70, 630])
         
         # Add areas to vertical splitter
         vertical_splitter.addWidget(top_area)
         vertical_splitter.addWidget(bottom_area)
-        vertical_splitter.setSizes([500, 300])
+        vertical_splitter.setSizes([700, 100])  # 进一步减小底部区域高度 (原为[650, 150])
         
         main_layout.addWidget(vertical_splitter)
 

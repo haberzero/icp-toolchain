@@ -149,10 +149,8 @@ class NewProjectWidget(QWidget):
     def get_project_path(self):
         """Get the project path"""
         if self.is_valid():
-            return os.path.join(
-                self.project_location.text(),
-                self.project_name.text()
-            )
+            # 只返回项目位置，不附加项目名称
+            return self.project_location.text().replace('\\', '/')
         return ""
 
 # Test
