@@ -59,55 +59,41 @@ class NewProjectWidget(QWidget):
         self.bypass_group = QGroupBox("旁路式设置")
         bypass_form = QFormLayout(self.bypass_group)
         
-        self.mcbc_path = QLineEdit()
-        self.mcpc_path = QLineEdit()
-        self.target_path = QLineEdit()
-        
-        bypass_form.addRow("MCBC 位置:", self.mcbc_path)
-        bypass_form.addRow("MCPC 位置:", self.mcpc_path)
-        bypass_form.addRow("Target 位置:", self.target_path)
-        
         self.bypass_group.setVisible(self.bypass_check.isChecked())
 
         build_layout.addLayout(suffix_layout)
         build_layout.addWidget(self.bypass_check)
         build_layout.addWidget(self.bypass_group)
 
-
-
-                
-        # 添加MCBC位置
+        # MCBC位置选取
         mcbc_layout = QHBoxLayout()
         self.mcbc_path = QLineEdit()
         self.mcbc_browse = QPushButton("浏览")
         mcbc_layout.addWidget(self.mcbc_path)
         mcbc_layout.addWidget(self.mcbc_browse)
-        form_layout.addRow("MCBC位置:", mcbc_layout)
+        bypass_form.addRow("MCBC位置:", mcbc_layout)
         
-        # 添加MCPC位置
+        # MCPC位置选取
         mcpc_layout = QHBoxLayout()
         self.mcpc_path = QLineEdit()
         self.mcpc_browse = QPushButton("浏览")
         mcpc_layout.addWidget(self.mcpc_path)
         mcpc_layout.addWidget(self.mcpc_browse)
-        form_layout.addRow("MCPC位置:", mcpc_layout)
+        bypass_form.addRow("MCPC位置:", mcpc_layout)
         
-        # 添加Target位置
+        # Target位置选取
         target_layout = QHBoxLayout()
         self.target_path = QLineEdit()
         self.target_browse = QPushButton("浏览")
         target_layout.addWidget(self.target_path)
         target_layout.addWidget(self.target_browse)
-        form_layout.addRow("Target位置:", target_layout)
+        bypass_form.addRow("Target位置:", target_layout)
 
         # 连接点击事件
         self.mcbc_browse.clicked.connect(self.browse_mcbc_location)
         self.mcpc_browse.clicked.connect(self.browse_mcpc_location)
         self.target_browse.clicked.connect(self.browse_target_location)
 
-
-
-        
         # Add to page layout
         layout.addLayout(form_layout)
         layout.addWidget(build_group)
