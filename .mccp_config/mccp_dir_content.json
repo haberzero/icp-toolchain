@@ -1,19 +1,17 @@
 {
-    "src":{
-        "main":{},
-        "ui":{
-            "main_window":{
-                "main_entry":null,
-                "main_window":null,
-                "init_popup":null,
-                "function_selector":null,
-                "left_side_browser":null,
-                "main_functional_area":null
-            }
-        },
-        "cfg_manager":{},
-        "module":{},
-        "app":{},
-        "libs":{}
-    }
+    "main":{},
+    "ui":{
+        "main_window":{
+            "main_entry":null,
+            "main_window":null,
+            "init_popup":null,
+            "function_selector":null,
+            "left_side_browser":null,
+            "main_functional_area":null
+        }
+    },
+    "cfg_manager":{},
+    "module":{},
+    "app":{},
+    "libs":{}
 }

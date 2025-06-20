@@ -3,7 +3,7 @@
     "mccpVersion": "0.0.3",
     "targetLanguage": "Python",
     "api-url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "api-key": "sk-6a76aeb1cf6b4e3bb37fad1221750386",
+    "api-key": "",
     "llmModel": "qwen3-30b-a3b",
     "dependentLib": [
         "pyqt5",

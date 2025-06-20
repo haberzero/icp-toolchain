@@ -22,6 +22,9 @@ tmp/
 *.tmp
 *.log
 
+# Backup files
+./backup
+
 # IDE specific files (example for popular IDEs)
 .idea/
 .vscode/
