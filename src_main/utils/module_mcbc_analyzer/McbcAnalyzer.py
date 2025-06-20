@@ -138,9 +138,9 @@ class MCBCAnalyzer:
                     print(f"  - Synced description for '{symbol_path}'")
                     updated_count += 1
             elif node:
-                 print(f"  - Warning: Symbol '{symbol_path}' exists in code but has no 'description' tag. Cannot sync.")
+                print(f"  - Warning: Symbol '{symbol_path}' exists in code but has no 'description' tag. Cannot sync.")
             else:
-                 print(f"  - Warning: Symbol '{symbol_path}' not found in '{self.active_file}'. It may have been renamed or removed.")
+                print(f"  - Warning: Symbol '{symbol_path}' not found in '{self.active_file}'. It may have been renamed or removed.")
 
         if updated_count > 0:
             self._save_symbols_json()
@@ -150,14 +150,13 @@ class MCBCAnalyzer:
     # --------------------------------------------------------------------------
     # Private Helper Methods - Analysis, Parsing, and Validation
     # --------------------------------------------------------------------------
-
+    # Orchestrates the parsing and validation of the active file.
     def _run_file_analysis(self) -> None:
-        """Orchestrates the parsing and validation of the active file."""
-        self.parsed_ast = {}
-
         print(f"Analyzing '{self.active_file}'...")
+
         parsed_lines = self._parse_mcbc_to_lines()
         if not parsed_lines:
+            self.parsed_ast = {}
             print("Analysis warning: File is empty or contains no valid content.")
             return
 
@@ -168,6 +167,7 @@ class MCBCAnalyzer:
     # Reads the active .mcbc file and converts it into a list of structured lines.
     def _parse_mcbc_to_lines(self) -> List[ParsedLine]:
         print("  - Step 1: Parsing file to lines...")
+
         if not self.active_directory or not self.active_file:
             return []
         file_path = self.active_file_path
@@ -194,9 +194,10 @@ class MCBCAnalyzer:
                 parsed_lines.append((line_num, indent_level, stripped_content))
         return parsed_lines
 
+    # Constructs an Abstract Syntax Tree (AST) from a list of parsed lines.
     def _build_ast_from_lines(self, lines: List[ParsedLine]) -> AstNode:
-        """Constructs an Abstract Syntax Tree (AST) from a list of parsed lines."""
         print("  - Step 2: Building Abstract Syntax Tree (AST)...")
+
         root: AstNode = {'type': 'root', 'children': [], 'indent': -1}
         stack: List[AstNode] = [root]
 
@@ -209,14 +210,12 @@ class MCBCAnalyzer:
                 stack.pop()
             parent_node = stack[-1]
             
-            # This will raise ValueError for malformed keywords.
             node_type, name = self._classify_line(content, line_num)
 
-            # FIX (L-2): Check for dangling annotations before processing a new line if indentation decreases.
-            if indent <= parent_node['indent'] and (last_annotations or last_description):
+            if last_annotations or last_description:
                 raise ValueError(f"Line {line_num}: Dangling 'description' or '@' annotation found. It must be followed by a valid code block (func, class, var).")
 
-            # FIX (2.3.6): Disallow statements at the root level.
+            # 在root节点中暂时禁止直接出现任何行为描述语句（后面这个行为要做成可修改的，主要是针对脚本式语言，很多都甚至没有类和函数概念）
             if parent_node['type'] == 'root' and node_type == 'statement':
                 raise ValueError(f"Line {line_num}: Illegal statement '{content}' found at the root level of the file. Only 'func', 'class', or 'var' are allowed here.")
 
