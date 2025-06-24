@@ -3,9 +3,9 @@ from typing import List, Dict, Any, Optional
 from lines_parser import LinesParser
 
 class AstBuilder:
-    def __init__(self, structured_lines: List[Dict[str, Any]], lines_parser: 'LinesParser'):
+    def __init__(self, structured_lines: List[Dict[str, Any]]):
         self.structured_lines = structured_lines
-        self.parse_functions = lines_parser
+        self.lines_parser = LinesParser()
         self.ast: Dict[str, Any] = {
             'type': 'root',
             'name': None,
@@ -31,7 +31,7 @@ class AstBuilder:
             line_num = line_info['line_num']
             content = line_info['content']
             
-            parsed_node = self.parse_functions.parse_line(content, line_num)
+            parsed_node = self.lines_parser.parse_line(content, line_num)
             
             if parsed_node is None:
                 continue

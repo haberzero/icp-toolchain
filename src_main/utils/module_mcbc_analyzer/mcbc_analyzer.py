@@ -11,27 +11,25 @@ class McbcAnalyzer:
         self.file_content: List[str] = []
         self.structured_lines: List[Dict[str, Any]] = []
         self.ast: Dict[str, Any] = {}
-        self.symbol_table: Dict[str, Any] = {}
-        self.last_intent_comment: str = ""
-        self.previous_node: Optional[Dict[str, Any]] = None
+        # self.symbol_table: Dict[str, Any] = {}  这一行存疑，大概率应该放进ast_builder
         self.lines_parser = LinesParser()
     
-    def start_analyzer(self) -> bool:
-        print("Starting Analyzer...")
+    def start_analysis(self) -> bool:
+        print(f"Starting Analyzing file: '{self.current_file_path}'")
         if not self._read_file():
-            print(f"Error: Could not read source file at '{self.current_file_path}'", file=sys.stderr)
+            print(f"Error: Could not read source file: '{self.current_file_path}'", file=sys.stderr)
             return False
         
-        print("File read successfully.")
+        print(f"File read successfully: ")
         
         if not self._generate_structured_lines():
-            print("Error: Failed to generate structured lines.", file=sys.stderr)
+            print(f"Error: Failed to generate structured lines: '{self.current_file_path}'", file=sys.stderr)
             return False
         
         print("Structured lines generated successfully.")
         
         if not self._build_ast():
-            print("Error: Failed to build AST.", file=sys.stderr)
+            print(f"Error: Failed to build AST: '{self.current_file_path}'", file=sys.stderr)
             return False
         
         print("AST built successfully.")
@@ -44,29 +42,29 @@ class McbcAnalyzer:
                 self.file_content = f.readlines()
             return True
         except IOError as e:
-            print(f"Error opening or reading file: {e}", file=sys.stderr)
             return False
     
     def _generate_structured_lines(self) -> bool:
         generator = LinesLoader(self.file_content)
         result = generator.generate()
-        if isinstance(result, list):
+        if len(result) == 0:
+            return False
+        else:
             self.structured_lines = result
             return True
-        else:
-            print(f"Indentation Error: {result}")
-            return False
     
     def _build_ast(self) -> bool:
-        builder = AstBuilder(self.structured_lines, self.lines_parser)
-        self.ast = builder.build()
-        if not self.ast:
+        builder = AstBuilder(self.structured_lines)
+        ast = builder.build()
+        if not ast:
             return False
-        return True
+        else:
+            self.ast = ast
+            return True
 
 if __name__ == "__main__":
     analyzer = McbcAnalyzer("example.mcbc")
-    if analyzer.start_analyzer():
+    if analyzer.start_analysis():
         print("Analysis completed successfully.")
     else:
         print("Analysis failed.")
