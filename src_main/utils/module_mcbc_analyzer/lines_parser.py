@@ -3,18 +3,21 @@ from typing import Dict, Any, List, Optional
 
 class LinesParser:
     def __init__(self):
-        pass
+        self.expected_next_types: List[str] = []
     
     def parse_line(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
+        # 首先检查处理意图注释，意图注释必须单独一行放置否则不会起效
         if line_content.startswith("@"):
             return self._parse_intent_comment(line_content, line_num)
         
+        # 如果行中出现了':'则会被split，需要进一步区分
         parts = line_content.split(':')
-        
-        # 如果行中出现了':'
         if len(parts) > 1:
+            # 例: "func myFunc:", parts[0] == "func myFunc", parts[0].split()[0] == "func"
             keyword = parts[0].split()[0]
             if keyword in ["class", "func", "var", "behavior"]:
+                # 这里最好不要这样子，我后续应该统一这几个_parse函数的接口形式，统一使用line_content
+                # 另外，现在这几个函数不整齐，明天换一个形式。用一个分类函数返回分类结果，此处的函数仅作switch处理调用明确的_parse函数
                 return self._parse_keyword_with_colon(keyword, parts, line_num)
             elif keyword in ["input", "output", "description", "inh"]:
                 parsed_attribute = self._parse_attribute(parts, line_num, keyword)
@@ -22,16 +25,32 @@ class LinesParser:
                     parsed_attribute['is_ast_node'] = False
                 return parsed_attribute
             else:
-                # 分支语句，循环语句
+                # 分支语句，循环语句，都是不具备关键词但是具有':'符号的，含有子代码块的行为语句
                 parsed_behavior = self._parse_behavior_code_with_children(line_content, line_num)
                 if parsed_behavior:
                     parsed_behavior['is_ast_node'] = True
                 return parsed_behavior
+        # 行内未出现':'直接被认为是行为语句，其它两种注释都已经被剔除
         else:
             parsed_behavior_code = self._parse_behavior_code(line_content, line_num)
-            if parsed_behavior_code:
-                parsed_behavior_code['is_ast_node'] = True
             return parsed_behavior_code
+
+    # ast_builder初始化时向其提供root_node
+    def gen_root_ast_node(self) -> Dict[str, Any]:
+        return {
+            'type': 'root',
+            'value': None,
+            'line_num': 0,
+            'name': 'root',
+            'description': 'root',
+            'intent': None,
+            'is_block_start': False,
+            'children': [],
+            'attributes': None,
+            'parent': None,
+            'expected_next_types': ['class', 'func', 'var'],
+            'is_ast_node': True
+        }
     
     def _parse_intent_comment(self, line_content: str, line_num: int) -> Dict[str, Any]:
         comment_text = line_content.lstrip('@').strip()
@@ -45,8 +64,8 @@ class LinesParser:
             'is_block_start': False,
             'children': [],
             'attributes': None,
-            'condition_or_action': None,
             'parent': None,
+            # 这里还不太对，input那些 包括带有子代码块的行为描述行也需要
             'expected_next_types': ['class', 'func', 'var', 'behavior'],
             'is_ast_node': False
         }
@@ -93,7 +112,6 @@ class LinesParser:
             'is_block_start': True,
             'children': [],
             'attributes': None,
-            'condition_or_action': None,
             'parent': None,
             'expected_next_types': ['inh', 'var', 'func', 'description']
         }
@@ -114,7 +132,6 @@ class LinesParser:
             'is_block_start': True,
             'children': [],
             'attributes': None,
-            'condition_or_action': None,
             'parent': None,
             'expected_next_types': ['input', 'output', 'description', 'behavior']
         }
@@ -136,7 +153,6 @@ class LinesParser:
             'is_block_start': False,
             'children': [],
             'attributes': None,
-            'condition_or_action': None,
             'parent': None,
             'expected_next_types': ['behavior_step', 'var', 'func']
         }
@@ -148,6 +164,7 @@ class LinesParser:
 
         value = parts[1].strip()
         return {
+            # 这个地方最好一定程度明文处理
             'type': keyword,
             'value': value,
             'line_num': line_num,
@@ -157,7 +174,6 @@ class LinesParser:
             'is_block_start': False,
             'children': [],
             'attributes': None,
-            'condition_or_action': None,
             'parent': None,
             'expected_next_types': ['input', 'output', 'description', 'behavior'] if keyword in ['input', 'output'] else ['var', 'func']
         }
@@ -172,7 +188,6 @@ class LinesParser:
             'is_block_start': True,
             'children': [],
             'attributes': None,
-            'condition_or_action': None,
             'parent': None,
             'expected_next_types': ['behavior_step']
         }
@@ -188,7 +203,6 @@ class LinesParser:
             'is_block_start': False,
             'children': [],
             'attributes': None,
-            'condition_or_action': None,
             'parent': None,
             'expected_next_types': ['behavior_step']
         }
@@ -208,7 +222,6 @@ class LinesParser:
             'is_block_start': True,
             'children': [],
             'attributes': None,
-            'condition_or_action': None,
             'parent': None,
             'expected_next_types': ['behavior_step']
         }
@@ -224,7 +237,6 @@ class LinesParser:
                 'is_block_start': False,
                 'children': [],
                 'attributes': None,
-                'condition_or_action': None,
                 'parent': behavior_node,
                 'expected_next_types': ['behavior_step']
             }

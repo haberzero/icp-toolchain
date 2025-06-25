@@ -5,6 +5,8 @@ from lines_parser import LinesParser
 
 from typing import List, Dict, Any, Optional
 
+# 关于运行过程中所涉及到的特殊变量: ast_node, parsed_lines, structured_lines等，请到dict_helper.py去查看其结构内容
+
 class McbcAnalyzer:
     def __init__(self, file_path: str):
         self.current_file_path: str = file_path
@@ -45,8 +47,8 @@ class McbcAnalyzer:
             return False
     
     def _generate_structured_lines(self) -> bool:
-        generator = LinesLoader(self.file_content)
-        result = generator.generate()
+        lines_loader = LinesLoader(self.file_content)
+        result = lines_loader.generate()
         if len(result) == 0:
             return False
         else:
@@ -54,8 +56,8 @@ class McbcAnalyzer:
             return True
     
     def _build_ast(self) -> bool:
-        builder = AstBuilder(self.structured_lines)
-        ast = builder.build()
+        ast_builder = AstBuilder(self.structured_lines)
+        ast = ast_builder.build()
         if not ast:
             return False
         else:

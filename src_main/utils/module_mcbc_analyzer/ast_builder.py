@@ -6,20 +6,7 @@ class AstBuilder:
     def __init__(self, structured_lines: List[Dict[str, Any]]):
         self.structured_lines = structured_lines
         self.lines_parser = LinesParser()
-        self.ast: Dict[str, Any] = {
-            'type': 'root',
-            'name': None,
-            'value': None,
-            'description': None,
-            'intent': None,
-            'line_num': 0,
-            'is_block_start': False,
-            'children': [],
-            'attributes': None,
-            'condition_or_action': None,
-            'parent': None,
-            'expected_next_types': ['class', 'func', 'var', 'behavior']
-        }
+        self.ast: Dict[str, Any] = self.lines_parser.gen_root_ast_node()
         self.symbol_table: Dict[str, Any] = {}
         self.last_intent_comment: str = ""
         self.previous_node: Optional[Dict[str, Any]] = None
@@ -73,6 +60,7 @@ class AstBuilder:
             parent_node['children'] = []
         parent_node['children'].append(child_node)
     
+    # 此函数后续分离至symbol_generator.py，不要混杂在ast_builder中处理
     def _update_symbol_table(self, parsed_node: Dict[str, Any]):
         node_type = parsed_node.get('type')
         if node_type in ["class", "func", "var"]:
