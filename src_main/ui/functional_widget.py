@@ -1,6 +1,5 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton
 
-
 class FunctionalWidget(QWidget):
 
     def __init__(self):

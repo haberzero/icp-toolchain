@@ -5,11 +5,11 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 try:
-    from .NewProjectWidget import NewProjectWidget
-    from .ExistingProjectWidget import ExistingProjectWidget
+    from .new_project_widget import NewProjectWidget
+    from .existing_project_widget import ExistingProjectWidget
 except ImportError:
-    from NewProjectWidget import NewProjectWidget
-    from ExistingProjectWidget import ExistingProjectWidget
+    from new_project_widget import NewProjectWidget
+    from existing_project_widget import ExistingProjectWidget
 
 
 class InitPopup(QDialog):

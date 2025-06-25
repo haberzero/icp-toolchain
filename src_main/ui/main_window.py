@@ -2,16 +2,16 @@ from PyQt5.QtWidgets import QMainWindow, QMenuBar, QAction, QVBoxLayout, QWidget
 
 try:
     # 尝试相对导入（当作为包的一部分运行时）
-    from .InitPopup import InitPopup
-    from .FunctionSelector import FunctionSelector
-    from .LeftSideBrowser import LeftSideBrowser
-    from .MainFunctionalArea import MainFunctionalArea
+    from .init_popup import InitPopup
+    from .function_selector import FunctionSelector
+    from .left_side_browser import LeftSideBrowser
+    from .main_functional_area import MainFunctionalArea
 except ImportError:
     # 回退到绝对导入（当直接运行时）
-    from InitPopup import InitPopup
-    from FunctionSelector import FunctionSelector
-    from LeftSideBrowser import LeftSideBrowser
-    from MainFunctionalArea import MainFunctionalArea
+    from init_popup import InitPopup
+    from function_selector import FunctionSelector
+    from left_side_browser import LeftSideBrowser
+    from main_functional_area import MainFunctionalArea
 
 class MainWindow(QMainWindow):
     def __init__(self):
