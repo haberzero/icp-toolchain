@@ -1,11 +1,12 @@
 import sys
 from lines_loader import LinesLoader
 from ast_builder import AstBuilder
-from lines_parser import LinesParser
 
 from typing import List, Dict, Any, Optional
 
 # 关于运行过程中所涉及到的特殊变量: ast_node, parsed_lines, structured_lines等，请到dict_helper.py去查看其结构内容
+# 考虑在这个模块里进行报错信息汇总处理。目前的大概思路是：lines-loader ast-builder两个如果出现任何报错flag，就直接调用suggester尝试处理
+# 如果首次处理尝试后再次调用对应builder仍然存在报错，则直接把对应行丢弃，进行后续步骤，避免直接被卡死
 
 class McbcAnalyzer:
     def __init__(self, file_path: str):
@@ -13,8 +14,6 @@ class McbcAnalyzer:
         self.file_content: List[str] = []
         self.structured_lines: List[Dict[str, Any]] = []
         self.ast: Dict[str, Any] = {}
-        # self.symbol_table: Dict[str, Any] = {}  这一行存疑，大概率应该放进ast_builder
-        self.lines_parser = LinesParser()
     
     def start_analysis(self) -> bool:
         print(f"Starting Analyzing file: '{self.current_file_path}'")

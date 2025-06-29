@@ -7,51 +7,62 @@ class AstBuilder:
         self.structured_lines = structured_lines
         self.lines_parser = LinesParser()
         self.ast: Dict[str, Any] = self.lines_parser.gen_root_ast_node()
-        self.symbol_table: Dict[str, Any] = {}
-        self.last_intent_comment: str = ""
-        self.previous_node: Optional[Dict[str, Any]] = None
+        self.expected_next_types: List[str] = []
     
     def build(self) -> Dict[str, Any]:
         ast_stack: List[Dict[str, Any]] = [self.ast]
-        
+        last_intent_comment: str = ""
+        previous_parsed_node: Optional[Dict[str, Any]] = None
+
         for line_info in self.structured_lines:
             line_num = line_info['line_num']
             content = line_info['content']
+            indent_level = line_info['indent_level']
             
-            parsed_node = self.lines_parser.parse_line(content, line_num)
+            current_parsed_node = self.lines_parser.parse_line(content, line_num)
             
-            if parsed_node is None:
-                continue
+            # 这一句后面要修，这是错误处理的地方
+            if current_parsed_node is None:
+                return {}
             
-            if parsed_node['type'] == 'intent_comment':
-                self.last_intent_comment = parsed_node['value']
+            if current_parsed_node['type'] == 'intent_comment':
+                # 错误处理得在这里增加内容，意图注释之后的行如果不是所期望的行，建议器应该把它挪位置或者直接删掉
+                last_intent_comment = current_parsed_node['value']
                 continue
             
             current_context_node = ast_stack[-1]
             
-            if parsed_node['type'] not in current_context_node['expected_next_types']:
+            if current_parsed_node['type'] not in current_context_node['expected_next_types']:
                 err_str = (
-                    f"Syntax Error on line {line_num}: Unexpected node type '{parsed_node['type']}' "
+                    f"Syntax Error on line {line_num}: Unexpected node type '{current_parsed_node['type']}' "
                     f"after '{current_context_node['type']}'. Expected one of: {current_context_node['expected_next_types']}. "
                     f"Line content: '{content}'"
                 )
                 print(err_str, file=sys.stderr)
                 return {}
             
-            if parsed_node['type'] in ['input', 'output', 'description', 'inh']:
-                if self.previous_node:
-                    if 'attributes' not in self.previous_node:
-                        self.previous_node['attributes'] = {}
-                    self.previous_node['attributes'][parsed_node['type']] = parsed_node['value']
+            # 这里要修一下，现在还不是atrribute,
+            if current_parsed_node['type'] in ['input', 'output', 'description', 'inh']:
+                if previous_parsed_node:
+                    if 'attributes' not in previous_parsed_node:
+                        previous_parsed_node['attributes'] = {}
+                    previous_parsed_node['attributes'][current_parsed_node['type']] = current_parsed_node['value']
                 continue
             
-            if parsed_node.get('is_block_start', False):
-                ast_stack.append(parsed_node)
+            if current_parsed_node.get('is_block_start', False):
+                ast_stack.append(current_parsed_node)
+            # 注意：有one_line_child_content的不能增加深度
             
-            parsed_node['parent'] = current_context_node
-            self._append_node_to_parent(current_context_node, parsed_node)
-            self._update_symbol_table(parsed_node)
-            self.previous_node = parsed_node
+            # expected_next_types只影响"同级别代码块"或"下一级别缩进代码块",不影响外部代码块，外部代码块的expected type由前面的父节点决定
+
+            # 这里 对吗？好像不太合理
+            current_parsed_node['parent'] = current_context_node
+            previous_parsed_node = current_parsed_node
+
+            # 目前考虑，如果是root节点上判断出现了behavior code，那么暂时直接忽略，标记一个建议删除
+
+            self._append_node_to_parent(current_context_node, current_parsed_node)
+            
         
         return self.ast
     
@@ -59,16 +70,3 @@ class AstBuilder:
         if 'children' not in parent_node:
             parent_node['children'] = []
         parent_node['children'].append(child_node)
-    
-    # 此函数后续分离至symbol_generator.py，不要混杂在ast_builder中处理
-    def _update_symbol_table(self, parsed_node: Dict[str, Any]):
-        node_type = parsed_node.get('type')
-        if node_type in ["class", "func", "var"]:
-            symbol_name = parsed_node.get('name')
-            if symbol_name:
-                symbol_info = {
-                    'type': node_type,
-                    'description': parsed_node.get('description', parsed_node.get('intent', '')),
-                    'line_num': parsed_node.get('line_num')
-                }
-                self.symbol_table[symbol_name] = symbol_info

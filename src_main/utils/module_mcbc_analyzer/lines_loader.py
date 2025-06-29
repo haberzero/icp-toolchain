@@ -16,7 +16,7 @@ class LinesLoader:
         # try:
         #     with open('mccp_config.json', 'r', encoding='utf-8') as config_file:
         #         config = json.load(config_file)
-        #         self.indent_space_num = config.get('indent_space_num', 4)
+        #         self.indent_space_num = config.get('indentSpaceNum', 4)
         # except FileNotFoundError:
         #     print("Warning: mccp_config.json not found. Using default indent space num of 4.")
         # except json.JSONDecodeError:
@@ -30,7 +30,7 @@ class LinesLoader:
             rstripped_line = line.rstrip(' ')
             fully_stripped_line = rstripped_line.lstrip(' ')
 
-            if fully_stripped_line == '':
+            if fully_stripped_line == '' or fully_stripped_line.startswith('//'):
                 continue
             
             if fully_stripped_line.startswith('\t'):
@@ -40,7 +40,7 @@ class LinesLoader:
             indent_space_num = len(rstripped_line) - len(fully_stripped_line)
 
             if indent_space_num % self.indent_space_num_config != 0:
-                print(f"Indentation level on line {line_num} is not a multiple of {self.indent_space_num_config}")
+                print(f"Indent space num on line {line_num} is not a multiple of indent_space_num_config: {self.indent_space_num_config}")
                 return []
 
             current_indent_level = indent_space_num // self.indent_space_num_config
@@ -50,11 +50,13 @@ class LinesLoader:
                 print(f"Unexpected indentation increase on line {line_num}")
                 return []
 
-            structured_lines.append({
-                'line_num': line_num,
-                'indent_level': current_indent_level,
-                'content': fully_stripped_line
-            })
+            structured_lines.append(
+                {
+                    'line_num': line_num,
+                    'indent_level': current_indent_level,
+                    'content': fully_stripped_line
+                }
+            )
             
             previous_indent_level = current_indent_level
         
