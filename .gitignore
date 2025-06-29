@@ -3,7 +3,7 @@
 
 # Byte-code files
 *.pyc
-__pycache__/
+__pycache__
 
 # C/C++ build artifacts
 *.o
@@ -16,26 +16,22 @@ __pycache__/
 *.out
 
 # Temporary files
-temp/
-temp_from_chain/
-tmp/
+temp
+tmp
 *.tmp
 *.log
 
 # Backup files
-./backup
+backup
 
-# IDE specific files (example for popular IDEs)
-.idea/
-.vscode/
+# IDE specific files
+.idea
+.vscode
 *.swp
 *~
 
-# MCCP generated files (consider ignoring src_target if fully generated)
-# src_target/
-
-# Configuration files that might contain sensitive info (handle carefully)
-# config/*.local.json
+# files that contain sensitive info (handle carefully!!)
+.mccp_config/mccp_api_config.json
 
 # User-specific settings
 .DS_Store # macOS
