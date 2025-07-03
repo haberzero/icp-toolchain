@@ -1,12 +1,15 @@
 import sys
 from typing import Dict, Any, List, Optional
 
+from src_main.libs.error_handler import ErrorHandler, EType, WType
+
+
 class LinesParser:
     def __init__(self):
         pass
     
     def parse_line(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
-        line_classify_result = self._classify_line(line_content)
+        line_classify_result, error_table = self._classify_line(line_content)
         
         if line_classify_result == "intent_comment":
             return self._parse_intent_comment(line_content, line_num)

@@ -14,6 +14,8 @@ class McbcAnalyzer:
         self.file_content: List[str] = []
         self.structured_lines: List[Dict[str, Any]] = []
         self.ast: Dict[str, Any] = {}
+
+        self.advisor_flag: bool = False
     
     def start_analysis(self) -> bool:
         print(f"Starting Analyzing file: '{self.current_file_path}'")
@@ -23,8 +25,9 @@ class McbcAnalyzer:
         
         print(f"File read successfully: ")
         
-        if not self._generate_structured_lines():
-            print(f"Error: Failed to generate structured lines: '{self.current_file_path}'", file=sys.stderr)
+        lines_len = self._generate_structured_lines()
+        if lines_len == 0:
+            print(f"No analyzable content found in file: '{self.current_file_path}'", file=sys.stderr)
             return False
         
         print("Structured lines generated successfully.")
@@ -47,12 +50,11 @@ class McbcAnalyzer:
     
     def _generate_structured_lines(self) -> bool:
         lines_loader = LinesLoader(self.file_content)
-        result = lines_loader.generate()
-        if len(result) == 0:
-            return False
-        else:
-            self.structured_lines = result
-            return True
+        result, diag_table = lines_loader.generate()
+        if len(diag_table) != 0:
+            self.advisor_flag = True
+        self.structured_lines = result
+        return len(result)
     
     def _build_ast(self) -> bool:
         ast_builder = AstBuilder(self.structured_lines)

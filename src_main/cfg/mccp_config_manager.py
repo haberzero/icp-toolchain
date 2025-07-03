@@ -1,6 +1,8 @@
 import os
 import json
 
+
+# 单例，请勿进行额外创建，只允许外部import文件末尾的唯一实例
 class MccpConfigManager:
     def __init__(self, project_path):
         """初始化配置管理器
@@ -131,3 +133,6 @@ if __name__ == "__main__":
     finally:
         # 清理临时目录
         shutil.rmtree(temp_dir)
+
+
+g_mccp_config_manager = MccpConfigManager()

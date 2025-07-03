@@ -1,30 +1,23 @@
 import json
-from textwrap import indent
 from typing import List, Dict, Any, Optional
-from src_main.cfg.mccp_config_manager import MccpConfigManager
-# 这里暂时不会用上，只有在真正开始实际构建项目目录的时候，具备项目根路径以及相应路径下的mccp_config.json文件后才会使用
+
+from src_main.cfg.mccp_config_manager import g_mccp_config_manager
+from src_main.libs.error_handler import DiagHandler, EType, WType
+
 
 class LinesLoader:
-    def __init__(self, file_content: List[str]):
+    def __init__(self, current_dir_path: str, file_content: List[str]):
         self.file_content = file_content
+        self.current_dir_path = current_dir_path
         self.indent_space_num_config = 4  # Default value
-        self.load_indent_config()
     
     def load_indent_config(self):
         pass
-        # 对于测试代码，此处暂时无用，直接使用默认4空格缩进
-        # try:
-        #     with open('mccp_config.json', 'r', encoding='utf-8') as config_file:
-        #         config = json.load(config_file)
-        #         self.indent_space_num = config.get('indentSpaceNum', 4)
-        # except FileNotFoundError:
-        #     print("Warning: mccp_config.json not found. Using default indent space num of 4.")
-        # except json.JSONDecodeError:
-        #     print("Warning: Invalid JSON format in mccp_config.json. Using default indent space num of 4.")
+        # config_manager = g_mccp_config_manager
     
-    def generate(self) -> List[Dict[str, Any]]:
+    def generate(self):
         structured_lines = []
-        previous_indent_level = 0
+        diag_handler = DiagHandler()
         
         for line_num, line in enumerate(self.file_content, 1):
             rstripped_line = line.rstrip(' ')
@@ -32,32 +25,35 @@ class LinesLoader:
 
             if fully_stripped_line == '' or fully_stripped_line.startswith('//'):
                 continue
-            
-            if fully_stripped_line.startswith('\t'):
-                print(f"Tab character found on line {line_num}")
-                return []
 
+            # 禁止使用tab字符
+            if '\t' in line:
+                diag_handler.set_line_error(line_num, EType.TAB_DETECTED)
+                continue
+
+            # 计算缩进空格数
             indent_space_num = len(rstripped_line) - len(fully_stripped_line)
 
+            # 检查缩进是否为配置的整数倍
             if indent_space_num % self.indent_space_num_config != 0:
-                print(f"Indent space num on line {line_num} is not a multiple of indent_space_num_config: {self.indent_space_num_config}")
-                return []
+                diag_handler.set_line_error(line_num, EType.INDENT_MISALIGNMENT)
+                continue
 
             current_indent_level = indent_space_num // self.indent_space_num_config
             
-            # 缩进等级在代码块结束时会出现向下跳变，但是始终不允许向上跳变
+            # 禁止缩进向上跳变，向上跳变会导致后续行缩进全部读取失败
             if current_indent_level > previous_indent_level + 1:
-                print(f"Unexpected indentation increase on line {line_num}")
-                return []
+                diag_handler.set_line_error(line_num, EType.INDENT_JUMP)
+                continue
 
-            structured_lines.append(
-                {
-                    'line_num': line_num,
-                    'indent_level': current_indent_level,
-                    'content': fully_stripped_line
-                }
-            )
-            
+            # 如果一切正常，则添加到结构化行中
+            structured_lines.append({
+                'line_num': line_num,
+                'indent_level': current_indent_level,
+                'content': fully_stripped_line
+            })
+
             previous_indent_level = current_indent_level
-        
-        return structured_lines
+
+        # 返回 结构化行列表 和 错误表
+        return structured_lines, diag_handler.read_diag_table_all()
