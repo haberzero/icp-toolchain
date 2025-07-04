@@ -1,7 +1,8 @@
 import sys
 from typing import Dict, Any, List, Optional
 
-from src_main.libs.error_handler import ErrorHandler, EType, WType
+from src_main.cfg.mccp_config_manager import g_mccp_config_manager
+from src_main.lib.diag_handler import DiagHandler, EType, WType
 
 
 class LinesParser:

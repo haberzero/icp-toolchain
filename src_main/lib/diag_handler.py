@@ -38,11 +38,8 @@ class DiagHandler:
         self._ensure_line_exists(line_num)
         self.diag_table[line_num]['warning_type'] = warning_type
 
-    def read_diag_table_line(self, line_num: int) -> Optional[Dict[str, Any]]:
-        entry = self.diag_table.get(line_num)
-        if entry is not None:
-            return entry.copy()
-        return None
-
     def read_diag_table_all(self) -> Dict[int, Dict[str, Any]]:
-        return self.diag_table.copy()
+        return self.diag_table
+
+    def is_diag_table_valid(self) -> bool:
+        return bool(self.diag_table)

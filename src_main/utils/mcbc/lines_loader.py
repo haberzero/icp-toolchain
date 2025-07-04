@@ -2,7 +2,7 @@ import json
 from typing import List, Dict, Any, Optional
 
 from src_main.cfg.mccp_config_manager import g_mccp_config_manager
-from src_main.libs.error_handler import DiagHandler, EType, WType
+from src_main.lib.diag_handler import DiagHandler, EType, WType
 
 
 class LinesLoader:
@@ -13,6 +13,7 @@ class LinesLoader:
     
     def load_indent_config(self):
         pass
+        # 暂时跳过,后面用manager读缩进数量的配置
         # config_manager = g_mccp_config_manager
     
     def generate(self):
@@ -41,7 +42,7 @@ class LinesLoader:
 
             current_indent_level = indent_space_num // self.indent_space_num_config
             
-            # 禁止缩进向上跳变，向上跳变会导致后续行缩进全部读取失败
+            # 禁止缩进向上跳变，向上跳变会导致后续行缩进读取出错
             if current_indent_level > previous_indent_level + 1:
                 diag_handler.set_line_error(line_num, EType.INDENT_JUMP)
                 continue
@@ -55,5 +56,5 @@ class LinesLoader:
 
             previous_indent_level = current_indent_level
 
-        # 返回 结构化行列表 和 错误表
-        return structured_lines, diag_handler.read_diag_table_all()
+        # 返回 结构化行列表 和 错误表管理器
+        return structured_lines, diag_handler
