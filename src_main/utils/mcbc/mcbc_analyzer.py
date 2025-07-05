@@ -73,13 +73,13 @@ class McbcAnalyzer:
     
     def _build_ast(self):
         ast_builder = AstBuilder(self.structured_lines)
-        ast,  = ast_builder.build()
-        # 这里是要进行修改的，应该也是一个flag，用于后续的报错信息处理
-        if not ast:
-            return False
-        else:
-            self.ast = ast
-            return True
+        ast, diag_handler = ast_builder.build()
+
+        if diag_handler.is_diag_table_valid():
+            self.advisor_flag = True
+            self.diag_handler = diag_handler
+
+        return len(ast)
 
 if __name__ == "__main__":
     analyzer = McbcAnalyzer("example.mcbc")

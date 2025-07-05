@@ -3,27 +3,29 @@ from typing import List, Dict, Any, Optional
 from lines_parser import LinesParser
 
 class AstBuilder:
-    def __init__(self, structured_lines: List[Dict[str, Any]]):
+    def __init__(self, structured_lines: List[Dict[str, Any]], diag_handler: DiagHandler):
         self.structured_lines = structured_lines
-        self.lines_parser = LinesParser()
+        self.lines_parser = LinesParser(diag_handler)
         self.ast: Dict[str, Any] = self.lines_parser.gen_root_ast_node()
         self.expected_next_types: List[str] = []
+        self.diag_handler = diag_handler
     
-    def build(self) -> Dict[str, Any]:
+    def build(self):
         ast_stack: List[Dict[str, Any]] = [self.ast]
         last_intent_comment: str = ""
         previous_parsed_node: Optional[Dict[str, Any]] = None
 
-        for line_info in self.structured_lines:
-            line_num = line_info['line_num']
-            content = line_info['content']
-            indent_level = line_info['indent_level']
+        
+        for structured_line in self.structured_lines:
+            line_num = structured_line['line_num']
+            content = structured_line['content']
+            indent_level = structured_line['indent_level']
             
             current_parsed_node = self.lines_parser.parse_line(content, line_num)
             
-            # 这一句后面要修，这是错误处理的地方
+            # 当前行解析失败时记录错误并继续处理下一行
             if current_parsed_node is None:
-                return {}
+                continue
             
             if current_parsed_node['type'] == 'intent_comment':
                 # 错误处理得在这里增加内容，意图注释之后的行如果不是所期望的行，建议器应该把它挪位置或者直接删掉
@@ -33,13 +35,8 @@ class AstBuilder:
             current_context_node = ast_stack[-1]
             
             if current_parsed_node['type'] not in current_context_node['expected_next_types']:
-                err_str = (
-                    f"Syntax Error on line {line_num}: Unexpected node type '{current_parsed_node['type']}' "
-                    f"after '{current_context_node['type']}'. Expected one of: {current_context_node['expected_next_types']}. "
-                    f"Line content: '{content}'"
-                )
-                print(err_str, file=sys.stderr)
-                return {}
+                self.diag_handler.set_line_error(line_num, EType.UNEXPECTED_NODE_TYPE)
+                continue  # 记录错误后继续处理下一行
             
             # 这里要修一下，现在还不是atrribute,
             if current_parsed_node['type'] in ['input', 'output', 'description', 'inh']:

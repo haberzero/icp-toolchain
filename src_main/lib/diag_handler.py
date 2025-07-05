@@ -7,6 +7,13 @@ class EType(Enum):
     TAB_DETECTED = 1            # 识别到 Tab 字符
     INDENT_MISALIGNMENT = 2     # 缩进数量错误
     INDENT_JUMP = 3             # 缩进跳变错误
+    UNEXPECTED_COLON = 4        # 意外的冒号
+    UNKNOWN_LINE_TYPE = 5       # 未知行类型
+    MISSING_CLASS_NAME = 6      # 缺少类名
+    MISSING_FUNCTION_NAME = 7   # 缺少函数名
+    MISSING_VAR_NAME = 8        # 缺少变量名
+    MISSING_COLON = 9           # 缺少冒号
+    UNEXPECTED_NODE_TYPE = 10   # 意外的节点类型
 
 
 # 警告类型枚举

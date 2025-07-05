@@ -6,8 +6,8 @@ from src_main.lib.diag_handler import DiagHandler, EType, WType
 
 
 class LinesParser:
-    def __init__(self):
-        pass
+    def __init__(self, diag_handler: DiagHandler):
+        self.diag_handler = diag_handler
     
     def parse_line(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
         line_classify_result, error_table = self._classify_line(line_content)
@@ -31,16 +31,12 @@ class LinesParser:
         
         # 错误处理，LinesParser 只负责处理单独一行内的错误，其它错误由AstBuilder处理
         elif line_classify_result == "line_error_unexpected_colon":
-            print(f"Syntax Error on line {line_num}: Unexpected colon at the beginning of the line. Line content: '{line_content}'", 
-                file=sys.stderr)
+            self.diag_handler.set_line_error(line_num, EType.UNEXPECTED_COLON)
             return None
-
         else:
-            # 其实根据设想，准确来讲这个地方不应该直接抛出错误，而是记录当前行数然后丢给建议器去维修的
-            print(f"Syntax Error on line {line_num}: Unknown line type. Line content: '{line_content}'", 
-                file=sys.stderr)
+            self.diag_handler.set_line_error(line_num, EType.UNKNOWN_LINE_TYPE)
             return None
-
+    
     def _classify_line(self, line_content: str) -> str:
         # 首先处理意图注释，意图注释后的空行检查暂时不做，必要性不高。或者后面修错误处理的时候一并修了
         if line_content.startswith("@"):
@@ -119,8 +115,7 @@ class LinesParser:
         parts = class_part.split()
         
         if len(parts) < 2:
-            print(f"Syntax Error on line {line_num}: Expected class name. Line content: '{line_content}'", 
-                file=sys.stderr)
+            self.diag_handler.set_line_error(line_num, EType.MISSING_CLASS_NAME)
             return None
         
         node = self._create_base_node('class', line_num)
@@ -137,8 +132,7 @@ class LinesParser:
         parts = func_part.split()
         
         if len(parts) < 2:
-            print(f"Syntax Error on line {line_num}: Expected function name. Line content: '{line_content}'", 
-                file=sys.stderr)
+            self.diag_handler.set_line_error(line_num, EType.MISSING_FUNCTION_NAME)
             return None
         
         node = self._create_base_node('func', line_num)
@@ -153,27 +147,32 @@ class LinesParser:
     def _parse_variable_declaration(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
         parts = line_content.split(':', 1)
         if len(parts) < 2:
-            print(f"Syntax Error on line {line_num}: Expected ':' in variable declaration. Line content: '{line_content}'", 
-                file=sys.stderr)
-            return None
+            description = None
+        else:
+            description = parts[1].strip()
         
         var_part = parts[0].strip()
         var_parts = var_part.split()
         if len(var_parts) < 2:
-            print(f"Syntax Error on line {line_num}: Expected variable name. Line content: '{line_content}'", 
-                file=sys.stderr)
+            self.diag_handler.set_line_error(line_num, EType.MISSING_VAR_NAME)
             return None
         
         node = self._create_base_node('var', line_num)
         node.update({
             'name': var_parts[1],
-            'description': parts[1].strip(),
+            'value': description,
+            'description': description,
             'expected_next_types': ['behavior_step', 'var', 'func']
         })
         return node
     
     # 行为块起始关键字
-    def _parse_behavior_declaration(self, line_content: str, line_num: int) -> Dict[str, Any]:
+    def _parse_behavior_declaration(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
+        # 检查行末尾是否有冒号
+        if not line_content.endswith(':'):
+            self.diag_handler.set_line_error(line_num, EType.MISSING_COLON)
+            return None
+        
         node = self._create_base_node('behavior', line_num)
         node.update({
             'is_block_start': True,
@@ -185,8 +184,7 @@ class LinesParser:
     def _parse_attribute(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
         parts = line_content.split(':', 1)
         if len(parts) < 2:
-            print(f"Syntax Error on line {line_num}: Expected ':' in attribute. Line content: '{line_content}'", 
-                file=sys.stderr)
+            self.diag_handler.set_line_error(line_num, EType.MISSING_COLON)
             return None
         
         keyword = parts[0].strip()
@@ -213,14 +211,14 @@ class LinesParser:
             'is_block_start': True,
             'expected_next_types': ['behavior_step']
         })
-
+        
         if len(parts) > 1:
             child_content = parts[1].strip()
             node.update({
                 'is_block_start': False,
                 'one_line_child_content': child_content
             })
-
+        
         return node
     
     # 常规行为步骤行
