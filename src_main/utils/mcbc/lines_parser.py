@@ -4,8 +4,7 @@ from typing import Dict, Any, List, Optional
 from src_main.cfg.mccp_config_manager import g_mccp_config_manager
 from src_main.lib.diag_handler import DiagHandler, EType, WType
 
-# TODO: 存在TODO事项，请时刻检查根目录TODO.txt
-
+# TODO: 存在TODO事项，请检查根目录TODO.txt
 class LinesParser:
     def __init__(self, diag_handler: DiagHandler):
         self.diag_handler = diag_handler
@@ -99,8 +98,7 @@ class LinesParser:
             'attributes': None,
             'one_line_child_content': None,
             'expected_next': [],
-            'expected_child': [],
-            'is_ast_node': False
+            'expected_child': []
         }
 
     def gen_root_ast_node(self) -> Dict[str, Any]:
@@ -109,19 +107,17 @@ class LinesParser:
         root.update({
             'name': 'root',
             'description': 'root',
-            'expected_next_types': ['class', 'func', 'var'],
-            'is_ast_node': True
+            'expected_child': ['class', 'func', 'var']
         })
         return root
-    
+
     # 意图注释
     def _parse_intent_comment(self, line_content: str, line_num: int) -> Dict[str, Any]:
-        # 无格式要求，意图注释本质上是提示词
+        # 无格式要求，意图注释本质上是提示词，意图注释特殊处理，不被当做ast_node存在
         node = self._create_base_node('intent_comment', line_num)
         node.update({
             'value': line_content.lstrip('@').strip(),
-            'is_ast_node': False,
-            'expected_next_types': ['class', 'func', 'var', 'behavior', 'behavior_step_with_child']
+            'expected_next': ['class', 'func', 'var', 'begin', 'behavior_step_with_child']
         })
         return node
     
@@ -149,12 +145,13 @@ class LinesParser:
             self.diag_handler.set_line_error(line_num, EType.UNEXPECTED_SPACE)
             return None
         
-        # 创建类节点
+        # 创建类节点（注意，class关键字不被认为是块起始, 'begin' 才是）
         node = self._create_base_node('class', line_num)
         node.update({
             'name': class_components[1],
             'is_block_start': False,  # 修改为False
-            'expected_next': ['inh', 'begin']  # 新增begin关键字要求
+            'expected_child': ['inh', 'description', 'begin'],
+            'expected_next': ['class', 'func', 'var']
         })
         return node
     
@@ -182,12 +179,13 @@ class LinesParser:
             self.diag_handler.set_line_error(line_num, EType.UNEXPECTED_SPACE)
             return None
         
-        # 创建函数节点（注意，func关键字不被认为是块起始, 'behavior' 才是）
+        # 创建函数节点（注意，func关键字不被认为是块起始, 'begin' 才是）
         node = self._create_base_node('func', line_num)
         node.update({
             'name': func_components[1],
             'is_block_start': False,
-            'expected_next': ['input', 'output', 'description', 'begin']
+            'expected_child': ['input', 'output', 'description', 'begin'],
+            'expected_next': ['class', 'func', 'var']
         })
         return node
     
@@ -216,9 +214,12 @@ class LinesParser:
             'name': var_parts[1],
             'value': description,
             'description': description,
-            'expected_next': ['behavior_step', 'behavior_step_with_child', 'var', 'func']
+            'expected_next': ['behavior_step', 'behavior_step_with_child', 'var', 'func', 'class']
         })
         return node
+        # 注意此处会出现一个bug，理论上来讲我不希望var func class在任何behavior_step之后被嵌套定义，但是var的出现会打破规则。以后是要修的
+        # 目前的考虑方案之一是，把var还是细分，class的var func的var root的var之类的，class也细分，是否被嵌套定义过。
+        # 这样一来，lineparser就应该接收额外的信息，就是当前的父节点是谁。这个倒是很好说，后面改一下ast_builder的调用过程即可
     
     # Begin块声明
     def _parse_begin_declaration(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
@@ -236,7 +237,7 @@ class LinesParser:
         node = self._create_base_node('begin', line_num)
         node.update({
             'is_block_start': True,
-            'expected_child': ['behavior_step', 'behavior_step_with_child', 'var', 'func']  # 使用expected_child
+            'expected_child': ['behavior_step', 'behavior_step_with_child', 'var', 'func', 'class']
         })
         return node
     
@@ -250,11 +251,10 @@ class LinesParser:
         node = self._create_base_node('input', line_num)
         node.update({
             'value': parts[1].strip(),
-            'is_ast_node': False,
-            'expected_next': ['input', 'output', 'description', 'begin']
+            'expected_next': ['output', 'description', 'begin']
         })
         return node
-    
+
     # Output属性解析
     def _parse_output_attribute(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
         parts = line_content.split(':', 1)
@@ -265,11 +265,10 @@ class LinesParser:
         node = self._create_base_node('output', line_num)
         node.update({
             'value': parts[1].strip(),
-            'is_ast_node': False,
-            'expected_next': ['input', 'output', 'description', 'begin']
+            'expected_next': ['description', 'begin']
         })
         return node
-    
+
     # Description属性解析
     def _parse_description_attribute(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
         parts = line_content.split(':', 1)
@@ -280,11 +279,10 @@ class LinesParser:
         node = self._create_base_node('description', line_num)
         node.update({
             'value': parts[1].strip(),
-            'is_ast_node': False,
-            'expected_next': ['var', 'func', 'begin']
+            'expected_next': ['var', 'func', 'class']
         })
         return node
-    
+
     # Inh属性解析
     def _parse_inh_attribute(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
         parts = line_content.split(':', 1)
@@ -295,7 +293,6 @@ class LinesParser:
         node = self._create_base_node('inh', line_num)
         node.update({
             'value': parts[1].strip(),
-            'is_ast_node': False,
             'expected_next': ['begin']  # inh后必须跟begin
         })
         return node
@@ -320,8 +317,8 @@ class LinesParser:
             node.update({
                 'value': behavior_desc,
                 'is_block_start': True,
-                'expected_child': ['var', 'behavior_step'],
-                'expected_next': ['behavior_step', 'behavior_step_with_child', 'var']
+                'expected_child': ['var', 'behavior_step', 'behavior_step_with_child'],
+                'expected_next': ['var', 'behavior_step', 'behavior_step_with_child']
             })
         return node
     
@@ -330,6 +327,6 @@ class LinesParser:
         node = self._create_base_node('behavior_step', line_num)
         node.update({
             'value': line_content.strip(),
-            'expected_next': ['behavior_step', 'behavior_step_with_child', 'var']
+            'expected_next': ['var', 'behavior_step', 'behavior_step_with_child']
         })
         return node
