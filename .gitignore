@@ -20,9 +20,11 @@ temp
 tmp
 *.tmp
 *.log
+test.*
 
 # Backup files
-backup
+*backup*
+
 
 # IDE specific files
 .idea
