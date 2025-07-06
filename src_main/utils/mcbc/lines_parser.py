@@ -4,9 +4,7 @@ from typing import Dict, Any, List, Optional
 from src_main.cfg.mccp_config_manager import g_mccp_config_manager
 from src_main.lib.diag_handler import DiagHandler, EType, WType
 
-# TODO: 在未来 expected_next_type这个属性应该进行一定的重构，现在这种状态属于纯手动维护，必然会为未来开发带来困难。
-# 更主要的一点在于，对于不同的target lang来说，语法行为应该有不同的限制。比如python允许函数和类的嵌套定义，但C中不会进行函数的嵌套
-# 目前的困难是：mccp不是编程语言，目前评估也不适合去编写“上下文无关文法 —— 也即CFG”。我需要自定义递归下降的结构，保持灵活性和可变性
+# TODO: 存在TODO事项，请时刻检查根目录TODO.txt
 
 class LinesParser:
     def __init__(self, diag_handler: DiagHandler):
@@ -26,8 +24,14 @@ class LinesParser:
             return self._parse_variable_declaration(line_content, line_num)
         elif line_classify_result == "behavior_declaration":
             return self._parse_begin_declaration(line_content, line_num)
-        elif line_classify_result == "attribute":
-            return self._parse_attribute(line_content, line_num)
+        elif line_classify_result == "input_attribute":
+            return self._parse_input_attribute(line_content, line_num)
+        elif line_classify_result == "output_attribute":
+            return self._parse_output_attribute(line_content, line_num)
+        elif line_classify_result == "description_attribute":
+            return self._parse_description_attribute(line_content, line_num)
+        elif line_classify_result == "inh_attribute":
+            return self._parse_inh_attribute(line_content, line_num)
         elif line_classify_result == "behavior_step_with_children":
             return self._parse_behavior_step_with_child(line_content, line_num)
         elif line_classify_result == "behavior_step":
@@ -123,7 +127,7 @@ class LinesParser:
     
     # 类声明
     def _parse_class_declaration(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
-        # 格式要求: 'class 类名:' (冒号后不允许有其他内容)
+        # 格式要求: 'class 类名:' (冒号后暂时不允许有其他内容)
         colon_split_strs = line_content.split(':', 1) # 只分割第一个冒号
         if len(colon_split_strs) < 2:
             self.diag_handler.set_line_error(line_num, EType.MISSING_COLON)
@@ -156,7 +160,7 @@ class LinesParser:
     
     # 函数声明
     def _parse_function_declaration(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
-        # 格式要求: 'func 函数名:' (冒号后不允许有其他内容)
+        # 格式要求: 'func 函数名:' (冒号后暂时不允许有其他内容)
         colon_split_strs = line_content.split(':', 1) # 只分割第一个冒号
         if len(colon_split_strs) < 2:
             self.diag_handler.set_line_error(line_num, EType.MISSING_COLON)
@@ -212,15 +216,21 @@ class LinesParser:
             'name': var_parts[1],
             'value': description,
             'description': description,
-            'expected_next_types': ['behavior_step', 'behavior_step_with_child', 'var', 'func']
+            'expected_next': ['behavior_step', 'behavior_step_with_child', 'var', 'func']
         })
         return node
     
-    # 行为块起始关键字
+    # Begin块声明
     def _parse_begin_declaration(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
-        # 检查行末尾是否有冒号
-        if not line_content.endswith(':'):
+        # 格式要求: 'begin:' (冒号后暂时不允许有其他内容)
+        colon_split_strs = line_content.split(':', 1) # 只分割第一个冒号
+        if len(colon_split_strs) < 2:
             self.diag_handler.set_line_error(line_num, EType.MISSING_COLON)
+            return None
+        
+        # 检查冒号后是否有多余内容
+        if colon_split_strs[1].strip() != "":
+            self.diag_handler.set_line_error(line_num, EType.EXTRA_CONTENT_AFTER_COLON)
             return None
         
         node = self._create_base_node('begin', line_num)
