@@ -20,5 +20,9 @@ file: lines_parser ——
 
 3.  还是以前记录过的，也许Scons这种新兴的借助python的构建工具可以帮到我。但是优先级不高，暂时作为备忘
 
+4.  data_type需要去实现，把现在node info做成class形式，现在属于纯原生字典手动管理，存在隐患
+    未来如果要针对不同的target，就可以针对node info的class进行针对性处理，有利于未来扩展
+    现在暂时不处理，精力集中于python，集中于第一次自举
+
 
 """
