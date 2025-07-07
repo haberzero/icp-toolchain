@@ -9,39 +9,39 @@ class LinesParser:
     def __init__(self, diag_handler: DiagHandler):
         self.diag_handler = diag_handler
     
-    def parse_line(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
+    def parse_line(self, line_content: str, node_uid: int) -> Optional[Dict[str, Any]]:
         line_classify_result = self._classify_line(line_content)
         
         # _parse_line检测到语法错误后会返回None
         if line_classify_result == "intent_comment":
-            return self._parse_intent_comment(line_content, line_num)
+            return self._parse_intent_comment(line_content, node_uid)
         elif line_classify_result == "class_declaration":
-            return self._parse_class_declaration(line_content, line_num)
+            return self._parse_class_declaration(line_content, node_uid)
         elif line_classify_result == "function_declaration":
-            return self._parse_function_declaration(line_content, line_num)
+            return self._parse_function_declaration(line_content, node_uid)
         elif line_classify_result == "variable_declaration":
-            return self._parse_variable_declaration(line_content, line_num)
+            return self._parse_variable_declaration(line_content, node_uid)
         elif line_classify_result == "behavior_declaration":
-            return self._parse_begin_declaration(line_content, line_num)
+            return self._parse_begin_declaration(line_content, node_uid)
         elif line_classify_result == "input_attribute":
-            return self._parse_input_attribute(line_content, line_num)
+            return self._parse_input_attribute(line_content, node_uid)
         elif line_classify_result == "output_attribute":
-            return self._parse_output_attribute(line_content, line_num)
+            return self._parse_output_attribute(line_content, node_uid)
         elif line_classify_result == "description_attribute":
-            return self._parse_description_attribute(line_content, line_num)
+            return self._parse_description_attribute(line_content, node_uid)
         elif line_classify_result == "inh_attribute":
-            return self._parse_inh_attribute(line_content, line_num)
+            return self._parse_inh_attribute(line_content, node_uid)
         elif line_classify_result == "behavior_step_with_children":
-            return self._parse_behavior_step_with_child(line_content, line_num)
+            return self._parse_behavior_step_with_child(line_content, node_uid)
         elif line_classify_result == "behavior_step":
-            return self._parse_behavior_step(line_content, line_num)
+            return self._parse_behavior_step(line_content, node_uid)
 
         # 目前唯一一个来自line_classify的语法错误检查
         elif line_classify_result == "line_error_unexpected_colon":
-            self.diag_handler.set_line_error(line_num, EType.UNEXPECTED_COLON)
+            self.diag_handler.set_line_error(node_uid, EType.UNEXPECTED_COLON)
             return None
         else:
-            self.diag_handler.set_line_error(line_num, EType.UNKNOWN_LINE_TYPE)
+            self.diag_handler.set_line_error(node_uid, EType.UNKNOWN_LINE_TYPE)
             return None
     
     def _classify_line(self, line_content: str) -> str:
@@ -84,10 +84,11 @@ class LinesParser:
             return "behavior_step"
 
     # 创建基础节点结构，确保所有键都存在。具体各个key的功能说明可查阅helper.py（后续会放进去，现在还没有）
-    def _create_base_node(self, node_type: str, line_num: int) -> Dict[str, Any]:
+    # 节点信息会在lines_parser和ast_builder中被进行一些不同处理
+    def _create_base_node(self, node_type: str, node_uid: int) -> Dict[str, Any]:
         return {
             'type': node_type,
-            'line_num': line_num,
+            'node_uid': node_uid,
             'name': None,
             'value': None,
             'description': None,
@@ -95,10 +96,9 @@ class LinesParser:
             'is_block_start': False,
             'parent': None,
             'children': [],
-            'attributes': None,
-            'one_line_child_content': None,
             'expected_next': [],
-            'expected_child': []
+            'expected_child': [],
+            'is_ast_node': True
         }
 
     def gen_root_ast_node(self) -> Dict[str, Any]:
@@ -107,90 +107,91 @@ class LinesParser:
         root.update({
             'name': 'root',
             'description': 'root',
-            'expected_child': ['class', 'func', 'var']
+            'expected_child': ['class', 'func', 'var', 'intent_comment']
         })
         return root
 
     # 意图注释
-    def _parse_intent_comment(self, line_content: str, line_num: int) -> Dict[str, Any]:
-        # 无格式要求，意图注释本质上是提示词，意图注释特殊处理，不被当做ast_node存在
-        node = self._create_base_node('intent_comment', line_num)
+    def _parse_intent_comment(self, line_content: str, node_uid: int) -> Dict[str, Any]:
+        # 无格式要求，意图注释本质上是提示词，意图注释特殊处理，不被当做ast_node存在，其自身不在expected_体系中处理
+        node = self._create_base_node('intent_comment', node_uid)
         node.update({
             'value': line_content.lstrip('@').strip(),
-            'expected_next': ['class', 'func', 'var', 'begin', 'behavior_step_with_child']
+            'expected_next': ['class', 'func', 'var', 'begin', 'behavior_step_with_child'],
+            'is_ast_node': False
         })
         return node
     
-    # 类声明
-    def _parse_class_declaration(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
+    # 类 class 声明
+    def _parse_class_declaration(self, line_content: str, node_uid: int) -> Optional[Dict[str, Any]]:
         # 格式要求: 'class 类名:' (冒号后暂时不允许有其他内容)
         colon_split_strs = line_content.split(':', 1) # 只分割第一个冒号
         if len(colon_split_strs) < 2:
-            self.diag_handler.set_line_error(line_num, EType.MISSING_COLON)
+            self.diag_handler.set_line_error(node_uid, EType.MISSING_COLON)
             return None
         
         # 检查冒号后是否有多余内容
         if colon_split_strs[1].strip() != "":
-            self.diag_handler.set_line_error(line_num, EType.EXTRA_CONTENT_AFTER_COLON)
+            self.diag_handler.set_line_error(node_uid, EType.EXTRA_CONTENT_AFTER_COLON)
             return None
         
         class_components = colon_split_strs[0].strip().split()
         # 检查类名是否存在
         if len(class_components) < 2:
-            self.diag_handler.set_line_error(line_num, EType.MISSING_CLASS_NAME)
+            self.diag_handler.set_line_error(node_uid, EType.MISSING_CLASS_NAME)
             return None
         
         # 检查是否有多余空格及内容
         if len(class_components) > 2:
-            self.diag_handler.set_line_error(line_num, EType.UNEXPECTED_SPACE)
+            self.diag_handler.set_line_error(node_uid, EType.UNEXPECTED_SPACE)
             return None
         
         # 创建类节点（注意，class关键字不被认为是块起始, 'begin' 才是）
-        node = self._create_base_node('class', line_num)
+        node = self._create_base_node('class', node_uid)
         node.update({
             'name': class_components[1],
             'is_block_start': False,  # 修改为False
-            'expected_child': ['inh', 'description', 'begin'],
-            'expected_next': ['class', 'func', 'var']
+            'expected_child': ['inh', 'begin', 'intent_comment'],
+            'expected_next': ['description', 'intent_comment', 'class', 'func', 'var']
         })
         return node
     
-    # 函数声明
-    def _parse_function_declaration(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
+    # 函数 func 声明
+    def _parse_function_declaration(self, line_content: str, node_uid: int) -> Optional[Dict[str, Any]]:
         # 格式要求: 'func 函数名:' (冒号后暂时不允许有其他内容)
         colon_split_strs = line_content.split(':', 1) # 只分割第一个冒号
         if len(colon_split_strs) < 2:
-            self.diag_handler.set_line_error(line_num, EType.MISSING_COLON)
+            self.diag_handler.set_line_error(node_uid, EType.MISSING_COLON)
             return None
         
         # 检查冒号后是否有多余内容
         if colon_split_strs[1].strip() != "":
-            self.diag_handler.set_line_error(line_num, EType.EXTRA_CONTENT_AFTER_COLON)
+            self.diag_handler.set_line_error(node_uid, EType.EXTRA_CONTENT_AFTER_COLON)
             return None
         
         func_components = colon_split_strs[0].strip().split()
         # 检查函数名是否存在
         if len(func_components) < 2:
-            self.diag_handler.set_line_error(line_num, EType.MISSING_FUNCTION_NAME)
+            self.diag_handler.set_line_error(node_uid, EType.MISSING_FUNCTION_NAME)
             return None
         
         # 检查函数名后是否有多余内容
         if len(func_components) > 2:
-            self.diag_handler.set_line_error(line_num, EType.UNEXPECTED_SPACE)
+            self.diag_handler.set_line_error(node_uid, EType.UNEXPECTED_SPACE)
             return None
         
         # 创建函数节点（注意，func关键字不被认为是块起始, 'begin' 才是）
-        node = self._create_base_node('func', line_num)
+        node = self._create_base_node('func', node_uid)
         node.update({
             'name': func_components[1],
             'is_block_start': False,
-            'expected_child': ['input', 'output', 'description', 'begin'],
-            'expected_next': ['class', 'func', 'var']
+            'expected_child': ['input', 'output', 'begin', 'intent_comment'],
+            'expected_next': ['description', 'class', 'func', 'var', 'intent_comment']
         })
         return node
     
-    # 变量声明
-    def _parse_variable_declaration(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
+    # 变量 var 声明
+    def _parse_variable_declaration(self, line_content: str, node_uid: int) -> Optional[Dict[str, Any]]:
         # 格式要求: 'var 变量名[: 可选的对变量的描述]' 
         parts = line_content.split(':', 1)
         if len(parts) < 2:
@@ -201,121 +202,124 @@ class LinesParser:
         var_parts = parts[0].strip().split()
         # 检查变量名是否存在
         if len(var_parts) < 2:
-            self.diag_handler.set_line_error(line_num, EType.MISSING_VAR_NAME)
+            self.diag_handler.set_line_error(node_uid, EType.MISSING_VAR_NAME)
             return None
         
         # 检查变量名后是否有多余内容
         if len(var_parts) > 2:
-            self.diag_handler.set_line_error(line_num, EType.UNEXPECTED_SPACE)
+            self.diag_handler.set_line_error(node_uid, EType.UNEXPECTED_SPACE)
             return None
         
-        node = self._create_base_node('var', line_num)
+        # 如果后续没有description声明进行覆盖的话, 默认以变量对自己的功能描述作为对外声明
+        # 变量声明的expected_next标记为'NONE' 特殊处理，会使用上一个节点的expected_next
+        node = self._create_base_node('var', node_uid)
         node.update({
             'name': var_parts[1],
             'value': description,
             'description': description,
-            'expected_next': ['behavior_step', 'behavior_step_with_child', 'var', 'func', 'class']
+            'expected_next': ['NONE']
         })
         return node
-        # 注意此处会出现一个bug，理论上来讲我不希望var func class在任何behavior_step之后被嵌套定义，但是var的出现会打破规则。以后是要修的
-        # 目前的考虑方案之一是，把var还是细分，class的var func的var root的var之类的，class也细分，是否被嵌套定义过。
-        # 这样一来，lineparser就应该接收额外的信息，就是当前的父节点是谁。这个倒是很好说，后面改一下ast_builder的调用过程即可
     
-    # Begin块声明
-    def _parse_begin_declaration(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
+    # begin 块声明
+    def _parse_begin_declaration(self, line_content: str, node_uid: int) -> Optional[Dict[str, Any]]:
         # 格式要求: 'begin:' (冒号后暂时不允许有其他内容)
         colon_split_strs = line_content.split(':', 1) # 只分割第一个冒号
         if len(colon_split_strs) < 2:
-            self.diag_handler.set_line_error(line_num, EType.MISSING_COLON)
+            self.diag_handler.set_line_error(node_uid, EType.MISSING_COLON)
             return None
         
         # 检查冒号后是否有多余内容
         if colon_split_strs[1].strip() != "":
-            self.diag_handler.set_line_error(line_num, EType.EXTRA_CONTENT_AFTER_COLON)
+            self.diag_handler.set_line_error(node_uid, EType.EXTRA_CONTENT_AFTER_COLON)
             return None
         
-        node = self._create_base_node('begin', line_num)
+        node = self._create_base_node('begin', node_uid)
         node.update({
             'is_block_start': True,
             'expected_child': ['behavior_step', 'behavior_step_with_child', 'var', 'func', 'class']
         })
         return node
     
-    # Input属性解析
-    def _parse_input_attribute(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
+    # input 输入变量列表解析
+    def _parse_input_attribute(self, line_content: str, node_uid: int) -> Optional[Dict[str, Any]]:
+        # 格式要求: 'input: [输入变量列表, 以逗号分隔]'
         parts = line_content.split(':', 1)
         if len(parts) < 2:
-            self.diag_handler.set_line_error(line_num, EType.MISSING_COLON)
+            self.diag_handler.set_line_error(node_uid, EType.MISSING_COLON)
             return None
         
-        node = self._create_base_node('input', line_num)
+        node = self._create_base_node('input', node_uid)
         node.update({
-            'value': parts[1].strip(),
+            'value': parts[1].strip().split(','),
             'expected_next': ['output', 'description', 'begin']
         })
         return node
 
-    # Output属性解析
-    def _parse_output_attribute(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
+    # output 输出变量列表解析
+    def _parse_output_attribute(self, line_content: str, node_uid: int) -> Optional[Dict[str, Any]]:
+        # 格式要求: 'output: [输出变量列表, 以逗号分隔]'
         parts = line_content.split(':', 1)
         if len(parts) < 2:
-            self.diag_handler.set_line_error(line_num, EType.MISSING_COLON)
+            self.diag_handler.set_line_error(node_uid, EType.MISSING_COLON)
             return None
         
-        node = self._create_base_node('output', line_num)
+        node = self._create_base_node('output', node_uid)
         node.update({
-            'value': parts[1].strip(),
-            'expected_next': ['description', 'begin']
+            'value': parts[1].strip().split(','),
+            'expected_next': ['begin']
         })
         return node
 
-    # Description属性解析
-    def _parse_description_attribute(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
+    # description 属性解析
+    def _parse_description_attribute(self, line_content: str, node_uid: int) -> Optional[Dict[str, Any]]:
+        # 格式要求: 'description: 关键字的对外可见描述'
+        # description 的声明不作为ast_node处理，其内容会被附加在上一个同缩进node上(但对于非对外关键字无意义)，其自身不在expected_体系中处理
         parts = line_content.split(':', 1)
         if len(parts) < 2:
-            self.diag_handler.set_line_error(line_num, EType.MISSING_COLON)
+            self.diag_handler.set_line_error(node_uid, EType.MISSING_COLON)
             return None
         
-        node = self._create_base_node('description', line_num)
+        # description的expected_next标记为'NONE' 特殊处理，会使用上一个节点的expected_next
+        node = self._create_base_node('description', node_uid)
         node.update({
             'value': parts[1].strip(),
-            'expected_next': ['var', 'func', 'class']
+            'expected_next': ['NONE'],
+            'is_ast_node': False
         })
         return node
 
-    # Inh属性解析
-    def _parse_inh_attribute(self, line_content: str, line_num: int) -> Optional[Dict[str, Any]]:
+    # inh属性解析
+    def _parse_inh_attribute(self, line_content: str, node_uid: int) -> Optional[Dict[str, Any]]:
         parts = line_content.split(':', 1)
         if len(parts) < 2:
-            self.diag_handler.set_line_error(line_num, EType.MISSING_COLON)
+            self.diag_handler.set_line_error(node_uid, EType.MISSING_COLON)
             return None
         
-        node = self._create_base_node('inh', line_num)
+        node = self._create_base_node('inh', node_uid)
         node.update({
             'value': parts[1].strip(),
-            'expected_next': ['begin']  # inh后必须跟begin
+            'expected_next': ['begin']  # inh后只会再出现begin
         })
         return node
     
-    # 带有子代码块的行为步骤行，子代码块可能在同一行且只有一行，体现为len(parts) > 1
-    def _parse_behavior_step_with_child(self, line_content: str, line_num: int) -> Dict[str, Any]:
+    # 带有子代码块的行为步骤行
+    def _parse_behavior_step_with_child(self, line_content: str, node_uid: int) -> Dict[str, Any]:
         parts = line_content.split(':', 1)
-        behavior_desc = parts[0].strip()
-
-        node = self._create_base_node('behavior_step_with_child', line_num)
-        # 如果子行为块直接在同一行就不必要再进行进一步缩进
-        if len(parts) > 1:
+        node = self._create_base_node('behavior_step_with_child', node_uid)
+        if parts[1].strip():
+            # 子代码块可能在同一行且只有一行，体现为冒号后存在非空白内容，此时禁止进一步换行缩进
             child_content = parts[1].strip()
             node.update({
-                'value': behavior_desc,
+                'value': line_content,
                 'is_block_start': False,
-                'one_line_child_content': child_content,
+                'expected_child': ['var', 'behavior_step', 'behavior_step_with_child'],
                 'expected_next': ['behavior_step', 'behavior_step_with_child', 'var']
             })
         else:
             # 没有同一行子内容时添加expected_child
             node.update({
-                'value': behavior_desc,
+                'value': line_content,
                 'is_block_start': True,
                 'expected_child': ['var', 'behavior_step', 'behavior_step_with_child'],
                 'expected_next': ['var', 'behavior_step', 'behavior_step_with_child']
@@ -323,8 +327,8 @@ class LinesParser:
         return node
     
     # 常规行为步骤行
-    def _parse_behavior_step(self, line_content: str, line_num: int) -> Dict[str, Any]:
-        node = self._create_base_node('behavior_step', line_num)
+    def _parse_behavior_step(self, line_content: str, node_uid: int) -> Dict[str, Any]:
+        node = self._create_base_node('behavior_step', node_uid)
         node.update({
             'value': line_content.strip(),
             'expected_next': ['var', 'behavior_step', 'behavior_step_with_child']
