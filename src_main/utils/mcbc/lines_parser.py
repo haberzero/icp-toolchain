@@ -314,7 +314,7 @@ class LinesParser:
                 'value': line_content,
                 'is_block_start': False,
                 'expected_child': ['var', 'behavior_step', 'behavior_step_with_child'],
-                'expected_next': ['behavior_step', 'behavior_step_with_child', 'var']
+                'expected_next': ['var', 'behavior_step', 'behavior_step_with_child']
             })
         else:
             # 没有同一行子内容时添加expected_child
