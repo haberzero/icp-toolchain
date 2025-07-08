@@ -94,8 +94,9 @@ class LinesParser:
             'description': None,
             'intent_comment': None,
             'is_block_start': False,
+            'is_attribute': False,
             'parent': None,
-            'children': [],
+            'child_list': [],
             'expected_next': [],
             'expected_child': [],
             'is_ast_node': True
@@ -106,14 +107,14 @@ class LinesParser:
         root = self._create_base_node('root', 0)
         root.update({
             'name': 'root',
-            'description': 'root',
-            'expected_child': ['class', 'func', 'var', 'intent_comment']
+            'expected_child': ['class', 'func', 'var']
         })
         return root
 
     # 意图注释
     def _parse_intent_comment(self, line_content: str, node_uid: int) -> Dict[str, Any]:
         # 无格式要求，意图注释本质上是提示词，意图注释特殊处理，不被当做ast_node存在，其自身不在expected_体系中处理
+        # 不被认为是 attribute
         node = self._create_base_node('intent_comment', node_uid)
         node.update({
             'value': line_content.lstrip('@').strip(),
@@ -151,8 +152,8 @@ class LinesParser:
         node.update({
             'name': class_components[1],
             'is_block_start': False,  # 修改为False
-            'expected_child': ['inh', 'begin', 'intent_comment'],
-            'expected_next': ['description', 'intent_comment', 'class', 'func', 'var']
+            'expected_child': ['inh', 'begin'],
+            'expected_next': ['class', 'func', 'var']
         })
         return node
     
@@ -185,8 +186,8 @@ class LinesParser:
         node.update({
             'name': func_components[1],
             'is_block_start': False,
-            'expected_child': ['input', 'output', 'begin', 'intent_comment'],
-            'expected_next': ['description', 'class', 'func', 'var', 'intent_comment']
+            'expected_child': ['input', 'output', 'begin'],
+            'expected_next': ['class', 'func', 'var']
         })
         return node
     
@@ -252,7 +253,8 @@ class LinesParser:
         node = self._create_base_node('input', node_uid)
         node.update({
             'value': parts[1].strip().split(','),
-            'expected_next': ['output', 'description', 'begin']
+            'is_attribute': True,
+            'expected_next': ['output', 'begin']
         })
         return node
 
@@ -267,25 +269,8 @@ class LinesParser:
         node = self._create_base_node('output', node_uid)
         node.update({
             'value': parts[1].strip().split(','),
+            'is_attribute': True,
             'expected_next': ['begin']
-        })
-        return node
-
-    # description 属性解析
-    def _parse_description_attribute(self, line_content: str, node_uid: int) -> Optional[Dict[str, Any]]:
-        # 格式要求: 'description: 关键字的对外可见描述'
-        # description 的声明不作为ast_node处理，其内容会被附加在上一个同缩进node上(但对于非对外关键字无意义)，其自身不在expected_体系中处理
-        parts = line_content.split(':', 1)
-        if len(parts) < 2:
-            self.diag_handler.set_line_error(node_uid, EType.MISSING_COLON)
-            return None
-        
-        # description的expected_next标记为'NONE' 特殊处理，会使用上一个节点的expected_next
-        node = self._create_base_node('description', node_uid)
-        node.update({
-            'value': parts[1].strip(),
-            'expected_next': ['NONE'],
-            'is_ast_node': False
         })
         return node
 
@@ -299,10 +284,30 @@ class LinesParser:
         node = self._create_base_node('inh', node_uid)
         node.update({
             'value': parts[1].strip(),
-            'expected_next': ['begin']  # inh后只会再出现begin
+            'is_attribute': True,
+            'expected_next': ['begin']  # inh后只会再出现begin（不考虑意图注释）
         })
         return node
-    
+
+    # description 属性解析
+    def _parse_description_attribute(self, line_content: str, node_uid: int) -> Optional[Dict[str, Any]]:
+        # 格式要求: 'description: 关键字的对外可见描述'
+        # description 的声明不作为ast_node处理，其内容会被附加在上一个同缩进node上(但对于非对外关键字无意义)
+        parts = line_content.split(':', 1)
+        if len(parts) < 2:
+            self.diag_handler.set_line_error(node_uid, EType.MISSING_COLON)
+            return None
+        
+        # description的expected_next标记为'NONE' 特殊处理，会使用上一个节点的expected_next，其自身不在expected_体系中处理
+        # 不被认为是 attribute
+        node = self._create_base_node('description', node_uid)
+        node.update({
+            'value': parts[1].strip(),
+            'expected_next': ['NONE'],
+            'is_ast_node': False
+        })
+        return node
+
     # 带有子代码块的行为步骤行
     def _parse_behavior_step_with_child(self, line_content: str, node_uid: int) -> Dict[str, Any]:
         parts = line_content.split(':', 1)
