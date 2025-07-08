@@ -16,6 +16,10 @@ class EType(Enum):
     UNEXPECTED_SPACE = 10       # 多余的空格
     EXTRA_CONTENT_AFTER_COLON = 11   # 冒号后有多余内容
     UNEXPECTED_NODE_TYPE = 12   # 未知节点类型
+    INDENTATION_LEVEL_ERROR = 13  # 缩进级别错误
+    MISSING_BLOCK_START = 14    # 缺少块起始标记
+    UNEXPECTED_BLOCK_END = 15   # 意外的块结束
+    INVALID_CHILD_NODE = 16     # 无效的子节点类型
 
 
 # 警告类型枚举
