@@ -15,11 +15,14 @@ class EType(Enum):
     MISSING_COLON = 9           # 缺少冒号
     UNEXPECTED_SPACE = 10       # 多余的空格
     EXTRA_CONTENT_AFTER_COLON = 11   # 冒号后有多余内容
-    UNEXPECTED_NODE_TYPE = 12   # 未知节点类型
-    INDENTATION_LEVEL_ERROR = 13  # 缩进级别错误
-    MISSING_BLOCK_START = 14    # 缺少块起始标记
-    UNEXPECTED_BLOCK_END = 15   # 意外的块结束
-    INVALID_CHILD_NODE = 16     # 无效的子节点类型
+    UNEXPECTED_NEXT_NODE = 12   # 意外的下一节点类型
+    UNEXPECTED_CHILD_NODE = 13  # 意外的子节点类型
+    UNEXPECTED_SPECIAL_ALIGN = 14   # 具备特殊缩进对齐的节点 对齐错误
+    UNEXPECTED_INDENT_INC = 15      # 意外的缩进增加
+    MISSING_INDENT_BLOCKSTART = 16  # 块起始节点之后缺失缩进
+
+
+
 
 
 # 警告类型枚举
