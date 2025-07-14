@@ -14,16 +14,16 @@ from src_main.lib.diag_handler import DiagHandler
 # 对于单个文件的分析流程目前完全是固定的，一次McbcAnalyzer调用对应一个文件的分析过程
 
 class McbcAnalyzer:
-    def __init__(self):
+    def __init__(self, file_path, project_root):
         self.current_file_path: str = ""
         self.file_content: List[str] = []
         self.structured_lines: List[Dict[str, Any]] = []
         self.ast: Dict[str, Any] = {}
 
-        self.diag_handler: DiagHandler = None
+        self.diag_handler: DiagHandler
         self.advisor_flag: bool = False
 
-    def start_analysis_file(self, file_path: str) -> bool:
+    def start_analysis(self, file_path: str) -> bool:
         # 被外部调用，如果出现报错则外部直接跳过此文件
         self.current_file_path = file_path
         print(f"Starting Analyzing file: '{self.current_file_path}'")
@@ -62,7 +62,7 @@ class McbcAnalyzer:
             return False
     
     def _generate_structured_lines(self):
-        lines_loader = LinesLoader(self.file_content)
+        lines_loader = LinesLoader()
         result, diag_handler = lines_loader.generate()
         if diag_handler.is_diag_table_valid():
             self.advisor_flag = True
