@@ -2,7 +2,7 @@ import json
 from typing import List, Dict, Any, Optional
 
 from src_main.cfg.mccp_config_manager import g_mccp_config_manager
-from src_main.lib.diag_handler import DiagHandler, EType, WType
+from src_main.lib.diag_handler import DiagHandler, McbcEType, McbcWType
 
 
 class LinesLoader:
@@ -29,7 +29,7 @@ class LinesLoader:
 
             # 禁止使用tab字符
             if '\t' in line:
-                self.diag_handler.set_line_error(line_num, EType.TAB_DETECTED)
+                self.diag_handler.set_line_error(line_num, McbcEType.TAB_DETECTED)
                 continue
 
             # 计算缩进空格数
@@ -37,14 +37,14 @@ class LinesLoader:
 
             # 检查缩进是否为配置的整数倍
             if indent_space_num % self.indent_space_num_config != 0:
-                self.diag_handler.set_line_error(line_num, EType.INDENT_MISALIGNMENT)
+                self.diag_handler.set_line_error(line_num, McbcEType.INDENT_MISALIGNMENT)
                 continue
 
             current_indent_level = indent_space_num // self.indent_space_num_config
             
             # 禁止缩进向上跳变，向上跳变会导致后续行缩进读取出错
             if current_indent_level > previous_indent_level + 1:
-                self.diag_handler.set_line_error(line_num, EType.INDENT_JUMP)
+                self.diag_handler.set_line_error(line_num, McbcEType.INDENT_JUMP)
                 continue
 
             # 如果一切正常，则添加到结构化行中

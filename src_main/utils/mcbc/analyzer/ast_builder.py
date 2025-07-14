@@ -3,7 +3,7 @@ import json
 from typing import List, Dict, Any, Optional
 from lines_parser import LinesParser
 
-from src_main.lib.diag_handler import DiagHandler, EType, WType
+from src_main.lib.diag_handler import DiagHandler, McbcEType, McbcWType
 
 class AstBuilder:
     def __init__(self, structured_lines: List[Dict[str, Any]], diag_handler: DiagHandler, active_file: str, project_root: str):
@@ -82,16 +82,16 @@ class AstBuilder:
             # 特殊缩进对齐检查
             if curr_node['special_align'] == True:
                 if curr_indent_level != last_indent_level:
-                    self.diag_handler.set_line_error(curr_line_num, EType.UNEXPECTED_SPECIAL_ALIGN)
+                    self.diag_handler.set_line_error(curr_line_num, McbcEType.UNEXPECTED_SPECIAL_ALIGN)
                     continue
 
             # 常规缩进检查
             else:
                 if curr_indent_level == last_indent_level and last_node['is_block_start'] == True:
-                    self.diag_handler.set_line_error(curr_line_num, EType.MISSING_INDENT_BLOCKSTART)
+                    self.diag_handler.set_line_error(curr_line_num, McbcEType.MISSING_INDENT_BLOCKSTART)
                     continue
                 elif curr_indent_level == last_indent_level+1 and last_node['is_block_start'] == False:
-                    self.diag_handler.set_line_error(curr_line_num, EType.UNEXPECTED_INDENT_INC)
+                    self.diag_handler.set_line_error(curr_line_num, McbcEType.UNEXPECTED_INDENT_INC)
                     continue
                 elif curr_indent_level > last_indent_level+1:
                     raise Exception("Undefined indent level increase!! Are there some bugs in the parser or loader?")
@@ -102,11 +102,11 @@ class AstBuilder:
             expected_child = parent_node['expected_child']
 
             if curr_node['type'] not in expected_next:
-                self.diag_handler.set_line_error(curr_line_num, EType.UNEXPECTED_NEXT_NODE)
+                self.diag_handler.set_line_error(curr_line_num, McbcEType.UNEXPECTED_NEXT_NODE)
                 continue
 
             if curr_node['type'] not in expected_child:
-                self.diag_handler.set_line_error(curr_line_num, EType.UNEXPECTED_CHILD_NODE)
+                self.diag_handler.set_line_error(curr_line_num, McbcEType.UNEXPECTED_CHILD_NODE)
                 continue
 
             # 节点之间归属记录
