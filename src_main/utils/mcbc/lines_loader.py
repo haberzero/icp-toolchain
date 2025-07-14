@@ -6,10 +6,11 @@ from src_main.lib.diag_handler import DiagHandler, EType, WType
 
 
 class LinesLoader:
-    def __init__(self, current_dir_path: str, file_content: List[str]):
+    def __init__(self, current_dir_path: str, file_content: List[str], diag_handler: DiagHandler):
         self.file_content = file_content
         self.current_dir_path = current_dir_path
         self.indent_space_num_config = 4  # Default value
+        self.diag_handler = diag_handler
     
     def load_indent_config(self):
         pass
@@ -18,7 +19,6 @@ class LinesLoader:
     
     def generate(self):
         structured_lines = []
-        diag_handler = DiagHandler()
         
         for line_num, line in enumerate(self.file_content, 1):
             rstripped_line = line.rstrip(' ')
@@ -29,7 +29,7 @@ class LinesLoader:
 
             # 禁止使用tab字符
             if '\t' in line:
-                diag_handler.set_line_error(line_num, EType.TAB_DETECTED)
+                self.diag_handler.set_line_error(line_num, EType.TAB_DETECTED)
                 continue
 
             # 计算缩进空格数
@@ -37,14 +37,14 @@ class LinesLoader:
 
             # 检查缩进是否为配置的整数倍
             if indent_space_num % self.indent_space_num_config != 0:
-                diag_handler.set_line_error(line_num, EType.INDENT_MISALIGNMENT)
+                self.diag_handler.set_line_error(line_num, EType.INDENT_MISALIGNMENT)
                 continue
 
             current_indent_level = indent_space_num // self.indent_space_num_config
             
             # 禁止缩进向上跳变，向上跳变会导致后续行缩进读取出错
             if current_indent_level > previous_indent_level + 1:
-                diag_handler.set_line_error(line_num, EType.INDENT_JUMP)
+                self.diag_handler.set_line_error(line_num, EType.INDENT_JUMP)
                 continue
 
             # 如果一切正常，则添加到结构化行中
@@ -57,4 +57,4 @@ class LinesLoader:
             previous_indent_level = current_indent_level
 
         # 返回 结构化行列表 和 错误表管理器
-        return structured_lines, diag_handler
+        return structured_lines, self.diag_handler
