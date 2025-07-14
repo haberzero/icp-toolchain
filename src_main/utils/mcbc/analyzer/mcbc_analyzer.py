@@ -5,6 +5,7 @@ from ast_builder import AstBuilder
 from typing import List, Dict, Any, Optional
 
 from src_main.lib.diag_handler import DiagHandler
+from src_main.lib.file_reader.file_operator import FileOperator
 
 
 # 关于运行过程中所涉及到的特殊变量: ast_node, parsed_lines, structured_lines等，请到mcbc_helper.py去查看其结构内容
@@ -23,7 +24,7 @@ class McbcAnalyzer:
         self.diag_handler: DiagHandler
         self.advisor_flag: bool = False
 
-    def start_analysis(self, file_path: str) -> bool:
+    def _file_analysis(self, file_path: str) -> bool:
         # 被外部调用，如果出现报错则外部直接跳过此文件
         self.current_file_path = file_path
         print(f"Starting Analyzing file: '{self.current_file_path}'")
@@ -83,7 +84,7 @@ class McbcAnalyzer:
 
 if __name__ == "__main__":
     analyzer = McbcAnalyzer("example.mcbc")
-    if analyzer.start_analysis():
+    if analyzer._file_analysis():
         print("Analysis completed successfully.")
     else:
         print("Analysis failed.")

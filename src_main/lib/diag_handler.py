@@ -59,3 +59,4 @@ class DiagHandler:
 
     def is_diag_table_valid(self) -> bool:
         return bool(self.diag_table)
+    
