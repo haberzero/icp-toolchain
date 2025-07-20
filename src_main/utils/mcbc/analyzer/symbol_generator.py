@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 from lines_parser import LinesParser
 
 
-class symbolGenerator:
+class SymbolGenerator:
     @staticmethod
     def generate_symbol_table(ast_node_dict: Dict[int, Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -12,7 +12,7 @@ class symbolGenerator:
         """
 
         root_uid = -1
-        result = symbolGenerator._process_node(root_uid, ast_node_dict, parent_type='root')
+        result = SymbolGenerator._process_node(root_uid, ast_node_dict, parent_type='root')
         return result if result else []
 
     @staticmethod
@@ -34,7 +34,7 @@ class symbolGenerator:
 
         if allow_children:
             for child_uid in node.get('child_list', []):
-                child_result = symbolGenerator._process_node(child_uid, ast_node_dict, parent_type=current_type)
+                child_result = SymbolGenerator._process_node(child_uid, ast_node_dict, parent_type=current_type)
                 if child_result:
                     children_data.extend(child_result)
 

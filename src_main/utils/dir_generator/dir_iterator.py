@@ -1,8 +1,34 @@
+import sys
 import os
 import json
 import argparse
 
-# 此文件后面全部重构，应该去调用cfg文件里的manager来进行操作
+# 导入并使用
+from src_main.cfg import mccp_config_manager
+from src_main.cfg import mccp_dir_content_manager
+
+
+class DirIterator:
+    def __init__(self, project_path):
+        self.project_path = project_path
+        self.dir_content = g_mccp_dir_content_manager.read_all_dir()
+        self.current_dir_content = self.dir_content[project_path]
+        self.current_dir_content_length = len(self.current_dir_content)
+
+    def __iter__(self):
+        self.current_index = 0
+        return self
+
+    def __next__(self):
+        if self.current_index < self.current_dir_content_length:
+            item = self.current_dir_content[self.current_index]
+            self.current_index += 1
+            return item
+        else:
+            raise StopIteration()
+
+
+# 下面的代码已经被废弃，仅供参考
 
 # def create_structure(data, base_path):
 #     """递归生成文件夹和文件"""

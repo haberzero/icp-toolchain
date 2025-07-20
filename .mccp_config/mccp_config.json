@@ -2,9 +2,6 @@
     "projectName": "mccp_toolchain",
     "mccpVersion": "0.0.3",
     "targetLanguage": "Python",
-    "api-url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "api-key": "",
-    "llmModel": "qwen3-30b-a3b",
     "dependentLib": [
         "pyqt5",
         "json",

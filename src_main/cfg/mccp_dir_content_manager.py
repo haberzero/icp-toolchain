@@ -1,293 +1,392 @@
 import os
 import json
+from typing import List, Dict, Optional, Union
 
 
-# 单例，请勿进行额外创建，只允许外部import文件末尾的唯一实例
 class MccpDirContentManager:
-    def __init__(self, project_path):
-        """初始化目录内容管理器
-        :param project_path: 项目根路径
-        """
-        self.project_path = project_path
-        # 构建mccp_dir_content.json文件路径，统一使用正斜杠
-        self.json_path = os.path.normpath(f"{project_path}/.mccp_config/mccp_dir_content.json").replace("\\", "/")
-        self.dir_content = self._load_dir_content()
-        # 确保顶层src对象存在
-        if "src" not in self.dir_content:
-            self.dir_content["src"] = {}
-            self._save_dir_content()
+    _instance = None  # 类变量用于保存单例实例
 
-    def _load_dir_content(self):
-        """加载目录内容JSON文件，如果文件不存在则直接返回一个空{}"""
-        if os.path.exists(self.json_path):
-            try:
-                with open(self.json_path, 'r', encoding='utf-8') as f:
-                    content = json.load(f)
-                    # 确保顶层结构正确
-                    if isinstance(content, dict):
-                        return content
-                    print("警告: 目录内容文件结构不正确，将使用默认结构")
-            except Exception as e:
-                print(f"警告: 加载目录内容文件失败 - {str(e)}")
-        return {}
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(MccpDirContentManager, cls).__new__(cls)
+            cls._instance.init_project_path(*args, **kwargs)
+        return cls._instance
 
-    def _save_dir_content(self):
-        """保存目录内容到JSON文件"""
+    class NodeInfo:
+        # 内部节点信息结构体
+        def __init__(self, name: str, is_directory: bool, path: str):
+            self.name = name                # 节点名称
+            self.is_directory = is_directory # 是否为目录
+            self.path = path                # 完整路径
+            self.child_list = []            # 子节点列表，内容为节点名称列表
+            self.parent = ''              # 父节点完整路径+父节点名称
+
+    # 初始化目录内容管理器
+    def init_project_path(self, project_path: str = ""):
+        if project_path:
+            self.project_path = project_path
+            self.json_path = os.path.normpath(f"{project_path}/.mccp_config/mccp_dir_content.json")
+            self.json_path = self.json_path.replace("\\", "/")
+            if not os.path.exists(self.json_path):
+                with open(self.json_path, 'w', encoding='utf-8') as f:
+                    json.dump({}, f, indent=4, ensure_ascii=False)
+            self.dir_content = self._load_content()
+        else:
+            self.project_path = ""
+            self.json_path = ""
+            self.dir_content = {}
+            print("警告: 未设置项目路径，目录内容管理器将无法正常工作")
+
+    # 加载JSON内容
+    def _load_content(self) -> dict:
+        if not self.json_path:
+            print("警告: JSON路径未设置，无法加载内容")
+            return {}
         try:
-            # 确保目录存在
+            with open(self.json_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    # 保存JSON内容
+    def _save_content(self) -> bool:
+        if not self.json_path:
+            print("警告: JSON路径未设置，无法保存内容")
+            return False
+        try:
             os.makedirs(os.path.dirname(self.json_path), exist_ok=True)
             with open(self.json_path, 'w', encoding='utf-8') as f:
                 json.dump(self.dir_content, f, indent=4, ensure_ascii=False)
             return True
-        except Exception as e:
-            print(f"保存目录内容文件失败 - {str(e)}")
+        except Exception:
             return False
 
-    def _normalize_path(self, path):
+    # 获取节点引用
+    def _get_node_ref(self, path_parts: List[str]) -> Optional[dict]:
+        current = self.dir_content
+        for part in path_parts:
+            if not isinstance(current, dict) or part not in current:
+                return None
+            current = current[part]
+        return current if isinstance(current, dict) else None
+
+    # 获取父节点和目标名称
+    def _get_parent_and_name(self, path_parts: List[str]) -> tuple:
+        if not path_parts:
+            return self.dir_content, ""
+        
+        parent_parts = path_parts[:-1]
+        target_name = path_parts[-1]
+        parent_node = self._get_node_ref(parent_parts) if parent_parts else self.dir_content
+        
+        return parent_node, target_name
+
+    def _normalize_path(self, path: str) -> List[str]:
         if not path:
+            raise ValueError("Path cannot be empty.")
+
+        # 检查是否包含 '..'（禁止向上级目录访问）
+        if ".." in path:
+            raise ValueError("Path contains '..' which is not allowed.")
+
+        # 检查是否包含连续斜杠（// 或 \\）
+        if "//" in path or "\\\\" in path:
+            raise ValueError("Path contains consecutive slashes which are not allowed.")
+        
+        # 根目录直接返回
+        if path == "/":
             return []
-        normalized = path.replace('.', '/').replace('\\', '/').strip('/')
-        components = [c for c in normalized.split('/') if c]  # 过滤掉空字符串
-        return components
 
-    def _get_node(self, path_components):
-        """根据路径组件获取对应的节点及父节点
-        :param path_components: 标准化后的路径组件列表
-        :return: (parent_node, target_node, target_name) 或 (None, None, None) if not found
-        """
-        current_node = self.dir_content["src"]
-        parent_node = None
-        target_name = None
+        # 移除开头的斜杠，并替换反斜杠为正斜杠
+        path = path.strip()
+        clean_path = path.lstrip("/").replace("\\", "/")
 
-        for i, component in enumerate(path_components):
-            if component not in current_node:
-                return (None, None, None)
+        # 分割路径并做简单过滤
+        parts = [p for p in clean_path.split("/") if p]
 
-            if i == len(path_components) - 1:
-                target_name = component
-                parent_node = current_node
-                current_node = current_node[component]
-                break
+        # 检查每个路径片段是否合法（如不含控制字符等）
+        for part in parts:
+            if not part:  # 空路径片段
+                raise ValueError("Empty path component detected.")
+            if any(c in part for c in r'<>:"|?*'):  # 简单检查是否包含非法字符（Windows限制的）
+                raise ValueError(f"Path component '{part}' contains invalid characters.")
 
-            next_node = current_node[component]
-            if not isinstance(next_node, dict):
-                return (None, None, None)
-            current_node = next_node
+        return parts
 
-        return (parent_node, current_node, target_name)
+    # 检查路径是否存在
+    def exists(self, path: str) -> bool:
+        path_parts = self._normalize_path(path)
+        if not path_parts:
+            return True  # 根目录总是存在
+        
+        parent_node, target_name = self._get_parent_and_name(path_parts)
+        return parent_node is not None and target_name in parent_node
 
-    def read_all_dir(self):
-        """读取全目录，返回src对应的对象"""
-        return self.dir_content["src"].copy()
-
-    def read_directory(self, path):
-        """读取某个目录
-        :param path: 目录路径，如"ui.main_window"或"ui/main_window"
-        :return: 目录对象或None
-        """
-        path_components = self._normalize_path(path)
-        if not path_components:
-            print("警告: 目录路径不能为空")
-            return None
-
-        parent_node, target_node, target_name = self._get_node(path_components)
-
-        if not target_node:
-            print(f"警告: 目录 '{path}' 不存在")
-            return None
-
-        if not isinstance(target_node, dict):
-            print(f"警告: '{path}' 是文件，不是目录")
-            return None
-
-        return target_node.copy()
-
-    def file_exists(self, path):
-        """确定某文件是否存在
-        :param path: 文件路径，如"ui.main_window.main_entry"或"ui/main_window/main_entry"
-        :return: True if exists and is file, None otherwise
-        """
-        path_components = self._normalize_path(path)
-        if not path_components:
-            print("警告: 文件路径不能为空")
-            return None
-
-        parent_node, target_node, target_name = self._get_node(path_components)
-
-        if not target_node:
-            print(f"警告: 文件 '{path}' 不存在")
-            return None
-
-        if isinstance(target_node, dict):
-            print(f"警告: '{path}' 是目录，不是文件")
-            return None
-
-        return True
-
-    def create_directory(self, path):
-        """新建一个目录
-        :param path: 目录路径，如"ui.main_window"或"ui/main_window"
-        :return: True if created successfully, False otherwise
-        """
-        path_components = self._normalize_path(path)
-        if not path_components:
-            print("警告: 目录路径不能为空")
+    # 检查是否为目录
+    def is_directory(self, path: str) -> bool:
+        path_parts = self._normalize_path(path)
+        if not path_parts:
+            return True  # 根目录是目录
+        
+        parent_node, target_name = self._get_parent_and_name(path_parts)
+        if parent_node is None or target_name not in parent_node:
             return False
+        
+        return isinstance(parent_node[target_name], dict)
 
-        current_node = self.dir_content["src"]
+    # 检查是否为文件
+    def is_file(self, path: str) -> bool:
+        return self.exists(path) and not self.is_directory(path)
 
-        for i, component in enumerate(path_components):
-            # 检查当前组件是否存在
-            if component in current_node:
-                child_node = current_node[component]
-                # 如果是最后一个组件且已存在
-                if i == len(path_components) - 1:
-                    if isinstance(child_node, dict):
-                        print(f"警告: 目录 '{path}' 已存在")
-                        return False
-                    else:
-                        print(f"警告: 与文件 '{path}' 同名，无法创建目录")
-                        return False
-                # 如果不是最后一个组件但存在且不是目录
-                elif not isinstance(child_node, dict):
-                    print(f"警告: 路径 '{'/'.join(path_components[:i+1])}' 是文件，无法创建子目录")
+    # 列出目录内容
+    def list_directory(self, path: str = "") -> List[NodeInfo]:
+        path_parts = self._normalize_path(path)
+        node = self._get_node_ref(path_parts) if path_parts else self.dir_content
+        
+        if node is None:
+            return []
+        
+        result = []
+        base_path = "/" + "/".join(path_parts) if path_parts else ""
+        parent_path = path if path else "/"
+        
+        for name, value in node.items():
+            is_dir = isinstance(value, dict)
+            item_path = f"{base_path}/{name}".strip("/")
+            
+            # 创建NodeInfo实例
+            node_info = self.NodeInfo(name, is_dir, item_path)
+            
+            # 设置父节点路径
+            node_info.parent = parent_path
+            
+            # 如果是目录，填充子节点列表
+            if is_dir and isinstance(value, dict):
+                node_info.child_list = list(value.keys())
+            
+            result.append(node_info)
+        
+        return result
+
+    # 创建目录
+    def create_directory(self, path: str) -> bool:
+        if not path.strip():
+            return False
+        
+        path_parts = self._normalize_path(path)
+        if not path_parts:
+            return False
+        
+        # 检查是否已存在
+        if self.exists(path):
+            return False
+        
+        # 逐级创建目录
+        current = self.dir_content
+        for part in path_parts:
+            if part not in current:
+                current[part] = {}
+            elif not isinstance(current[part], dict):
+                return False  # 路径冲突：存在同名文件
+            current = current[part]
+        
+        return self._save_content()
+
+    # 创建文件
+    def create_file(self, path: str) -> bool:
+        if not path.strip():
+            return False
+        
+        path_parts = self._normalize_path(path)
+        if not path_parts:
+            return False
+        
+        # 检查是否已存在
+        if self.exists(path):
+            return False
+        
+        # 确保父目录存在
+        if len(path_parts) > 1:
+            parent_path = "/".join(path_parts[:-1])
+            if not self.exists(parent_path):
+                if not self.create_directory(parent_path):
                     return False
-                # 继续遍历下一级目录
-                current_node = child_node
-            else:
-                # 如果是最后一个组件，创建目录
-                if i == len(path_components) - 1:
-                    current_node[component] = {}
-                    return self._save_dir_content()
-                # 创建中间目录
-                current_node[component] = {}
-                current_node = current_node[component]
-
+            elif not self.is_directory(parent_path):
+                return False  # 父路径是文件，无法创建
+        
+        # 创建文件
+        parent_node, file_name = self._get_parent_and_name(path_parts)
+        if parent_node is not None:
+            parent_node[file_name] = None
+            return self._save_content()
+        
         return False
 
-    def create_file(self, path):
-        """新建一个文件
-        :param path: 文件路径，如"ui.main_window.main_entry"或"ui/main_window/main_entry"
-        :return: True if created successfully, False otherwise
-        """
-        path_components = self._normalize_path(path)
-        if not path_components or len(path_components) < 1:
-            print("警告: 文件路径不能为空")
+    # 删除路径（文件或目录）
+    def delete(self, path: str) -> bool:
+        if not path.strip():
             return False
-
-        # 分离目录部分和文件名
-        dir_components = path_components[:-1]
-        file_name = path_components[-1]
-
-        # 获取父目录节点
-        if dir_components:
-            parent_node, _, _ = self._get_node(dir_components)
-            if not parent_node or not isinstance(parent_node, dict):
-                print(f"警告: 文件父目录不存在或不是目录")
-                return False
-        else:
-            parent_node = self.dir_content["src"]
-
-        # 检查是否已存在同名条目
-        if file_name in parent_node:
-            existing_node = parent_node[file_name]
-            if isinstance(existing_node, dict):
-                print(f"警告: 与目录 '{path}' 同名，无法创建文件")
-            else:
-                print(f"警告: 文件 '{path}' 已存在")
+        
+        path_parts = self._normalize_path(path)
+        if not path_parts:
+            return False  # 不能删除根目录
+        
+        parent_node, target_name = self._get_parent_and_name(path_parts)
+        if parent_node is None or target_name not in parent_node:
             return False
-
-        # 创建文件节点（值为null表示文件）
-        parent_node[file_name] = None
-        return self._save_dir_content()
-
-    def delete_directory(self, path):
-        """删除目录及其内容
-        :param path: 目录路径
-        :return: True if deleted successfully, False otherwise
-        """
-        path_components = self._normalize_path(path)
-        if not path_components:
-            print("警告: 目录路径不能为空")
-            return False
-
-        parent_node, target_node, target_name = self._get_node(path_components)
-
-        if not target_node:
-            print(f"警告: 目录 '{path}' 不存在")
-            return False
-
-        if not isinstance(target_node, dict):
-            print(f"警告: '{path}' 是文件，不是目录")
-            return False
-
+        
         del parent_node[target_name]
-        return self._save_dir_content()
+        return self._save_content()
 
-    def delete_file(self, path):
-        """删除文件
-        :param path: 文件路径
-        :return: True if deleted successfully, False otherwise
-        """
-        path_components = self._normalize_path(path)
-        if not path_components:
-            print("警告: 文件路径不能为空")
+    # 移动/重命名
+    def move(self, old_path: str, new_path: str) -> bool:
+        if not self.exists(old_path) or self.exists(new_path):
             return False
-
-        parent_node, target_node, target_name = self._get_node(path_components)
-
-        if not target_node:
-            print(f"警告: 文件 '{path}' 不存在")
+        
+        old_parts = self._normalize_path(old_path)
+        new_parts = self._normalize_path(new_path)
+        
+        if not old_parts or not new_parts:
             return False
-
-        if isinstance(target_node, dict):
-            print(f"警告: '{path}' 是目录，不是文件")
+        
+        # 获取源数据
+        old_parent, old_name = self._get_parent_and_name(old_parts)
+        if old_parent is None or old_name not in old_parent:
             return False
+        
+        source_data = old_parent[old_name]
+        
+        # 确保目标父目录存在
+        if len(new_parts) > 1:
+            new_parent_path = "/".join(new_parts[:-1])
+            if not self.exists(new_parent_path):
+                if not self.create_directory(new_parent_path):
+                    return False
+        
+        # 移动数据
+        new_parent, new_name = self._get_parent_and_name(new_parts)
+        if new_parent is not None:
+            new_parent[new_name] = source_data
+            del old_parent[old_name]
+            return self._save_content()
+        
+        return False
 
-        del parent_node[target_name]
-        return self._save_dir_content()
+    # 获取完整的目录树（扁平化列表）
+    def get_all_paths(self) -> List[NodeInfo]:
+        result = []
+        
+        def _traverse(node: dict, current_path: str = "", parent_path: Optional[str] = None):
+            for name, value in node.items():
+                is_dir = isinstance(value, dict)
+                item_path = f"{current_path}/{name}".strip("/")
+                
+                # 创建NodeInfo实例
+                node_info = self.NodeInfo(name, is_dir, item_path)
+                
+                # 设置父节点路径
+                node_info.parent = parent_path if parent_path else ("/" if current_path else '')
+                
+                # 如果是目录，填充子节点列表
+                if is_dir and isinstance(value, dict):
+                    node_info.child_list = list(value.keys())
+                
+                result.append(node_info)
+                
+                if is_dir:
+                    _traverse(value, item_path, item_path)
+        
+        _traverse(self.dir_content)
+        return result
+
+    # 获取指定路径的NodeInfo对象
+    def get_node_info(self, path: str) -> Optional[NodeInfo]:
+        """获取指定路径的NodeInfo对象，包含完整的父子关系信息"""
+        if not self.exists(path):
+            return None
+        
+        path_parts = self._normalize_path(path)
+        if not path_parts:
+            # 根目录
+            node_info = self.NodeInfo("/", True, "/")
+            node_info.parent = ''
+            node_info.child_list = list(self.dir_content.keys())
+            return node_info
+        
+        # 获取父路径
+        parent_path = "/" + "/".join(path_parts[:-1]) if len(path_parts) > 1 else "/"
+        parent_path = parent_path.strip("/") if parent_path != "/" else "/"
+        
+        name = path_parts[-1]
+        is_dir = self.is_directory(path)
+        
+        # 创建NodeInfo实例
+        node_info = self.NodeInfo(name, is_dir, path)
+        node_info.parent = parent_path if parent_path != "/" else ''
+        
+        # 如果是目录，获取子节点列表
+        if is_dir:
+            children = self.list_directory(path)
+            node_info.child_list = [child.name for child in children]
+        
+        return node_info
+
+    # 获取节点的所有子孙节点
+    def get_descendants(self, path: str) -> List[NodeInfo]:
+        """获取指定路径下的所有子孙节点"""
+        if not self.is_directory(path):
+            return []
+        
+        result = []
+        
+        def _collect_descendants(current_path: str):
+            children = self.list_directory(current_path)
+            for child in children:
+                result.append(child)
+                if child.is_directory:
+                    _collect_descendants(child.path)
+        
+        _collect_descendants(path)
+        return result
+
+    # 获取节点的所有祖先节点路径
+    def get_ancestors(self, path: str) -> List[str]:
+        """获取指定路径的所有祖先节点路径"""
+        path_parts = self._normalize_path(path)
+        ancestors = []
+        
+        for i in range(len(path_parts)):
+            ancestor_path = "/" + "/".join(path_parts[:i+1])
+            ancestor_path = ancestor_path.strip("/")
+            if ancestor_path:
+                ancestors.append(ancestor_path)
+        
+        return ancestors
+
+    # 获取节点的直接父节点信息
+    def get_parent_info(self, path: str) -> Optional[NodeInfo]:
+        """获取指定路径的直接父节点信息"""
+        path_parts = self._normalize_path(path)
+        if not path_parts:
+            return None  # 根目录没有父节点
+        
+        if len(path_parts) == 1:
+            # 父节点是根目录
+            return self.get_node_info("/")
+        
+        parent_path = "/" + "/".join(path_parts[:-1])
+        parent_path = parent_path.strip("/")
+        return self.get_node_info(parent_path)
+
+    # 获取节点的直接子节点信息
+    def get_children_info(self, path: str) -> List[NodeInfo]:
+        """获取指定路径的直接子节点信息"""
+        return self.list_directory(path)
 
 
-# 自测代码
-if __name__ == "__main__":
-    import tempfile
-    import shutil
+# 创建一个单例实例，供模块导入时使用
+_instance = MccpDirContentManager()
 
-    # 创建临时目录
-    temp_dir = tempfile.mkdtemp()
-    try:
-        # 初始化管理器
-        manager = MccpDirContentManager(temp_dir)
-        print("初始化测试: ", "通过" if manager.read_all_dir() == {} else "失败")
-
-        # 测试创建目录
-        dir_result = manager.create_directory("ui/main_window")
-        print("创建目录测试: ", "通过" if dir_result else "失败")
-
-        # 测试创建文件
-        file_result = manager.create_file("ui/main_window/main_entry")
-        print("创建文件测试: ", "通过" if file_result else "失败")
-
-        # 测试读取目录
-        dir_content = manager.read_directory("ui/main_window")
-        expected_content = {"main_entry": None}
-        print("读取目录测试: ", "通过" if dir_content == expected_content else "失败")
-
-        # 测试文件存在性
-        exists_result = manager.file_exists("ui/main_window/main_entry")
-        print("文件存在测试: ", "通过" if exists_result else "失败")
-
-        # 测试删除文件
-        delete_file_result = manager.delete_file("ui/main_window/main_entry")
-        print("删除文件测试: ", "通过" if delete_file_result else "失败")
-
-        # 测试删除目录
-        delete_dir_result = manager.delete_directory("ui/main_window")
-        print("删除目录测试: ", "通过" if delete_dir_result else "失败")
-
-    finally:
-        # 清理临时目录
-        shutil.rmtree(temp_dir)
-
-
-g_mccp_dir_content_manager = MccpDirContentManager()
+# 提供一个全局访问方法
+def get_instance():
+    return _instance

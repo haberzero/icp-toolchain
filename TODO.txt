@@ -4,8 +4,6 @@ file: mcbc_data_type.py, data_type.py ——
     而且我其实不喜欢python的返回类型注释，很难读
 """
 
-
-
 file: lines_parser ——
 """
 1.  在未来 expected_next_type这个属性应该进行一定的重构，现在这种状态属于纯手动维护，必然会为未来开发带来困难。
@@ -26,11 +24,13 @@ file: lines_parser ——
 """
 
 
-
 file: ast_builder ——
 """
 # 未来会给接口定义做特殊处理，避免频繁书写begin以及pass，凭空占用行数量而且没有实际有效信息
 """
+
+
+
 
 符号表生成器现在姑且是用ai写好了，不过后面可能会涉及完善修改。先运行几次再看吧，现在懒得动
 随后接下来是要：

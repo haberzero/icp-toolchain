@@ -1,6 +1,7 @@
 import sys
 from lines_loader import LinesLoader
 from ast_builder import AstBuilder
+from symbol_generator import SymbolGenerator
 
 from typing import List, Dict, Any, Optional
 
@@ -15,7 +16,7 @@ from src_main.lib.file_reader.file_operator import FileOperator
 # 对于单个文件的分析流程目前完全是固定的，一次McbcAnalyzer调用对应一个文件的分析过程
 
 class McbcAnalyzer:
-    def __init__(self, file_path, project_root):
+    def __init__(self, file_path):
         self.current_file_path: str = ""
         self.file_content: List[str] = []
         self.structured_lines: List[Dict[str, Any]] = []
