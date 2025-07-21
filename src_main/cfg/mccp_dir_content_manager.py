@@ -298,3 +298,63 @@ _instance = MccpDirContentManager()
 # 提供一个全局访问方法
 def get_instance():
     return _instance
+
+
+
+
+# def test_all():
+#     manager = get_instance()
+#     project_root = r"C:\myself\proj\mccp-toolchain\test_mccp_proj"
+#     manager.init_project_path(project_root)
+
+#     print("=== 创建目录 ===")
+#     manager.create_dir("proj_root/test_dir")
+#     manager.create_dir("proj_root/test_dir/sub_dir")
+#     manager.create_dir("proj_root/test_dir/sub_dir/sub_sub_dir")
+
+#     print("\n=== 创建文件 ===")
+#     manager.create_file("proj_root/test_dir/file1.txt")
+#     manager.create_file("proj_root/test_dir/sub_dir/file2.txt")
+#     manager.create_file("proj_root/test_dir/sub_dir/sub_sub_dir/file3.txt")
+
+#     print("\n=== 尝试重复创建文件和目录 ===")
+#     manager.create_file("proj_root/test_dir/file1.txt")  # 应提示已存在
+#     manager.create_dir("proj_root/test_dir/sub_dir")     # 应提示已存在
+
+#     print("\n=== 尝试在文件路径上创建目录 ===")
+#     manager.create_dir("proj_root/test_dir/file1.txt")   # 应提示不能在文件路径上创建目录
+
+#     print("\n=== 删除文件 ===")
+#     manager.delete_file("proj_root/test_dir/file1.txt")
+
+#     print("\n=== 尝试删除不存在的文件 ===")
+#     manager.delete_file("proj_root/test_dir/file1.txt")  # 应提示不存在
+
+#     print("\n=== 删除目录 ===")
+#     manager.delete_dir("proj_root/test_dir/sub_dir")     # 删除 sub_dir 及其内容
+
+#     print("\n=== 尝试删除不存在的目录 ===")
+#     manager.delete_dir("proj_root/test_dir/sub_dir")     # 应提示不存在
+
+#     print("=== 创建一些用例，用于展示获取到的展平目录列表 ===")
+#     manager.create_dir("proj_root/test_dir/another_dir")
+#     manager.create_file("proj_root/test_dir/another_dir/file4.txt")
+#     manager.create_file("proj_root/test_dir/another_dir/file5.txt")
+#     manager.create_dir("proj_root/test_dir/another_dir/sub_dir")
+#     manager.create_file("proj_root/test_dir/another_dir/sub_dir/file6.txt")
+
+#     print("\n=== 获取proj_root/test_dir目录下的，展平的目录列表 ===")
+#     flat_dict = manager.get_flat_path_dict("proj_root/test_dir")
+#     print(len(flat_dict), "个节点:")
+#     for path, type_ in flat_dict.items():
+#         print(f"类型: {type_}, 路径: {path}")
+
+#     print("\n=== 最终 JSON 内容 ===")
+#     with open(manager.json_path, 'r', encoding='utf-8') as f:
+#         print(json.dumps(json.load(f), indent=4))
+
+#     print("\n=== 测试完成，清空proj_root下的内容 ===")
+#     manager.delete_dir("proj_root/test_dir")
+
+# if __name__ == "__main__":
+#     test_all()
