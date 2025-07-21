@@ -3,7 +3,7 @@ import os
 
 from src_main.utils.mcbc.analyzer.mcbc_analyzer import McbcAnalyzer
 from src_main.lib.diag_handler import DiagHandler
-from src_main.utils.dir_generator.dir_iterator import DirIterator
+from src_main.utils.dir_generator.dir_generator import DirIterator
 
 from cfg.mccp_config_manager import MccpConfigManager
 

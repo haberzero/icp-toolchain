@@ -25,8 +25,8 @@ class MccpDirContentManager:
     def init_project_path(self, project_path: str = ""):
         if project_path:
             self.project_path = project_path
-            self.json_path = os.path.abspath(self.json_path)
             self.json_path = os.path.normpath(f"{project_path}/.mccp_config/mccp_dir_content.json")
+            self.json_path = os.path.abspath(self.json_path)
             self.json_path = self.json_path.replace("\\", "/")  # 确保路径使用正斜杠
             
             if not os.path.exists(self.json_path):
@@ -41,7 +41,7 @@ class MccpDirContentManager:
     # 检查实例是否正确初始化，以及project_path是否正确设置
     def is_initialized(self) -> bool:
         if not self.project_path:
-            print("警告: 未设置项目路径，目录内容管理器将无法正常工作")
+            print("警告: 未正确初始化，目录内容管理器将无法正常工作")
         return bool(self.project_path and self.json_path and self.dir_content)
 
     # 加载JSON内容
@@ -68,7 +68,8 @@ class MccpDirContentManager:
         except Exception:
             return False
 
-    # 传入路径的结构处理，返回路径片段列表，便于针对JSON结构进行操作
+    # 传入路径的结构处理，返回路径片段列表，便于针对JSON结构进行操作。进行较基本的路径格式检查
+    # 请注意！！此处的路径特指mccp_dir_content.json中的目录结构路径，不是实际的文件系统路径
     def _path_to_parts_list(self, path: str) -> List[str]:
         if not path:
             raise ValueError("Path cannot be empty.")
@@ -101,7 +102,7 @@ class MccpDirContentManager:
         return parts
     from typing import List
 
-    # 检查传入的路径状态
+    # 根据mccp_dir_content.json 检查传入的路径状态
     def check_path_status(self, path_parts: List[str]) -> str:
         if not path_parts:
             raise ValueError("Path cannot be empty.")
@@ -237,7 +238,7 @@ class MccpDirContentManager:
         del current_content[path_parts[-1]]
         return self._save_content()
     
-    # 以字典形式返回特定路径下的，展平的完整目录结构，并且指明每个节点的类型（文件或目录）
+    # 以字典形式返回特定路径下的、展平的完整目录结构。同时指明每个节点的类型（文件或目录）
     def get_flat_path_dict(self, path: str) -> dict:
 
         # 递归解析 JSON 对象，将键路径以 "dir1/dir2/key" 形式存入 content_dict。
