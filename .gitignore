@@ -21,10 +21,11 @@ tmp
 *.tmp
 *.log
 test.*
+test_mccp_proj
+test*.py
 
 # Backup files
 *backup*
-
 
 # IDE specific files
 .idea
