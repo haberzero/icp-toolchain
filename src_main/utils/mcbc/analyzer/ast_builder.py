@@ -6,7 +6,12 @@ from lines_parser import LinesParser
 from src_main.lib.diag_handler import DiagHandler, McbcEType, McbcWType
 
 class AstBuilder:
-    def __init__(self, structured_lines: List[Dict[str, Any]], diag_handler: DiagHandler, active_file: str, project_root: str):
+    def __init__(
+            self, 
+            structured_lines: List[Dict[str, Any]], 
+            diag_handler: DiagHandler, 
+            active_file: str, 
+            project_root: str):
         self.structured_lines = structured_lines
         self.lines_parser = LinesParser(diag_handler)
         self.diag_handler = diag_handler

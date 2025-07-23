@@ -1,7 +1,6 @@
 import json
 from typing import List, Dict, Any, Optional
 
-from src_main.cfg.mccp_config_manager import g_mccp_config_manager
 from src_main.lib.diag_handler import DiagHandler, McbcEType, McbcWType
 
 

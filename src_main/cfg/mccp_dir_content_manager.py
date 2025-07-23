@@ -22,10 +22,10 @@ class MccpDirContentManager:
             self.parent = ''                # 父节点完整路径+父节点名称
 
     # 初始化目录内容管理器，dir_content.json不存在时会自动创建
-    def init_project_path(self, project_path: str = ""):
-        if project_path:
-            self.project_path = project_path
-            self.json_path = os.path.normpath(f"{project_path}/.mccp_config/mccp_dir_content.json")
+    def init_project_path(self, project_root: str = ""):
+        if project_root:
+            self.project_path = project_root
+            self.json_path = os.path.normpath(f"{project_root}/.mccp_config/mccp_dir_content.json")
             self.json_path = os.path.abspath(self.json_path)
             self.json_path = self.json_path.replace("\\", "/")  # 确保路径使用正斜杠
             
@@ -239,7 +239,7 @@ class MccpDirContentManager:
         return self._save_content()
     
     # 以字典形式返回特定路径下的、展平的完整目录结构。同时指明每个节点的类型（文件或目录）
-    def get_flat_path_dict(self, path: str) -> dict:
+    def get_flat_path_dict(self, path = 'proj_root') -> dict:
 
         # 递归解析 JSON 对象，将键路径以 "dir1/dir2/key" 形式存入 content_dict。
         def _recursive_parser(init_path_str, content_dict, stack, json_obj):

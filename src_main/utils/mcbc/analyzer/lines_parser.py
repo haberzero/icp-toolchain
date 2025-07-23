@@ -1,10 +1,9 @@
 import sys
 from typing import Dict, Any, List, Optional
 
-from src_main.cfg.mccp_config_manager import g_mccp_config_manager
 from src_main.lib.diag_handler import DiagHandler, McbcEType, McbcWType
 
-# TODO: 存在TODO事项，请检查根目录TODO.txt
+
 class LinesParser:
     def __init__(self, diag_handler: DiagHandler):
         self.diag_handler = diag_handler
