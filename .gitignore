@@ -34,7 +34,7 @@ test*.py
 *~
 
 # files that contain sensitive info (handle carefully!!)
-.mccp_config/mccp_api_config.json
+mccp_api_config.json
 
 # User-specific settings
 .DS_Store # macOS
