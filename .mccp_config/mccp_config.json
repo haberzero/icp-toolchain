@@ -2,6 +2,7 @@
     "projectName": "mccp_toolchain",
     "mccpVersion": "0.0.3",
     "targetLanguage": "Python",
+    "targetSuffix": ".py",
     "dependentLib": [
         "pyqt5",
         "json",

@@ -239,7 +239,7 @@ class MccpDirContentManager:
         return self._save_content()
     
     # 以字典形式返回特定路径下的、展平的完整目录结构。同时指明每个节点的类型（文件或目录）
-    def get_flat_path_dict(self, path = 'proj_root') -> dict:
+    def get_flat_path_dict(self, path = 'proj_root/') -> dict:
 
         # 递归解析 JSON 对象，将键路径以 "dir1/dir2/key" 形式存入 content_dict。
         def _recursive_parser(init_path_str, content_dict, stack, json_obj):
