@@ -23,6 +23,7 @@ tmp
 test.*
 test_mccp_proj
 test*.py
+test_scripts
 
 # Backup files
 *backup*
