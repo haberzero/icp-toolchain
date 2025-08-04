@@ -4,7 +4,7 @@ import json
 import argparse
 
 # 导入并使用
-from src_main.cfg import mccp_dir_content_manager
+from src_main.utils import mccp_dir_content_manager
 
 # 这个文件最主要的作用：从dir_content_manager中读取展平后的目录内容
 # 三个generator函数，分别创建mcbc, mcpc, src_main的完整目录结构

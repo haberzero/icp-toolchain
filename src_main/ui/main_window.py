@@ -1,103 +1,149 @@
-from PyQt5.QtWidgets import QMainWindow, QMenuBar, QAction, QVBoxLayout, QWidget, QHBoxLayout
+import sys
+import os
+import json
+import asyncio
+from threading import Thread
 
-try:
-    # 尝试相对导入（当作为包的一部分运行时）
-    from .init_popup import InitPopup
-    from .function_selector import FunctionSelector
-    from .left_side_browser import LeftSideBrowser
-    from .main_functional_area import MainFunctionalArea
-except ImportError:
-    # 回退到绝对导入（当直接运行时）
-    from init_popup import InitPopup
-    from function_selector import FunctionSelector
-    from left_side_browser import LeftSideBrowser
-    from main_functional_area import MainFunctionalArea
+from typing import Callable, Optional, Dict, List
+from dataclasses import dataclass
+from threading import Thread
+from queue import Queue, Empty
+from enum import Enum
 
-class MainWindow(QMainWindow):
+from src_main.cfg import proj_cfg_manager
+from src_main.cfg import ui_comm_inst
+
+import tkinter as tk
+from tkinter import ttk
+
+
+
+# 主应用类
+class MainWindow:
     def __init__(self):
-        super().__init__()
-        self.setWindowTitle("MCCP Toolchain")
-        self.setGeometry(100, 100, 1200, 800)
+        self.root = tk.Tk()
+        self.root.title("MCCP-Toolchain")
+        self.root.geometry("1280x720")
         
-        # Initialize project state
-        self.project_loaded = False
-        self.project_path = ""
+        # 初始化ui组件
+        self.setup_ui()
         
-        # Create menu bar
-        self.create_menu_bar()
-        
-        # Central widget and main layout
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QHBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-        
-        # Function selector (left narrow panel)
-        self.function_selector = FunctionSelector()
-        main_layout.addWidget(self.function_selector, 5)
-        
-        # Left side browser (wider panel)
-        self.left_side_browser = LeftSideBrowser()
-        main_layout.addWidget(self.left_side_browser, 15)
-        
-        # Main functional area
-        self.main_functional_area = MainFunctionalArea()
-        main_layout.addWidget(self.main_functional_area, 80)
-        
-        # Show initialization popup
-        self.show_init_popup()
-    
-    def create_menu_bar(self):
-        """Create the menu bar with placeholder menus"""
-        menu_bar = QMenuBar()
-        
-        # Create menus
-        file_menu = menu_bar.addMenu("文件")
-        edit_menu = menu_bar.addMenu("编辑")
-        select_menu = menu_bar.addMenu("选择")
-        view_menu = menu_bar.addMenu("查看")
-        help_menu = menu_bar.addMenu("帮助")
-        
-        # Add placeholder actions
-        file_menu.addAction("占位符")
-        edit_menu.addAction("占位符")
-        select_menu.addAction("占位符")
-        view_menu.addAction("占位符")
-        help_menu.addAction("占位符")
-        
-        self.setMenuBar(menu_bar)
-    
-    def show_init_popup(self):
-        """Show the initialization popup"""
-        self.popup = InitPopup(self)
-        self.popup.exec_()
-        
-        # Handle popup result
-        if self.popup.result() == InitPopup.Accepted:
-            self.project_loaded = True
-            self.project_path = self.popup.get_project_path()
-            # self.project_path = self.popup.get_project_path().replace('\\', '/')
-            self.load_project()
-        else:
-            # Keep window blank if canceled
-            self.left_side_browser.setVisible(False)
-            self.main_functional_area.setVisible(False)
-    
-    def load_project(self):
-        """Load project after initialization"""
-        # Show project-related components
-        self.left_side_browser.setVisible(True)
-        self.main_functional_area.setVisible(True)
-        
-        # Set project path in file browser
-        self.left_side_browser.set_root_path(self.project_path)
+        # 初始化中间层实例
+        self.config_manager = proj_cfg_manager.get_instance()
+        self.ui_comm_inst = ui_comm_inst.get_instance()
 
-# Test
-if __name__ == "__main__":
-    import sys
-    from PyQt5.QtWidgets import QApplication
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec_())
+        # 初始化队列
+        self.ui_queue = Queue()
+        
+        # 启动UI更新
+        self.update_display()
+
+    def setup_ui(self):
+        # 创建主框架
+        main_frame = ttk.Frame(self.root, padding="10")
+        main_frame.grid(row=0, column=0, sticky="nsew")
+        
+        # 配置网格权重
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(0, weight=1)
+        
+        # 文本显示框
+        self.text_display = tk.Text(main_frame, wrap=tk.WORD, state=tk.DISABLED)
+        text_scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.text_display.yview)
+        self.text_display.configure(yscrollcommand=text_scrollbar.set)
+        
+        # 文本输入框
+        self.text_input = ttk.Entry(main_frame)
+        self.text_input.bind("<Return>", lambda event: self.send_message())
+        
+        # 确认按钮
+        self.send_button = ttk.Button(main_frame, text="发送", command=self.send_message)
+        
+        # 布局
+        self.text_display.grid(row=0, column=0, columnspan=2, sticky="nsew", pady=(0, 5))
+        text_scrollbar.grid(row=0, column=2, sticky="ns", pady=(0, 5))
+        self.text_input.grid(row=1, column=0, sticky="we", pady=(0, 5))
+        self.send_button.grid(row=1, column=1, pady=(0, 5), padx=(5, 0))
+        
+        # 配置列权重
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(0, weight=1)
+
+    def send_message(self):
+        pass
+        # user_input = self.text_input.get()
+        # if not user_input.strip():
+        #     return
+            
+        # # 清空输入框
+        # self.text_input.delete(0, tk.END)
+        
+        # # 在显示框中显示用户输入
+        # self.append_to_display(f"用户: {user_input}\n\n")
+        
+        # # 设置上下文并启动处理
+        # self.ui_comm_inst.user_input = user_input
+        # self.ui_comm_inst.current_model_index = 0
+        # self.ui_comm_inst.model_outputs = []
+        # self.set_ui_state(False)
+
+    def ai_processing_loop(self):
+        """AI处理主循环"""
+        while True:
+            # 确定下一个状态
+            next_state = self.ui_comm_inst.get_next_state()
+            
+            # 如果状态发生变化，执行相应逻辑
+            if self.ui_comm_inst.current_state != self.ui_comm_inst.next_state:
+                self.ui_comm_inst.current_state = self.ui_comm_inst.next_state
+                self.state_machine.execute_state_logic()
+            
+            # 如果是完成状态，通知UI启用控件
+            if self.ui_comm_inst.current_state == AppState.DONE:
+                self.ui_queue.put(("UI_STATE", True))
+                self.ui_comm_inst.current_state = AppState.IDLE
+
+    def append_to_display(self, text: str):
+        self.text_display.config(state=tk.NORMAL)
+        self.text_display.insert(tk.END, text)
+        self.text_display.config(state=tk.DISABLED)
+        self.text_display.see(tk.END)
+
+    def clear_display(self):
+        """清空显示框"""
+        self.text_display.config(state=tk.NORMAL)
+        self.text_display.delete(1.0, tk.END)
+        self.text_display.config(state=tk.DISABLED)
+
+    def set_ui_state(self, enabled: bool):
+        """设置UI组件的启用/禁用状态"""
+        state = 'normal' if enabled else 'disabled'
+        self.text_input.config(state=state)
+        self.send_button.config(state=state)
+
+    def update_display(self):
+        """更新UI显示"""
+        while True:
+            try:
+                message = self.ui_queue.get_nowait()
+                
+                # 处理特殊消息
+                if isinstance(message, tuple):
+                    msg_type, msg_data = message
+                    if msg_type == "CLEAR":
+                        self.clear_display()
+                    elif msg_type == "UI_STATE":
+                        self.set_ui_state(msg_data)
+                else:
+                    # 普通文本消息
+                    self.append_to_display(message)
+            except Empty:
+                break
+                
+        # 每100ms刷新一次
+        self.root.after(100, self.update_display)
+
+    def run(self):
+        self.root.mainloop()

@@ -5,7 +5,9 @@ from src_main.utils.mcbc.analyzer.mcbc_analyzer import McbcAnalyzer
 from src_main.lib.diag_handler import DiagHandler
 from src_main.utils.dir_generator.dir_generator import DirGenerator
 
-from src_main.cfg import mccp_dir_content_manager
+from src_main.utils import mccp_dir_content_manager
+
+from src_main.cfg import proj_cfg_manager
 
 # 本文件的目的：
 # 通过dir_generator获取目录列表，然后逐步根据dependent map 分析目录下的mcbc文件，生成ast和symbol表

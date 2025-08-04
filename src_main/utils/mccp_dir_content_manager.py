@@ -13,7 +13,7 @@ class MccpDirContentManager:
         return cls._instance
 
     class ContentNode:
-        # 内部节点信息结构体
+        # 内部节点信息结构体（暂时未启用）
         def __init__(self, node_type: str, name: str, path: str):
             self.node_type = node_type      # 节点类型, "file" 或 "directory"
             self.name = name                # 节点名称
