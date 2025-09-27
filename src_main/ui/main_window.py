@@ -1,149 +1,270 @@
-import sys
-import os
-import json
-import asyncio
-from threading import Thread
-
-from typing import Callable, Optional, Dict, List
-from dataclasses import dataclass
-from threading import Thread
-from queue import Queue, Empty
-from enum import Enum
-
-from src_main.cfg import proj_cfg_manager
-from src_main.cfg import ui_comm_inst
-
 import tkinter as tk
 from tkinter import ttk
+import os
+from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
+from data_exchange.user_data_manager import get_instance as get_user_data_manager
 
 
-
-# 主应用类
 class MainWindow:
-    def __init__(self):
-        self.root = tk.Tk()
-        self.root.title("MCCP-Toolchain")
-        self.root.geometry("1280x720")
-        
-        # 初始化ui组件
-        self.setup_ui()
-        
-        # 初始化中间层实例
-        self.config_manager = proj_cfg_manager.get_instance()
-        self.ui_comm_inst = ui_comm_inst.get_instance()
+    def __init__(self, parent):
+        self.parent = parent
+        self.proj_cfg_manager = get_proj_cfg_manager()
+        self.user_data_manager = get_user_data_manager()
+        self.create_window()
+        self.populate_tree()
 
-        # 初始化队列
-        self.ui_queue = Queue()
+    def center_window(self, window, width, height):
+        # 获取屏幕尺寸
+        screen_width = window.winfo_screenwidth()
+        screen_height = window.winfo_screenheight()
         
-        # 启动UI更新
-        self.update_display()
+        # 计算居中位置
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        
+        # 设置窗口位置
+        window.geometry(f"{width}x{height}+{x}+{y}")
+    
+    def create_window(self):
+        self.window = self.parent
+        self.window.title("项目管理工具")
+        
+        # 设置窗口大小并居中
+        self.center_window(self.window, 1000, 600)
 
-    def setup_ui(self):
         # 创建主框架
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.grid(row=0, column=0, sticky="nsew")
-        
-        # 配置网格权重
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
-        main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(0, weight=1)
-        
-        # 文本显示框
-        self.text_display = tk.Text(main_frame, wrap=tk.WORD, state=tk.DISABLED)
-        text_scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.text_display.yview)
+        main_frame = tk.Frame(self.window)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # 创建三个区域的框架
+        # 左侧目录树框架
+        left_frame = tk.Frame(main_frame, width=200)
+        left_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 5))
+        left_frame.pack_propagate(False)
+
+        # 中间文本显示框架
+        middle_frame = tk.Frame(main_frame)
+        middle_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+
+        # 右侧显示框架
+        right_frame = tk.Frame(main_frame, width=200)
+        right_frame.pack(side=tk.LEFT, fill=tk.Y)
+        right_frame.pack_propagate(False)
+
+        # 创建目录树
+        left_label = tk.Label(left_frame, text="项目目录结构")
+        left_label.pack(anchor=tk.W)
+
+        self.tree = ttk.Treeview(left_frame)
+        tree_scrollbar = tk.Scrollbar(left_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=tree_scrollbar.set)
+
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tree_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.tree.bind('<<TreeviewSelect>>', self.on_tree_select)
+
+        # 创建中间文本显示区域
+        middle_label = tk.Label(middle_frame, text="文件内容")
+        middle_label.pack(anchor=tk.W)
+
+        self.text_display = tk.Text(middle_frame, wrap=tk.WORD, state=tk.DISABLED)
+        text_scrollbar = tk.Scrollbar(middle_frame, orient=tk.VERTICAL, command=self.text_display.yview)
         self.text_display.configure(yscrollcommand=text_scrollbar.set)
-        
-        # 文本输入框
-        self.text_input = ttk.Entry(main_frame)
-        self.text_input.bind("<Return>", lambda event: self.send_message())
-        
-        # 确认按钮
-        self.send_button = ttk.Button(main_frame, text="发送", command=self.send_message)
-        
-        # 布局
-        self.text_display.grid(row=0, column=0, columnspan=2, sticky="nsew", pady=(0, 5))
-        text_scrollbar.grid(row=0, column=2, sticky="ns", pady=(0, 5))
-        self.text_input.grid(row=1, column=0, sticky="we", pady=(0, 5))
-        self.send_button.grid(row=1, column=1, pady=(0, 5), padx=(5, 0))
-        
-        # 配置列权重
-        main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(0, weight=1)
 
-    def send_message(self):
-        pass
-        # user_input = self.text_input.get()
-        # if not user_input.strip():
-        #     return
-            
-        # # 清空输入框
-        # self.text_input.delete(0, tk.END)
+        self.text_display.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        text_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 创建右侧显示区域
+        right_label = tk.Label(right_frame, text="信息显示")
+        right_label.pack(anchor=tk.W)
+
+        self.info_display = tk.Text(right_frame, wrap=tk.WORD, state=tk.DISABLED)
+        info_scrollbar = tk.Scrollbar(right_frame, orient=tk.VERTICAL, command=self.info_display.yview)
+        self.info_display.configure(yscrollcommand=info_scrollbar.set)
+
+        self.info_display.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        info_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 创建用户交互区域
+        bottom_frame = tk.Frame(self.window, height=150)
+        bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(0, 5))
+        bottom_frame.pack_propagate(False)
+
+        # 用户输入区域
+        input_frame_container = tk.Frame(bottom_frame)
+        input_frame_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        input_label = tk.Label(input_frame_container, text="初始需求输入区:")
+        input_label.pack(anchor=tk.W, fill=tk.X)  # 让input_label占据整个上方部分
+
+        input_frame = tk.Frame(input_frame_container)
+        input_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        self.user_input = tk.Text(input_frame, wrap=tk.WORD, height=4)
+        input_scrollbar = tk.Scrollbar(input_frame, orient=tk.VERTICAL, command=self.user_input.yview)
+        self.user_input.configure(yscrollcommand=input_scrollbar.set)
+
+        self.user_input.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        input_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 按钮区域
+        button_frame = tk.Frame(bottom_frame)
+        button_frame.config(width=200)
+        button_frame.pack(side=tk.RIGHT, fill=tk.Y)
+        button_frame.pack_propagate(False)
+
+        # 创建按钮区域容器
+        buttons_column1 = tk.Frame(button_frame)
+        buttons_column1.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        spacer_label = tk.Label(buttons_column1, text="")
+        spacer_label.pack(fill=tk.X, pady=(0, 2)) # 控制与下方按钮的间距
+
+        # 按钮信息列表
+        buttons_info = [
+            ("按钮1", self.on_button1_click),
+            ("按钮2", self.on_button2_click),
+            ("按钮3", self.on_button3_click),
+            ("按钮4", self.on_button4_click),
+        ]
+
+        for text, command in buttons_info:
+            btn = tk.Button(
+                buttons_column1,
+                text=text,
+                command=command,
+                width=10,
+            )
+            btn.pack(fill=tk.X, expand=True, pady=1)
         
-        # # 在显示框中显示用户输入
-        # self.append_to_display(f"用户: {user_input}\n\n")
-        
-        # # 设置上下文并启动处理
-        # self.ui_comm_inst.user_input = user_input
-        # self.ui_comm_inst.current_model_index = 0
-        # self.ui_comm_inst.model_outputs = []
-        # self.set_ui_state(False)
+        # 创建第二列按钮区域容器
+        buttons_column2 = tk.Frame(button_frame)
+        buttons_column2.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        spacer_label2 = tk.Label(buttons_column2, text="")
+        spacer_label2.pack(fill=tk.X, pady=(0, 2))  # 控制与下方按钮的间距
 
-    def ai_processing_loop(self):
-        """AI处理主循环"""
-        while True:
-            # 确定下一个状态
-            next_state = self.ui_comm_inst.get_next_state()
-            
-            # 如果状态发生变化，执行相应逻辑
-            if self.ui_comm_inst.current_state != self.ui_comm_inst.next_state:
-                self.ui_comm_inst.current_state = self.ui_comm_inst.next_state
-                self.state_machine.execute_state_logic()
-            
-            # 如果是完成状态，通知UI启用控件
-            if self.ui_comm_inst.current_state == AppState.DONE:
-                self.ui_queue.put(("UI_STATE", True))
-                self.ui_comm_inst.current_state = AppState.IDLE
+        # 第二列按钮信息列表
+        buttons_info2 = [
+            ("按钮5", self.on_button5_click),
+            ("按钮6", self.on_button6_click),
+            ("按钮7", self.on_button7_click),
+            ("按钮8", self.on_button8_click),
+        ]
 
-    def append_to_display(self, text: str):
-        self.text_display.config(state=tk.NORMAL)
-        self.text_display.insert(tk.END, text)
-        self.text_display.config(state=tk.DISABLED)
-        self.text_display.see(tk.END)
+        for text, command in buttons_info2:
+            btn = tk.Button(
+                buttons_column2,
+                text=text,
+                command=command,
+                width=10,
+            )
+            btn.pack(fill=tk.X, expand=True, pady=1)
 
-    def clear_display(self):
-        """清空显示框"""
+        # 绑定用户输入事件
+        self.user_input.bind('<KeyRelease>', self.on_user_input_change)
+
+    def populate_tree(self):
+        # 清空现有项目树
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        # 获取项目根路径
+        root_path = self.proj_cfg_manager.get_work_dir()
+        if not root_path or not os.path.exists(root_path):
+            return
+
+        # 添加根节点
+        root_node = self.tree.insert('', 'end', text=os.path.basename(root_path), values=[root_path])
+
+        # 递归添加子目录和文件
+        self.add_nodes(root_node, root_path)
+
+    def add_nodes(self, parent, path):
+        try:
+            for item in sorted(os.listdir(path)):
+                item_path = os.path.join(path, item)
+                if os.path.isdir(item_path):
+                    # 添加目录节点
+                    node = self.tree.insert(parent, 'end', text=item, values=[item_path])
+                    # 递归添加子节点
+                    self.add_nodes(node, item_path)
+                else:
+                    # 添加文件节点
+                    self.tree.insert(parent, 'end', text=item, values=[item_path])
+        except PermissionError:
+            # 处理权限不足的情况
+            pass
+
+    def on_tree_select(self, event):
+        # 获取选中的项目
+        selection = self.tree.selection()
+        if not selection:
+            return
+
+        item = selection[0]
+        item_path = self.tree.item(item, 'values')[0]
+
+        # 检查是否为文件
+        if os.path.isfile(item_path):
+            # 尝试读取并显示文件内容
+            self.display_file_content(item_path)
+        else:
+            # 如果是目录，清空显示
+            self.clear_text_display()
+
+    def display_file_content(self, file_path):
+        try:
+            # 尝试以文本方式读取文件
+            with open(file_path, 'r', encoding='utf-8') as file:
+                content = file.read()
+
+            # 显示文件内容
+            self.text_display.config(state=tk.NORMAL)
+            self.text_display.delete(1.0, tk.END)
+            self.text_display.insert(1.0, content)
+            self.text_display.config(state=tk.DISABLED)
+        except (UnicodeDecodeError, PermissionError, FileNotFoundError):
+            # 如果文件无法读取为文本，则显示空白
+            self.clear_text_display()
+
+    def clear_text_display(self):
         self.text_display.config(state=tk.NORMAL)
         self.text_display.delete(1.0, tk.END)
         self.text_display.config(state=tk.DISABLED)
 
-    def set_ui_state(self, enabled: bool):
-        """设置UI组件的启用/禁用状态"""
-        state = 'normal' if enabled else 'disabled'
-        self.text_input.config(state=state)
-        self.send_button.config(state=state)
+    def on_user_input_change(self, event=None):
+        # 获取用户输入并保存到单例中
+        user_input = self.user_input.get(1.0, tk.END)
+        self.user_data_manager.set_user_prompt(user_input)
 
-    def update_display(self):
-        """更新UI显示"""
-        while True:
-            try:
-                message = self.ui_queue.get_nowait()
-                
-                # 处理特殊消息
-                if isinstance(message, tuple):
-                    msg_type, msg_data = message
-                    if msg_type == "CLEAR":
-                        self.clear_display()
-                    elif msg_type == "UI_STATE":
-                        self.set_ui_state(msg_data)
-                else:
-                    # 普通文本消息
-                    self.append_to_display(message)
-            except Empty:
-                break
-                
-        # 每100ms刷新一次
-        self.root.after(100, self.update_display)
+    def on_button1_click(self):
+        # 按钮1功能待实现
+        pass
 
-    def run(self):
-        self.root.mainloop()
+    def on_button2_click(self):
+        # 按钮2功能待实现
+        pass
+
+    def on_button3_click(self):
+        # 按钮3功能待实现
+        pass
+
+    def on_button4_click(self):
+        # 按钮4功能待实现
+        pass
+
+    def on_button5_click(self):
+        # 按钮5功能待实现
+        pass
+
+    def on_button6_click(self):
+        # 按钮6功能待实现
+        pass
+
+    def on_button7_click(self):
+        # 按钮7功能待实现
+        pass
+
+    def on_button8_click(self):
+        # 按钮8功能待实现
+        pass

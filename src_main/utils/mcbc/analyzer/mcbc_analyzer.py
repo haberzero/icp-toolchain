@@ -5,18 +5,18 @@ from symbol_generator import SymbolGenerator
 
 from typing import List, Dict, Any, Optional
 
-from src_main.lib.diag_handler import DiagHandler
-from src_main.lib.file_reader.file_operator import FileOperator
+from lib.diag_handler import DiagHandler
+from lib.file_reader.file_operator import FileOperator
 
 
-# 关于运行过程中所涉及到的特殊变量: ast_node, parsed_lines, structured_lines等，请到mcbc_helper.py去查看其结构内容
+# 关于运行过程中所涉及到的特殊变量: ast_node, parsed_lines, structured_lines等，请到icb_helper.py去查看其结构内容
 # 考虑在这个模块里进行报错信息汇总处理。
 # 目前的大概思路是：lines-loader ast-builder两个如果出现任何报错flag，就直接调用suggester尝试处理
 # 如果首次处理尝试后再次调用对应builder仍然存在报错，则直接把对应行丢弃，进行后续步骤，避免直接被卡死
 
-# 对于单个文件的分析流程目前完全是固定的，一次McbcAnalyzer调用对应一个文件的分析过程
+# 对于单个文件的分析流程目前完全是固定的，一次IcbAnalyzer调用对应一个文件的分析过程
 
-class McbcAnalyzer:
+class IcbAnalyzer:
     def __init__(self, file_path):
         self.current_file_path: str = ""
         self.file_content: List[str] = []
@@ -85,7 +85,7 @@ class McbcAnalyzer:
         return len(ast)
 
 if __name__ == "__main__":
-    analyzer = McbcAnalyzer("example.mcbc")
+    analyzer = IcbAnalyzer("example.icb")
     if analyzer._file_analysis():
         print("Analysis completed successfully.")
     else:

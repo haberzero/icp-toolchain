@@ -1,7 +1,7 @@
 import sys
 from typing import Dict, Any, List, Optional
 
-from src_main.lib.diag_handler import DiagHandler, McbcEType, McbcWType
+from lib.diag_handler import DiagHandler, IcbEType, IcbWType
 
 
 class LinesParser:
@@ -39,10 +39,10 @@ class LinesParser:
 
         # 目前唯一一个来自line_classify的语法错误检查
         elif line_classify_result == "line_error_unexpected_colon":
-            self.diag_handler.set_line_error(node_uid, McbcEType.UNEXPECTED_COLON)
+            self.diag_handler.set_line_error(node_uid, IcbEType.UNEXPECTED_COLON)
             return None
         else:
-            self.diag_handler.set_line_error(node_uid, McbcEType.UNKNOWN_LINE_TYPE)
+            self.diag_handler.set_line_error(node_uid, IcbEType.UNKNOWN_LINE_TYPE)
             return None
     
     def _classify_line(self, line_content: str) -> str:
@@ -135,7 +135,7 @@ class LinesParser:
         # description 的内容会被附加在上一个同缩进的node上(但对于非对外关键字无意义)
         parts = line_content.split(':', 1)
         if len(parts) < 2:
-            self.diag_handler.set_line_error(node_uid, McbcEType.MISSING_COLON)
+            self.diag_handler.set_line_error(node_uid, IcbEType.MISSING_COLON)
             return None
         
         # 'expected_next': ['NONE'] 意味着不覆盖上一个节点的expected_next。该节点不在expected_体系中处理
@@ -153,23 +153,23 @@ class LinesParser:
         # 格式要求: 'class 类名:' (冒号后暂时不允许有其他内容)
         colon_split_strs = line_content.split(':', 1) # 只分割第一个冒号
         if len(colon_split_strs) < 2:
-            self.diag_handler.set_line_error(node_uid, McbcEType.MISSING_COLON)
+            self.diag_handler.set_line_error(node_uid, IcbEType.MISSING_COLON)
             return None
         
         # 检查冒号后是否有多余内容
         if colon_split_strs[1].strip() != "":
-            self.diag_handler.set_line_error(node_uid, McbcEType.EXTRA_CONTENT_AFTER_COLON)
+            self.diag_handler.set_line_error(node_uid, IcbEType.EXTRA_CONTENT_AFTER_COLON)
             return None
         
         class_components = colon_split_strs[0].strip().split()
         # 检查类名是否存在
         if len(class_components) < 2:
-            self.diag_handler.set_line_error(node_uid, McbcEType.MISSING_CLASS_NAME)
+            self.diag_handler.set_line_error(node_uid, IcbEType.MISSING_CLASS_NAME)
             return None
         
         # 检查是否有多余空格及内容
         if len(class_components) > 2:
-            self.diag_handler.set_line_error(node_uid, McbcEType.UNEXPECTED_SPACE)
+            self.diag_handler.set_line_error(node_uid, IcbEType.UNEXPECTED_SPACE)
             return None
         
         # 创建类节点
@@ -187,23 +187,23 @@ class LinesParser:
         # 格式要求: 'func 函数名:' (冒号后暂时不允许有其他内容)
         colon_split_strs = line_content.split(':', 1) # 只分割第一个冒号
         if len(colon_split_strs) < 2:
-            self.diag_handler.set_line_error(node_uid, McbcEType.MISSING_COLON)
+            self.diag_handler.set_line_error(node_uid, IcbEType.MISSING_COLON)
             return None
         
         # 检查冒号后是否有多余内容
         if colon_split_strs[1].strip() != "":
-            self.diag_handler.set_line_error(node_uid, McbcEType.EXTRA_CONTENT_AFTER_COLON)
+            self.diag_handler.set_line_error(node_uid, IcbEType.EXTRA_CONTENT_AFTER_COLON)
             return None
         
         func_components = colon_split_strs[0].strip().split()
         # 检查函数名是否存在
         if len(func_components) < 2:
-            self.diag_handler.set_line_error(node_uid, McbcEType.MISSING_FUNCTION_NAME)
+            self.diag_handler.set_line_error(node_uid, IcbEType.MISSING_FUNCTION_NAME)
             return None
         
         # 检查函数名后是否有多余内容
         if len(func_components) > 2:
-            self.diag_handler.set_line_error(node_uid, McbcEType.UNEXPECTED_SPACE)
+            self.diag_handler.set_line_error(node_uid, IcbEType.UNEXPECTED_SPACE)
             return None
         
         # 创建函数节点
@@ -228,12 +228,12 @@ class LinesParser:
         var_parts = parts[0].strip().split()
         # 检查变量名是否存在
         if len(var_parts) < 2:
-            self.diag_handler.set_line_error(node_uid, McbcEType.MISSING_VAR_NAME)
+            self.diag_handler.set_line_error(node_uid, IcbEType.MISSING_VAR_NAME)
             return None
         
         # 检查变量名后是否有多余内容
         if len(var_parts) > 2:
-            self.diag_handler.set_line_error(node_uid, McbcEType.UNEXPECTED_SPACE)
+            self.diag_handler.set_line_error(node_uid, IcbEType.UNEXPECTED_SPACE)
             return None
         
         # 如果后续没有description声明进行覆盖的话, 默认以变量对自己的功能描述作为对外声明
@@ -252,12 +252,12 @@ class LinesParser:
         # 格式要求: 'begin:' (冒号后暂时不允许有其他内容)
         colon_split_strs = line_content.split(':', 1) # 只分割第一个冒号
         if len(colon_split_strs) < 2:
-            self.diag_handler.set_line_error(node_uid, McbcEType.MISSING_COLON)
+            self.diag_handler.set_line_error(node_uid, IcbEType.MISSING_COLON)
             return None
         
         # 检查冒号后是否有多余内容
         if colon_split_strs[1].strip() != "":
-            self.diag_handler.set_line_error(node_uid, McbcEType.EXTRA_CONTENT_AFTER_COLON)
+            self.diag_handler.set_line_error(node_uid, IcbEType.EXTRA_CONTENT_AFTER_COLON)
             return None
         
         node = self._create_base_node('begin', node_uid)
@@ -273,7 +273,7 @@ class LinesParser:
         # 格式要求: 'input: [输入变量列表, 以逗号分隔]'
         parts = line_content.split(':', 1)
         if len(parts) < 2:
-            self.diag_handler.set_line_error(node_uid, McbcEType.MISSING_COLON)
+            self.diag_handler.set_line_error(node_uid, IcbEType.MISSING_COLON)
             return None
         
         node = self._create_base_node('input', node_uid)
@@ -289,7 +289,7 @@ class LinesParser:
         # 格式要求: 'output: [输出变量列表, 以逗号分隔]'
         parts = line_content.split(':', 1)
         if len(parts) < 2:
-            self.diag_handler.set_line_error(node_uid, McbcEType.MISSING_COLON)
+            self.diag_handler.set_line_error(node_uid, IcbEType.MISSING_COLON)
             return None
         
         node = self._create_base_node('output', node_uid)
@@ -304,7 +304,7 @@ class LinesParser:
     def _parse_inh_attribute(self, line_content: str, node_uid: int) -> Optional[Dict[str, Any]]:
         parts = line_content.split(':', 1)
         if len(parts) < 2:
-            self.diag_handler.set_line_error(node_uid, McbcEType.MISSING_COLON)
+            self.diag_handler.set_line_error(node_uid, IcbEType.MISSING_COLON)
             return None
         
         node = self._create_base_node('inh', node_uid)

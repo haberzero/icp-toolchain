@@ -2,17 +2,8 @@ import sys
 import os
 import json
 
-
-
-# class MccpDirContentManager:
-#     _instance = None  # 类变量用于保存单例实例
-
-#     def __new__(cls, *args, **kwargs):
-#         if cls._instance is None:
-#             cls._instance = super(MccpDirContentManager, cls).__new__(cls)
-#             cls._instance.init_project_path(*args, **kwargs)
-#         return cls._instance
-
+# 只在运行过程中管理工程相关配置信息，所有变量都保持在内存
+# 这个类本身不应该涉及对持久性文件的存取
 
 class ProjCfgManager:
     _instance = None
@@ -20,29 +11,25 @@ class ProjCfgManager:
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super(ProjCfgManager, cls).__new__(cls)
-            cls._instance.inst_init(*args, **kwargs)
         return cls._instance
 
-    def inst_init(self, project_root: str = ""):
-        # 暂不启用，目前考虑是main获取实例以后直接set项目路径
-        pass
+    def __init__(self):
+        if not hasattr(self, 'proj_root'):
+            self.work_dir = ""
 
-    def set_proj_root(self, new_path):
+    def set_work_dir(self, new_path):
         if not os.path.exists(new_path):
             print(f"错误: 项目根路径 '{new_path}' 不存在")
             return False
-
-        self.proj_root = new_path
+        self.work_dir = new_path
         return True
     
-    def get_proj_root(self):
-        return self.proj_root
+    def get_work_dir(self):
+        return self.work_dir
 
 
-# 创建一个单例实例，供模块导入时使用
 _instance = ProjCfgManager()
 
-# 提供一个全局访问方法
+
 def get_instance():
     return _instance
-

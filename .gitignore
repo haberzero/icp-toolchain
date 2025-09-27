@@ -1,42 +1,40 @@
-# Generic .gitignore placeholder
-# Add files/directories to ignore in Git version control
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
 
-# Byte-code files
-*.pyc
-__pycache__
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
 
-# C/C++ build artifacts
-*.o
-*.so
-*.dll
-*.exe
-*.obj
-*.lib
-*.a
-*.out
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.pytest_cache/
 
-# Temporary files
-temp
-tmp
-*.tmp
-*.log
-test.*
-test_mccp_proj
-test*.py
-test_scripts
+# Environments
+.env
+.venv
+venv/
 
-# Backup files
-*backup*
-
-# IDE specific files
-.idea
-.vscode
+# IDE-specific files
+.vscode/
+.idea/
 *.swp
-*~
+*.swo
 
-# files that contain sensitive info (handle carefully!!)
-mccp_api_config.json
+# OS-specific files
+.DS_Store
+Thumbs.db
 
-# User-specific settings
-.DS_Store # macOS
-Thumbs.db # Windows
+# Project-specific files
+src_main/app_data/last_path.json
+
+# Test files and temporary dev files
+test_target_project
+src_main/_dev_temp
+test.py
