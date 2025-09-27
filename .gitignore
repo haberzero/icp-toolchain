@@ -32,9 +32,9 @@ venv/
 Thumbs.db
 
 # Project-specific files
-src_main/app_data/last_path.json
+src_main/app_data/app_data.json
 
 # Test files and temporary dev files
-test_target_project
+test_target_proj
 src_main/_dev_temp
 test.py
