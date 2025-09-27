@@ -1,7 +1,7 @@
 import sys
 from typing import Dict, Any, List, Optional
 
-from lib.diag_handler import DiagHandler, IcbEType, IcbWType
+from libs.diag_handler import DiagHandler, IcbEType, IcbWType
 
 
 class LinesParser:

@@ -1,7 +1,7 @@
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
-from lib.diag_handler import DiagHandler, IcbEType, IcbWType
+from libs.diag_handler import DiagHandler, IcbEType, IcbWType
 
 
 class LinesLoader:
@@ -16,8 +16,11 @@ class LinesLoader:
         # 暂时跳过,后面用manager读缩进数量的配置
         # config_manager = g_icp_config_manager
     
-    def generate(self):
+    def generate(self) -> Tuple[List[Dict[str, Any]], DiagHandler]:
         structured_lines = []
+        
+        # 初始化previous_indent_level
+        previous_indent_level = 0
         
         for line_num, line in enumerate(self.file_content, 1):
             rstripped_line = line.rstrip(' ')

@@ -3,7 +3,7 @@ import json
 from typing import List, Dict, Any, Optional
 from lines_parser import LinesParser
 
-from lib.diag_handler import DiagHandler, IcbEType, IcbWType
+from libs.diag_handler import DiagHandler, IcbEType, IcbWType
 
 class AstBuilder:
     def __init__(
@@ -22,7 +22,7 @@ class AstBuilder:
         self.expected_next_stack = []  # 存储每个子层级入栈时的当前expected_next，出栈至同层级后恢复
         self.uid_tree = {}  # 存储uid的树结构，目前先用原生字典做一个很简陋的树结构（其实还没想清楚这个要怎么利用起来）
 
-    def build(self):
+    def build(self) -> bool:
         curr_line_num = 0
         last_line_num = -1
         # parent_line_num = -1
