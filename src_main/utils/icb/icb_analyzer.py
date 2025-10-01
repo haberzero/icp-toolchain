@@ -1,7 +1,7 @@
 import sys
-from lines_loader import LinesLoader
-from ast_builder import AstBuilder
-from symbol_generator import SymbolGenerator
+from utils.icb.lines_loader import LinesLoader
+from utils.icb.ast_builder import AstBuilder
+from utils.icb.symbol_generator import SymbolGenerator
 
 from typing import List, Dict, Any, Optional, Tuple
 
@@ -99,15 +99,3 @@ class IcbAnalyzer:
             self.advisor_flag = True
 
         return result
-
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        file_path = sys.argv[1]
-    else:
-        file_path = "example.icb"
-        
-    analyzer = IcbAnalyzer(file_path)
-    if analyzer._file_analysis(file_path):
-        print("Analysis completed successfully.")
-    else:
-        print("Analysis failed.")

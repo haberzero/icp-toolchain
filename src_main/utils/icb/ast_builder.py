@@ -1,7 +1,7 @@
 import os
 import json
 from typing import List, Dict, Any, Optional
-from lines_parser import LinesParser
+from utils.icb.lines_parser import LinesParser
 
 from libs.diag_handler import DiagHandler, IcbEType, IcbWType
 

@@ -1,6 +1,6 @@
 import sys
 from typing import List, Dict, Any, Optional
-from lines_parser import LinesParser
+from utils.icb.lines_parser import LinesParser
 
 
 class SymbolGenerator:
