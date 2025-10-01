@@ -75,13 +75,16 @@ class CmdHandlerIntentCodeBehaviorGen(BaseCmdHandler):
         # 构建ICB目录路径
         icb_root_path = os.path.join(self.work_dir, icb_dir_name)
         
-        # 检查ICB目录是否存在
-        if not os.path.exists(icb_root_path):
-            print(f"  {Colors.FAIL}错误: ICB目录不存在，请先执行one_file_req_gen命令创建目录结构{Colors.ENDC}")
+        # 构建_src_staging目录路径
+        staging_dir_path = os.path.join(self.work_dir, '_src_staging')
+        
+        # 检查_src_staging目录是否存在
+        if not os.path.exists(staging_dir_path):
+            print(f"  {Colors.FAIL}错误: _src_staging目录不存在，请先执行one_file_req_gen命令创建目录结构{Colors.ENDC}")
             return
         
         # 为每个单文件生成半自然语言行为描述代码
-        self._generate_intent_code_behavior(icb_root_path, proj_root, file_creation_order_list, dependent_relation)
+        self._generate_intent_code_behavior(icb_root_path, staging_dir_path, proj_root, file_creation_order_list, dependent_relation)
         
         print(f"{Colors.OKGREEN}半自然语言行为描述代码生成命令执行完毕!{Colors.ENDC}")
 
@@ -107,7 +110,8 @@ class CmdHandlerIntentCodeBehaviorGen(BaseCmdHandler):
 
     def _generate_intent_code_behavior(
             self, 
-            icb_root_path: str, 
+            icb_root_path: str,
+            staging_dir_path: str,  # 添加_src_staging目录路径参数
             proj_root_content: Dict, 
             file_creation_order_list: List[str],
             dependent_relation: Dict[str, List[str]]
@@ -127,8 +131,8 @@ class CmdHandlerIntentCodeBehaviorGen(BaseCmdHandler):
         
         # 按照依赖顺序为每个文件生成半自然语言行为描述代码
         for file_path in file_creation_order_list:
-            # 读取文件需求描述
-            req_file_path = os.path.join(icb_root_path, f"{file_path}_one_file_req.txt")
+            # 从_src_staging目录读取文件需求描述
+            req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
             try:
                 with open(req_file_path, 'r', encoding='utf-8') as f:
                     file_req_content = f.read()
@@ -156,7 +160,7 @@ class CmdHandlerIntentCodeBehaviorGen(BaseCmdHandler):
             )
 
             # 移除可能的代码块标记
-            lines = cleaned_content.split('\n')
+            lines = intent_code_behavior.split('\n')  # 修复错误的变量名
             if lines and lines[0].strip().startswith('```'):
                 lines = lines[1:]
             if lines and lines[-1].strip().startswith('```'):
@@ -164,8 +168,8 @@ class CmdHandlerIntentCodeBehaviorGen(BaseCmdHandler):
             cleaned_content = '\n'.join(lines).strip()
             
             if intent_code_behavior:
-                # 保存半自然语言行为描述代码到文件
-                self._save_intent_code_behavior(icb_root_path, file_path, intent_code_behavior)
+                # 保存半自然语言行为描述代码到ICB目录下的文件
+                self._save_intent_code_behavior(icb_root_path, file_path, cleaned_content)
                 
                 # 将当前文件的描述添加到累积字典中，供后续文件参考
                 accumulated_descriptions_dict[file_path] = f"文件 {file_path} 的接口描述:\n{file_req_content}"
