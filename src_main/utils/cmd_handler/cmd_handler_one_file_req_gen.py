@@ -73,30 +73,24 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         proj_root = final_content["proj_root"]
         dependent_relation = final_content["dependent_relation"]
         file_creation_order_list = DirJsonFuncs.build_file_creation_order(dependent_relation)
-        
-        # 获取ICB目录名称
-        icb_dir_name = self._get_icb_directory_name()
-        
-        # 创建ICB目录
-        icb_root_path = os.path.join(self.work_dir, icb_dir_name)
+
+        # 创建_src_staging目录用于存储_one_file_req.txt文件
+        staging_dir_path = os.path.join(self.work_dir, '_src_staging')
         try:
-            os.makedirs(icb_root_path, exist_ok=True)
-            print(f"  {Colors.OKGREEN}ICB根目录创建成功: {icb_root_path}{Colors.ENDC}")
+            os.makedirs(staging_dir_path, exist_ok=True)
+            print(f"  {Colors.OKGREEN}_src_staging目录创建成功: {staging_dir_path}{Colors.ENDC}")
         except Exception as e:
-            print(f"  {Colors.FAIL}错误: 创建ICB根目录失败: {e}{Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 创建_src_staging目录失败: {e}{Colors.ENDC}")
             return
         
-        # 根据proj_root递归创建目录结构
-        self._create_directory_structure(icb_root_path, proj_root)
-        
-        # 为每个单文件生成需求描述
-        self._generate_file_requirements_1(icb_root_path, proj_root, file_creation_order_list)
+        # 为每个单文件生成需求描述，保存到_src_staging目录
+        self._generate_file_requirements_1(staging_dir_path, proj_root, file_creation_order_list)
         
         # 构建文件描述字典供依赖分析使用
-        file_desc_dict = self._build_file_desc_dict(icb_root_path, file_creation_order_list)
+        file_desc_dict = self._build_file_desc_dict(staging_dir_path, file_creation_order_list)
         
         # 为每个文件生成依赖关系，并获取新的依赖关系字典
-        new_dependent_relation = self._generate_file_dependencies_2(icb_root_path, file_creation_order_list, file_desc_dict, proj_root)
+        new_dependent_relation = self._generate_file_dependencies_2(staging_dir_path, file_creation_order_list, file_desc_dict, proj_root)
         
         cycle_detected = DirJsonFuncs.detect_circular_dependencies(new_dependent_relation)
         if cycle_detected:
@@ -108,68 +102,9 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         
         print(f"{Colors.OKGREEN}ICB目录结构创建命令执行完毕!{Colors.ENDC}")
 
-    def _get_icb_directory_name(self) -> str:
-        """获取ICB目录名称，优先从配置文件读取behavioral_layer_dir，失败则使用默认值"""
-        icp_config_file = os.path.join(self.icp_proj_data_dir, 'icp_config.json')
-        try:
-            with open(icp_config_file, 'r', encoding='utf-8') as f:
-                icp_config = json.load(f)
-            
-            # 尝试获取behavioral_layer_dir
-            behavioral_layer_dir = icp_config["file_system_mapping"].get("behavioral_layer_dir")
-            if behavioral_layer_dir:
-                print(f"  {Colors.OKGREEN}使用配置的ICB目录名称: {behavioral_layer_dir}{Colors.ENDC}")
-                return behavioral_layer_dir
-            else:
-                print(f"  {Colors.WARNING}警告: 配置文件中未找到behavioral_layer_dir，使用默认名称: ICB{Colors.ENDC}")
-                return "ICB"
-        except FileNotFoundError:
-            print(f"  {Colors.WARNING}警告: 未找到配置文件 {icp_config_file}，使用默认名称: ICB{Colors.ENDC}")
-            return "ICB"
-        except json.JSONDecodeError as e:
-            print(f"  {Colors.WARNING}警告: 配置文件 {icp_config_file} JSON格式错误: {e}，使用默认名称: ICB{Colors.ENDC}")
-            return "ICB"
-        except Exception as e:
-            print(f"  {Colors.WARNING}警告: 读取配置文件失败: {e}，使用默认名称: ICB{Colors.ENDC}")
-            return "ICB"
-
-    def _create_directory_structure(self, icb_root_path: str, node: Dict, current_path: str = ""):
-        """递归创建目录结构"""
-        if not isinstance(node, dict):
-            return
-            
-        for key, value in node.items():
-            # 构建完整路径
-            full_path = os.path.join(icb_root_path, current_path, key)
-            
-            if isinstance(value, dict):
-                # 如果值是字典，说明是目录
-                try:
-                    os.makedirs(full_path, exist_ok=True)
-                    print(f"  {Colors.OKGREEN}创建目录: {full_path}{Colors.ENDC}")
-                except Exception as e:
-                    print(f"  {Colors.FAIL}错误: 创建目录失败 {full_path}: {e}{Colors.ENDC}")
-                
-                # 递归处理子目录
-                self._create_directory_structure(icb_root_path, value, os.path.join(current_path, key))
-            elif isinstance(value, str):
-                # 如果值是字符串，说明是文件
-                try:
-                    # 确保文件的父目录存在
-                    parent_dir = os.path.dirname(full_path)
-                    if parent_dir:
-                        os.makedirs(parent_dir, exist_ok=True)
-                    file_full_path = full_path + "_one_file_req.txt"
-                    # 创建空文件
-                    with open(file_full_path, 'w', encoding='utf-8') as f:
-                        pass
-                    print(f"  {Colors.OKGREEN}创建文件: {file_full_path}{Colors.ENDC}")
-                except Exception as e:
-                    print(f"  {Colors.FAIL}错误: 创建文件失败 {file_full_path}: {e}{Colors.ENDC}")
-
     def _generate_file_requirements_1(
             self, 
-            icb_root_path: str, 
+            staging_dir_path: str,  # 修改参数名称以反映实际用途
             proj_root_content: Dict, 
             file_creation_order_list: List[str]
         ) -> None:
@@ -213,8 +148,14 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
                 lines = lines[:-1]
             new_file_description = '\n'.join(lines).strip()
             
-            # 保存新生成的描述到文件（内联原_save_file_description逻辑）
-            req_file_path = os.path.join(icb_root_path, f"{file_path}_one_file_req.txt")
+            # 保存新生成的描述到_src_staging目录下的文件
+            req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
+            
+            # 确保文件的父目录存在
+            parent_dir = os.path.dirname(req_file_path)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
+            
             try:
                 with open(req_file_path, 'w', encoding='utf-8') as f:
                     f.write(new_file_description)
