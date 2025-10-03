@@ -15,7 +15,7 @@ from utils.ai_handler.chat_handler import ChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
 
 
-class CmdHandlerIntentCodeBehaviorGen(BaseCmdHandler):
+class CmdHandlerIcbGen(BaseCmdHandler):
     """将单文件需求描述转换为半自然语言行为描述代码"""
     
     def __init__(self):
@@ -267,6 +267,8 @@ class CmdHandlerIntentCodeBehaviorGen(BaseCmdHandler):
         """保存半自然语言行为描述代码到文件"""
         behavior_file_path = os.path.join(icb_root_path, f"{file_path}.icb")
         try:
+            # 确保目标目录存在
+            os.makedirs(os.path.dirname(behavior_file_path), exist_ok=True)
             with open(behavior_file_path, 'w', encoding='utf-8') as f:
                 f.write(content)
             print(f"  {Colors.OKGREEN}半自然语言行为描述代码已保存: {behavior_file_path}{Colors.ENDC}")

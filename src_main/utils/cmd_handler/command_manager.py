@@ -10,7 +10,7 @@ from utils.cmd_handler.cmd_handler_dir_file_fill import CmdHandlerDirFileFill
 from utils.cmd_handler.cmd_handler_depend_analysis import CmdHandlerDependAnalysis
 from utils.cmd_handler.cmd_handler_depend_refine import CmdHandlerDependRefine
 from utils.cmd_handler.cmd_handler_one_file_req_gen import CmdHandlerOneFileReqGen
-from utils.cmd_handler.cmd_handler_intent_code_behavior_gen import CmdHandlerIntentCodeBehaviorGen
+from utils.cmd_handler.cmd_handler_icb_gen import CmdHandlerIcbGen
 from utils.cmd_handler.cmd_handler_icb_to_target_code import CmdHandlerIcbToTargetCode
 
 # TODO: 是否有必要进行倒置？给CommandManager实现一个register_command()方法，让各个CmdHandler注册自己？随后单独做一个工厂类放一个文件？
@@ -94,7 +94,7 @@ class CommandManager:
         commands.append(one_file_req_cmd)
 
         # 半自然语言行为描述代码生成命令
-        intent_code_behavior_gen_cmd = CmdHandlerIntentCodeBehaviorGen()
+        intent_code_behavior_gen_cmd = CmdHandlerIcbGen()
         commands.append(intent_code_behavior_gen_cmd)
 
         # ICB到目标代码转换命令
