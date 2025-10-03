@@ -23,8 +23,8 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         self.command_info = CommandInfo(
             name="one_file_req_gen",
             aliases=["OFR"],
-            description="在文件系统中创建实际的ICB层级目录结构",
-            help_text="根据最终目录结构创建ICB层级的目录和文件结构",
+            description="在文件系统中创建_src_staging目录结构以及one_file_req.txt文件",
+            help_text="根据已有的dir_content.json文件的内容在_src_staging目录结构下创建单文件的编程需求描述, 为ICB的生成做准备",
         )
         proj_cfg_manager = get_proj_cfg_manager()
         self.work_dir = proj_cfg_manager.get_work_dir()
