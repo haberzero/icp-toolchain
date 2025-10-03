@@ -51,7 +51,7 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
             
         print(f"{Colors.OKBLUE}开始创建ICB目录结构...{Colors.ENDC}")
 
-        # 读取最终目录结构
+        # 读取经过依赖项修复的目录结构
         final_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_refined.json')
         try:
             with open(final_dir_file, 'r', encoding='utf-8') as f:
