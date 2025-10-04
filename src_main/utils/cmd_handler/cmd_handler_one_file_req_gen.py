@@ -23,8 +23,8 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         self.command_info = CommandInfo(
             name="one_file_req_gen",
             aliases=["OFR"],
-            description="在文件系统中创建_src_staging目录结构以及one_file_req.txt文件",
-            help_text="根据已有的dir_content.json文件的内容在_src_staging目录结构下创建单文件的编程需求描述, 为ICB的生成做准备",
+            description="在文件系统中创建src_staging目录结构以及one_file_req.txt文件",
+            help_text="根据已有的dir_content.json文件的内容在src_staging目录结构下创建单文件的编程需求描述, 为ICB的生成做准备",
         )
         proj_cfg_manager = get_proj_cfg_manager()
         self.work_dir = proj_cfg_manager.get_work_dir()
@@ -74,16 +74,16 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         dependent_relation = final_content["dependent_relation"]
         file_creation_order_list = DirJsonFuncs.build_file_creation_order(dependent_relation)
 
-        # 创建_src_staging目录用于存储_one_file_req.txt文件
-        staging_dir_path = os.path.join(self.work_dir, '_src_staging')
+        # 创建src_staging目录用于存储_one_file_req.txt文件
+        staging_dir_path = os.path.join(self.work_dir, 'src_staging')
         try:
             os.makedirs(staging_dir_path, exist_ok=True)
-            print(f"  {Colors.OKGREEN}_src_staging目录创建成功: {staging_dir_path}{Colors.ENDC}")
+            print(f"  {Colors.OKGREEN}src_staging目录创建成功: {staging_dir_path}{Colors.ENDC}")
         except Exception as e:
-            print(f"  {Colors.FAIL}错误: 创建_src_staging目录失败: {e}{Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 创建src_staging目录失败: {e}{Colors.ENDC}")
             return
         
-        # 为每个单文件生成需求描述，保存到_src_staging目录
+        # 为每个单文件生成需求描述，保存到src_staging目录
         self._generate_file_requirements_1(staging_dir_path, proj_root, file_creation_order_list)
         
         # 构建文件描述字典供依赖分析使用
@@ -148,7 +148,7 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
                 lines = lines[:-1]
             new_file_description = '\n'.join(lines).strip()
             
-            # 保存新生成的描述到_src_staging目录下的文件
+            # 保存新生成的描述到src_staging目录下的文件
             req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
             
             # 确保文件的父目录存在
