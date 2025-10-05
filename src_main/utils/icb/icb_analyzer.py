@@ -23,6 +23,7 @@ class IcbAnalyzer:
         self.file_content: List[str] = []
         self.structured_lines: List[Dict[str, Any]] = []
         self.ast: Dict[str, Any] = {}
+        self.ast_builder: Optional[AstBuilder] = None
 
         self.diag_handler: Optional[DiagHandler] = None
         self.advisor_flag: bool = False
@@ -86,16 +87,18 @@ class IcbAnalyzer:
             self.diag_handler = DiagHandler(self.current_file_path, self.file_content)
         
         # 创建AstBuilder实例
-        ast_builder = AstBuilder(
+        self.ast_builder = AstBuilder(
             structured_lines=self.structured_lines,
             diag_handler=self.diag_handler,
             active_file=self.current_file_path,
             project_root=""  # 根据需要设置项目根目录
         )
         
-        result = ast_builder.build()
+        result = self.ast_builder.build()
 
         if self.diag_handler.is_diag_table_valid():
             self.advisor_flag = True
 
+        # 获取AST节点字典
+        self.ast = self.ast_builder.get_node_dict()
         return result

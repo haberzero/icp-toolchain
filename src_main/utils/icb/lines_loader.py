@@ -23,9 +23,10 @@ class LinesLoader:
         previous_indent_level = 0
         
         for line_num, line in enumerate(self.file_content, 1):
-            rstripped_line = line.rstrip(' ')
+            rstripped_line = line.rstrip('\r\n').rstrip(' ')
             fully_stripped_line = rstripped_line.lstrip(' ')
 
+            # 忽略空行和注释行
             if fully_stripped_line == '' or fully_stripped_line.startswith('//'):
                 continue
 
@@ -44,7 +45,7 @@ class LinesLoader:
 
             current_indent_level = indent_space_num // self.indent_space_num_config
             
-            # 禁止缩进向上跳变，向上跳变会导致后续行缩进读取出错
+            # 禁止缩进增加超过一级（即不允许跳层缩进），但允许任意级别的减少（如从4级退回0级）
             if current_indent_level > previous_indent_level + 1:
                 self.diag_handler.set_line_error(line_num, IcbEType.INDENT_JUMP)
                 continue

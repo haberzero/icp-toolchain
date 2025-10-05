@@ -1,80 +1,116 @@
-from typing import List, Dict, Any, Optional
 from enum import Enum
+from typing import List, Dict, Any, Optional
+from dataclasses import dataclass, field
 
-
-# 错误类型枚举
-class IcbEType(Enum):
-    TAB_DETECTED = 1            # 识别到 Tab 字符
-    INDENT_MISALIGNMENT = 2     # 缩进数量错误
-    INDENT_JUMP = 3             # 缩进跳变错误
-    UNEXPECTED_COLON = 4        # 意外的冒号
-    UNKNOWN_LINE_TYPE = 5       # 未知行类型
-    MISSING_CLASS_NAME = 6      # 缺少类名
-    MISSING_FUNCTION_NAME = 7   # 缺少函数名
-    MISSING_VAR_NAME = 8        # 缺少变量名
-    MISSING_COLON = 9           # 缺少冒号
-    UNEXPECTED_SPACE = 10       # 多余的空格
-    EXTRA_CONTENT_AFTER_COLON = 11   # 冒号后有多余内容
-    UNEXPECTED_NEXT_NODE = 12   # 意外的下一节点类型
-    UNEXPECTED_CHILD_NODE = 13  # 意外的子节点类型
-    UNEXPECTED_SPECIAL_ALIGN = 14   # 具备特殊缩进对齐的节点 对齐错误
-    UNEXPECTED_INDENT_INC = 15      # 意外的缩进增加
-    MISSING_INDENT_BLOCKSTART = 16  # 块起始节点之后缺失缩进
-
-
-# 警告类型枚举
-class IcbWType(Enum):
-    MYPASS = 1            # 占位符
-
-
-# 诊断信息类
+@dataclass
 class DiagInfo:
-    def __init__(self, line_num: int, file_path: str):
-        self.line_num: int = line_num
-        self.file_path: str = file_path
-        self.error_type: Optional[IcbEType] = None
-        self.warning_type: Optional[IcbWType] = None
-        self.message: str = ""
+    line_num: int
+    file_path: str
+    error_type: Optional[str] = None
+    warning_type: Optional[str] = None
+    message: str = ""
+
+class IcbEType(Enum):
+    # 缩进错误
+    TAB_DETECTED = "ICB_TAB_DETECTED"
+    INDENT_MISALIGNMENT = "ICB_INDENT_MISALIGNMENT"
+    INDENT_JUMP = "ICB_INDENT_JUMP"
+    MISSING_INDENT_BLOCKSTART = "ICB_MISSING_INDENT_BLOCKSTART"
+    UNEXPECTED_INDENT_INC = "ICB_UNEXPECTED_INDENT_INC"
+    UNEXPECTED_SPECIAL_ALIGN = "ICB_UNEXPECTED_SPECIAL_ALIGN"
+    
+    # 语法错误
+    UNEXPECTED_COLON = "ICB_UNEXPECTED_COLON"
+    MISSING_COLON = "ICB_MISSING_COLON"
+    EXTRA_CONTENT_AFTER_COLON = "ICB_EXTRA_CONTENT_AFTER_COLON"
+    UNEXPECTED_SPACE = "ICB_UNEXPECTED_SPACE"
+    UNKNOWN_LINE_TYPE = "ICB_UNKNOWN_LINE_TYPE"
+    KEYWORD_FORMAT_ERROR = "ICB_KEYWORD_FORMAT_ERROR"
+    
+    # 具体元素错误
+    MISSING_CLASS_NAME = "ICB_MISSING_CLASS_NAME"
+    MISSING_FUNCTION_NAME = "ICB_MISSING_FUNCTION_NAME"
+    MISSING_VAR_NAME = "ICB_MISSING_VAR_NAME"
+    MISSING_MODULE_NAME = "ICB_MISSING_MODULE_NAME"
+    
+    # 结构错误
+    UNEXPECTED_NEXT_NODE = "ICB_UNEXPECTED_NEXT_NODE"
+    UNEXPECTED_CHILD_NODE = "ICB_UNEXPECTED_CHILD_NODE"
+    
+    # Module相关错误
+    MODULE_NOT_AT_TOP = "ICB_MODULE_NOT_AT_TOP"
 
 
-# 诊断处理类
+class IcbWType(Enum):
+    # 警告类型
+    pass
+
 class DiagHandler:
     def __init__(self, file_path: str, file_content: List[str]):
-        self.file_path: str = file_path
-        self.file_content: List[str] = file_content
-        self.diag_table: Dict[int, DiagInfo] = {}  # key: 行号；value: 诊断信息
+        self.file_path = file_path
+        self.file_content = file_content
+        self.diag_table: List[DiagInfo] = []
     
-    def _ensure_line_exists(self, line_num: int) -> None:
-        if line_num not in self.diag_table:
-            self.diag_table[line_num] = DiagInfo(line_num, self.file_path)
-
-    def set_line_error(self, line_num: int, error_type: IcbEType) -> None:
-        if not isinstance(error_type, IcbEType):
-            raise ValueError(f"Invalid error_type: {error_type}. Must be an instance of IcbEType.")
-        self._ensure_line_exists(line_num)
-        self.diag_table[line_num].error_type = error_type
-
-    def set_line_warning(self, line_num: int, warning_type: IcbWType) -> None:
-        if not isinstance(warning_type, IcbWType):
-            raise ValueError(f"Invalid warning_type: {warning_type}. Must be an instance of IcbWType.")
-        self._ensure_line_exists(line_num)
-        self.diag_table[line_num].warning_type = warning_type
-
-    def set_line_message(self, line_num: int, message: str) -> None:
-        self._ensure_line_exists(line_num)
-        self.diag_table[line_num].message = message
-
-    def get_line_diag(self, line_num: int) -> Optional[DiagInfo]:
-        return self.diag_table.get(line_num)
-
-    def read_diag_table_all(self) -> Dict[int, DiagInfo]:
-        return self.diag_table
-
+    def set_line_error(self, line_num: int, error_type: IcbEType, message: str = ""):
+        """设置某一行的错误信息"""
+        if not message:
+            message = self._get_default_error_message(error_type)
+        
+        diag_info = DiagInfo(
+            line_num=line_num,
+            file_path=self.file_path,
+            error_type=error_type.value,
+            message=message
+        )
+        self.diag_table.append(diag_info)
+    
+    def set_line_warning(self, line_num: int, warning_type: IcbWType, message: str = ""):
+        """设置某一行的警告信息"""
+        if not message:
+            message = self._get_default_warning_message(warning_type)
+        
+        diag_info = DiagInfo(
+            line_num=line_num,
+            file_path=self.file_path,
+            warning_type=warning_type.value,
+            message=message
+        )
+        self.diag_table.append(diag_info)
+    
     def is_diag_table_valid(self) -> bool:
-        return bool(self.diag_table)
+        """检查诊断表是否包含任何诊断信息"""
+        return len(self.diag_table) > 0
     
-    def get_file_path(self) -> str:
-        return self.file_path
+    def get_diag_table(self) -> List[DiagInfo]:
+        """获取诊断信息表"""
+        return self.diag_table
     
-    def get_file_content(self) -> List[str]:
-        return self.file_content
+    def _get_default_error_message(self, error_type: IcbEType) -> str:
+        """获取默认错误消息"""
+        error_messages = {
+            IcbEType.TAB_DETECTED: "检测到使用了tab字符，请使用空格进行缩进",
+            IcbEType.INDENT_MISALIGNMENT: "缩进未对齐，缩进必须是4个空格的整数倍",
+            IcbEType.INDENT_JUMP: "缩进跳跃错误，不允许直接从低层级缩进到高层级",
+            IcbEType.MISSING_INDENT_BLOCKSTART: "缺少缩进，块开始语句后应进行缩进",
+            IcbEType.UNEXPECTED_INDENT_INC: "意外的缩进增加，非块开始语句不应增加缩进",
+            IcbEType.UNEXPECTED_SPECIAL_ALIGN: "特殊对齐错误，特殊对齐行应与上一行保持相同缩进",
+            IcbEType.UNEXPECTED_COLON: "意外的冒号，行首不应直接以冒号开始",
+            IcbEType.MISSING_COLON: "缺少冒号，声明语句后应使用冒号",
+            IcbEType.EXTRA_CONTENT_AFTER_COLON: "冒号后存在多余内容",
+            IcbEType.UNEXPECTED_SPACE: "存在意外的空格",
+            IcbEType.UNKNOWN_LINE_TYPE: "未知的行类型",
+            IcbEType.KEYWORD_FORMAT_ERROR: "关键字格式错误，关键字后应有空格和相应内容",
+            IcbEType.MISSING_CLASS_NAME: "缺少类名",
+            IcbEType.MISSING_FUNCTION_NAME: "缺少函数名",
+            IcbEType.MISSING_VAR_NAME: "缺少变量名",
+            IcbEType.MISSING_MODULE_NAME: "缺少模块名",
+            IcbEType.UNEXPECTED_NEXT_NODE: "意外的下一行节点类型",
+            IcbEType.UNEXPECTED_CHILD_NODE: "意外的子节点类型",
+            IcbEType.MODULE_NOT_AT_TOP: "module声明必须出现在文件顶部，不能在其他声明之后出现"
+        }
+        return error_messages.get(error_type, "未知错误")
+    
+    def _get_default_warning_message(self, warning_type: IcbWType) -> str:
+        """获取默认警告消息"""
+        # 暂无默认警告消息
+        return "未知警告"

@@ -143,12 +143,12 @@ class CmdHandlerIcbGen(BaseCmdHandler):
             # 为每个文件生成半自然语言行为描述代码
             print(f"  {Colors.OKBLUE}正在为文件生成半自然语言行为描述代码: {file_path}{Colors.ENDC}")
             
-            # 获取依赖于当前文件的文件列表（即当前文件被哪些文件依赖）
-            dependent_files = [f for f, deps in dependent_relation.items() if file_path in deps]
-            
-            # 构建可用文件描述字典（仅包含已处理过的文件）
-            available_file_desc_dict = {k: v for k, v in accumulated_descriptions_dict.items() 
-                                      if k in dependent_relation.get(file_path, [])}
+            # 当前文件所依赖的文件内容，用于提供上下文信息
+            available_file_desc_dict = {}
+            current_file_dependencies = dependent_relation.get(file_path, [])
+            for file_key, file_description in accumulated_descriptions_dict.items():
+                if file_key in current_file_dependencies:
+                    available_file_desc_dict[file_key] = file_description
             
             # 生成新的半自然语言行为描述代码
             intent_code_behavior = self._create_intent_code_behavior(
@@ -167,7 +167,7 @@ class CmdHandlerIcbGen(BaseCmdHandler):
                 lines = lines[:-1]
             cleaned_content = '\n'.join(lines).strip()
             
-            if intent_code_behavior:
+            if cleaned_content:
                 # 保存半自然语言行为描述代码到ICB目录下的文件
                 self._save_intent_code_behavior(icb_root_path, file_path, cleaned_content)
                 

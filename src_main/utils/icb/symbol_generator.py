@@ -1,7 +1,5 @@
 import sys
-from typing import List, Dict, Any, Optional
-from utils.icb.lines_parser import LinesParser
-
+from typing import Dict, Any, List, Optional
 
 class SymbolGenerator:
     @staticmethod
@@ -12,89 +10,122 @@ class SymbolGenerator:
         """
 
         root_uid = -1
-        result = SymbolGenerator._process_node(root_uid, ast_node_dict, parent_type='root')
-        return result if result else []
+        # 收集所有目标符号
+        symbols = SymbolGenerator._collect_symbols(root_uid, ast_node_dict)
+        return symbols
 
     @staticmethod
-    def _process_node(uid: int, ast_node_dict: Dict[int, Dict[str, Any]], parent_type: str) -> Optional[List[Dict[str, Any]]]:
+    def _collect_symbols(uid: int, ast_node_dict: Dict[int, Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        遍历AST并收集所有目标符号（class/func/var/module）
+        """
         node = ast_node_dict.get(uid)
         if not node:
-            return None
+            return []
 
-        current_type = node.get('type')
+        collected_symbols = []
+        
+        # 如果当前节点是目标类型，则处理它
+        if node.get('type') in ['class', 'func', 'var', 'module']:
+            processed_node = SymbolGenerator._process_node(node, ast_node_dict)
+            if processed_node:
+                collected_symbols.append(processed_node)
 
-        # 当前节点是否为目标类型（class/func/var）
-        is_target_type = current_type in ['class', 'func', 'var']
+        # 遍历所有子节点
+        for child_uid in node.get('child_list', []):
+            child_symbols = SymbolGenerator._collect_symbols(child_uid, ast_node_dict)
+            collected_symbols.extend(child_symbols)
 
-        # 是否允许处理子节点（只有 root/class/func 允许继续处理子节点）
-        allow_children = current_type in ['root', 'class', 'func']
+        return collected_symbols
 
-        collected = []
-        children_data = []
+    @staticmethod
+    def _process_node(node: Dict[str, Any], ast_node_dict: Dict[int, Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        根据节点类型处理单个节点
+        """
+        node_type = node.get('type')
+        
+        if node_type == 'func':
+            return SymbolGenerator._process_function(node, ast_node_dict)
+        elif node_type == 'class':
+            return SymbolGenerator._process_class(node, ast_node_dict)
+        elif node_type == 'var':
+            return SymbolGenerator._process_var(node)
+        elif node_type == 'module':
+            return SymbolGenerator._process_module(node)
+        
+        return None
 
-        if allow_children:
-            for child_uid in node.get('child_list', []):
-                child_result = SymbolGenerator._process_node(child_uid, ast_node_dict, parent_type=current_type)
-                if child_result:
-                    children_data.extend(child_result)
+    @staticmethod
+    def _process_function(node: Dict[str, Any], ast_node_dict: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
+        """处理函数节点，提取input/output参数"""
+        input_params = []
+        output_params = []
 
-        # 处理函数参数
-        if current_type == 'func':
-            input_params = []
-            output_params = []
+        # 查找函数的子节点中的input和output
+        for child_uid in node.get('child_list', []):
+            child_node = ast_node_dict.get(child_uid)
+            if not child_node:
+                continue
+                
+            if child_node.get('type') == 'input':
+                input_params = child_node.get('value', [])
+            elif child_node.get('type') == 'output':
+                output_params = child_node.get('value', [])
 
-            for child in children_data:
-                if child['type'] == 'input':
-                    input_params = child['value']
-                elif child['type'] == 'output':
-                    output_params = child['value']
+        return {
+            'type': 'func',
+            'name': node.get('name'),
+            'description': node.get('description'),
+            'input': input_params,
+            'output': output_params,
+            'children': []
+        }
 
-            func_node = {
-                'type': 'func',
-                'name': node.get('name'),
-                'description': node.get('description'),
-                'input': input_params,
-                'output': output_params,
-                'children': []
-            }
+    @staticmethod
+    def _process_class(node: Dict[str, Any], ast_node_dict: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
+        """处理类节点，提取inh和内部的var/func"""
+        inh_class = None
+        var_func_nodes = []
 
-            collected.append(func_node)
+        # 查找类的子节点中的inh和var/func
+        for child_uid in node.get('child_list', []):
+            child_node = ast_node_dict.get(child_uid)
+            if not child_node:
+                continue
+                
+            if child_node.get('type') == 'inh':
+                inh_class = child_node.get('value')
+            elif child_node.get('type') in ['class', 'func', 'var']:
+                # 对于类内部的var/func，我们只需要基本信息
+                processed_child = SymbolGenerator._process_node(child_node, ast_node_dict)
+                if processed_child:
+                    var_func_nodes.append(processed_child)
 
-        # 处理类继承关键字
-        elif current_type == 'class':
-            inh_class = None
-            var_func_nodes = []
+        return {
+            'type': 'class',
+            'name': node.get('name'),
+            'description': node.get('description'),
+            'inh': inh_class,
+            'children': var_func_nodes
+        }
 
-            for child in children_data:
-                if child['type'] == 'inh':
-                    inh_class = child['value']
-                elif child['type'] in ['class', 'func', 'var']:
-                    var_func_nodes.append(child)
+    @staticmethod
+    def _process_var(node: Dict[str, Any]) -> Dict[str, Any]:
+        """处理变量节点"""
+        return {
+            'type': 'var',
+            'name': node.get('name'),
+            'description': node.get('description'),
+            'value': node.get('value')
+        }
 
-            class_node = {
-                'type': 'class',
-                'name': node.get('name'),
-                'description': node.get('description'),
-                'inh': inh_class,
-                'children': var_func_nodes
-            }
-
-            collected.append(class_node)
-
-        # 处理变量
-        elif current_type == 'var':
-            var_node = {
-                'type': 'var',
-                'name': node.get('name'),
-                'description': node.get('description'),
-                'value': node.get('value')
-            }
-
-            collected.append(var_node)
-
-        # 如果当前节点不是目标类型，但允许处理子节点，则返回子节点结果
-        elif not is_target_type and allow_children:
-            collected = children_data
-
-        return collected if collected else None
-    
+    @staticmethod
+    def _process_module(node: Dict[str, Any]) -> Dict[str, Any]:
+        """处理模块节点"""
+        return {
+            'type': 'module',
+            'name': node.get('name'),
+            'description': node.get('description'),
+            'value': node.get('value')
+        }

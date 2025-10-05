@@ -9,83 +9,151 @@ class LinesParser:
         self.diag_handler = diag_handler
     
     def parse_line(self, line_content: str, node_uid: int) -> Optional[Dict[str, Any]]:
-        line_classify_result = self._classify_line(line_content)
+        """
+        解析单行内容并生成对应的节点结构
+        Args:
+            line_content: 行内容字符串
+            node_uid: 节点唯一标识符（行号）
+            
+        Returns:
+            解析后的节点字典，如果解析失败则返回None
+        """
+        # 1. 对行内容进行分类
+        line_classification = self._classify_line(line_content)
         
-        # _parse_line检测到语法错误后会返回None
-        if line_classify_result == "intent_comment":
-            return self._parse_intent_comment(line_content, node_uid)
-        elif line_classify_result == "class_declaration":
-            return self._parse_class_declaration(line_content, node_uid)
-        elif line_classify_result == "function_declaration":
-            return self._parse_function_declaration(line_content, node_uid)
-        elif line_classify_result == "variable_declaration":
-            return self._parse_variable_declaration(line_content, node_uid)
-        elif line_classify_result == "behavior_declaration":
-            return self._parse_begin_declaration(line_content, node_uid)
-        elif line_classify_result == "input_attribute":
-            return self._parse_input_attribute(line_content, node_uid)
-        elif line_classify_result == "output_attribute":
-            return self._parse_output_attribute(line_content, node_uid)
-        elif line_classify_result == "description_attribute":
-            return self._parse_description_attribute(line_content, node_uid)
-        elif line_classify_result == "inh_attribute":
-            return self._parse_inh_attribute(line_content, node_uid)
-        elif line_classify_result == "behavior_step_with_child":
-            return self._parse_behavior_step_with_child(line_content, node_uid)
-        elif line_classify_result == "behavior_step":
-            return self._parse_behavior_step(line_content, node_uid)
-        elif line_classify_result == "pass":
-            return self._parse_pass(line_content, node_uid)
-
-        # 目前唯一一个来自line_classify的语法错误检查
-        elif line_classify_result == "line_error_unexpected_colon":
-            self.diag_handler.set_line_error(node_uid, IcbEType.UNEXPECTED_COLON)
-            return None
+        # 2. 根据分类结果选择对应的解析方法
+        parsing_methods = {
+            "intent_comment": self._parse_intent_comment,
+            "module_declaration": self._parse_module_declaration,
+            "class_declaration": self._parse_class_declaration,
+            "function_declaration": self._parse_function_declaration,
+            "variable_declaration": self._parse_variable_declaration,
+            "begin_declaration": self._parse_begin_declaration,
+            "input_attribute": self._parse_input_attribute,
+            "output_attribute": self._parse_output_attribute,
+            "description_attribute": self._parse_description_attribute,
+            "inh_attribute": self._parse_inh_attribute,
+            "behavior_step_with_child": self._parse_behavior_step_with_child,
+            "behavior_step": self._parse_behavior_step,
+            "pass": self._parse_pass
+        }
+        
+        # 3. 如果是正常的行类型，调用对应的解析方法
+        if line_classification in parsing_methods:
+            return parsing_methods[line_classification](line_content, node_uid)
+        
+        # 4. 处理各种行分类错误
+        error_type_map = {
+            "line_error_unexpected_colon": IcbEType.UNEXPECTED_COLON,
+            "line_error_keyword_format": IcbEType.KEYWORD_FORMAT_ERROR,
+            "line_error_missing_colon": IcbEType.MISSING_COLON
+        }
+        
+        # 5. 根据错误类型设置诊断信息
+        if line_classification in error_type_map:
+            self.diag_handler.set_line_error(node_uid, error_type_map[line_classification])
         else:
             self.diag_handler.set_line_error(node_uid, IcbEType.UNKNOWN_LINE_TYPE)
-            return None
+            
+        # 6. 解析失败返回None
+        return None
     
     def _classify_line(self, line_content: str) -> str:
-        # 行分类中不处理更多语法问题，语法问题放在具体的_parser函数中解决
+        """
+        对行内容进行分类，识别其类型
+        Args:
+            line_content: 行内容字符串
+            
+        Returns:
+            行的分类结果字符串
+        """
+        # 意图注释行以@开头
         if line_content.startswith("@"):
-            # 不对意图注释进行更多语法限制
             return "intent_comment"
 
+        # 处理包含冒号的行
         if ':' in line_content:
-            # 提取冒号前的第一个字符串
-            first_part = line_content.split(':', 1)[0].strip()
-
-            if first_part == "":
-                # 唯一一个由classify处理的语法错误
-                return "line_error_unexpected_colon"
-            
-            # 检查第一个字符串是否是关键词
-            first_word = first_part.split()[0]
-            if first_word == "class":
-                return "class_declaration"
-            elif first_word == "func":
-                return "function_declaration"
-            elif first_word == "var":
-                return "variable_declaration"
-            elif first_word == "behavior":
-                return "behavior_declaration"
-            elif first_word == "begin":
-                return "begin_declaration"
-            elif first_word == "input":
-                return "input_attribute"
-            elif first_word == "output":
-                return "output_attribute"
-            elif first_word == "description":
-                return "description_attribute"
-            elif first_word == "inh":
-                return "inh_attribute"
-            else:
-                return "behavior_step_with_child"
+            return self._classify_line_with_colon(line_content)
         else:
-            if line_content == "pass":
-                return "pass"
-            else:
-                return "behavior_step"
+            # 处理不包含冒号的行
+            return self._classify_line_without_colon(line_content)
+
+    def _classify_line_with_colon(self, line_content: str) -> str:
+        """
+        对包含冒号的行进行分类
+        
+        Args:
+            line_content: 包含冒号的行内容字符串
+            
+        Returns:
+            行的分类结果字符串
+        """
+        # 提取冒号前的第一个字符串
+        first_part = line_content.split(':', 1)[0].strip()
+
+        # 检查是否是行首冒号错误
+        if first_part == "":
+            return "line_error_unexpected_colon"
+        
+        # 获取第一个单词（关键字）
+        first_word = first_part.split()[0]
+        
+        # 定义关键字到分类的映射
+        keyword_map = {
+            "module": "module_declaration",
+            "class": "class_declaration",
+            "func": "function_declaration",
+            "var": "variable_declaration",
+            "begin": "begin_declaration",
+            "input": "input_attribute",
+            "output": "output_attribute",
+            "description": "description_attribute",
+            "inh": "inh_attribute"
+        }
+        
+        # 如果第一个词是关键字，直接返回对应的分类
+        if first_word in keyword_map:
+            return keyword_map[first_word]
+            
+        # 非关键字但包含冒号的行视为行为步骤（带子节点）
+        return "behavior_step_with_child"
+
+    def _classify_line_without_colon(self, line_content: str) -> str:
+        """
+        对不包含冒号的行进行分类
+        Args:
+            line_content: 不包含冒号的行内容字符串
+            
+        Returns:
+            行的分类结果字符串
+        """
+        # 去除首尾空格后按空格分割
+        parts = line_content.strip().split()
+        
+        # 获取第一个单词，如果parts为空则使用整行内容
+        first_word = parts[0] if parts else line_content.strip()
+        
+        # 定义不需要冒号的关键字映射
+        keyword_map_no_colon = {
+            "pass": "pass"
+        }
+        
+        # 需要冒号但缺少冒号的关键字列表
+        keywords_requiring_colon = [
+            "module", "class", "func", "var", 
+            "begin", "input", "output", "description", "inh"
+        ]
+        
+        # 检查是否是以关键字开头但应该有冒号的行
+        if first_word in keywords_requiring_colon:
+            return "line_error_missing_colon"
+            
+        # 检查是否是不需要冒号的特殊关键字
+        if first_word in keyword_map_no_colon:
+            return keyword_map_no_colon[first_word]
+            
+        # 默认视为行为步骤
+        return "behavior_step"
 
     # 创建基础节点结构，确保所有键都存在。具体各个key的功能说明可查阅helper.py（后续会放进去，现在还没有）
     # 节点信息会在lines_parser和ast_builder中被进行一些不同处理
@@ -112,7 +180,7 @@ class LinesParser:
         root.update({
             'name': 'root',
             'is_block_start': True,
-            'expected_child': ['class', 'func', 'var']
+            'expected_child': ['module', 'class', 'func', 'var', 'begin']
         })
         return root
 
@@ -126,6 +194,35 @@ class LinesParser:
             'value': line_content.lstrip('@').strip(),
             'expected_next': ['NONE'],
             'is_ast_node': False
+        })
+        return node
+
+    # module 模块声明
+    def _parse_module_declaration(self, line_content: str, node_uid: int) -> Optional[Dict[str, Any]]:
+        # 格式要求: 'module 模块名: 模块描述'
+        colon_split_strs = line_content.split(':', 1)  # 只分割第一个冒号
+        if len(colon_split_strs) < 2:
+            self.diag_handler.set_line_error(node_uid, IcbEType.MISSING_COLON)
+            return None
+
+        module_components = colon_split_strs[0].strip().split()
+        # 检查模块名是否存在
+        if len(module_components) < 2:
+            self.diag_handler.set_line_error(node_uid, IcbEType.MISSING_MODULE_NAME)
+            return None
+
+        # 检查是否有多余空格及内容
+        if len(module_components) > 2:
+            self.diag_handler.set_line_error(node_uid, IcbEType.UNEXPECTED_SPACE)
+            return None
+
+        # 创建模块节点
+        node = self._create_base_node('module', node_uid)
+        node.update({
+            'name': module_components[1],
+            'value': colon_split_strs[1].strip(),
+            'description': colon_split_strs[1].strip(),
+            'expected_next': ['module', 'class', 'func', 'var']
         })
         return node
 
@@ -177,7 +274,7 @@ class LinesParser:
         node.update({
             'name': class_components[1],
             'is_block_start': True,
-            'expected_child': ['inh', 'begin'],
+            'expected_child': ['description', 'inh', 'begin', 'var', 'func'],  # 添加description支持
             'expected_next': ['class', 'func', 'var']
         })
         return node
@@ -220,10 +317,6 @@ class LinesParser:
     def _parse_variable_declaration(self, line_content: str, node_uid: int) -> Optional[Dict[str, Any]]:
         # 格式要求: 'var 变量名[: 可选的对变量的描述]' 
         parts = line_content.split(':', 1)
-        if len(parts) < 2:
-            description = None
-        else:
-            description = parts[1].strip()
         
         var_parts = parts[0].strip().split()
         # 检查变量名是否存在
@@ -235,6 +328,11 @@ class LinesParser:
         if len(var_parts) > 2:
             self.diag_handler.set_line_error(node_uid, IcbEType.UNEXPECTED_SPACE)
             return None
+        
+        # 处理变量描述
+        description = None
+        if len(parts) >= 2:
+            description = parts[1].strip() if parts[1].strip() else None
         
         # 如果后续没有description声明进行覆盖的话, 默认以变量对自己的功能描述作为对外声明
         # 变量声明的expected_next标记为'NONE' 特殊处理，会使用上一个节点的expected_next
@@ -276,9 +374,13 @@ class LinesParser:
             self.diag_handler.set_line_error(node_uid, IcbEType.MISSING_COLON)
             return None
         
+        # 分割逗号分隔的变量列表，并去除每个变量名前后的空格
+        raw_variables = parts[1].strip().split(',')
+        variables = [var.strip() for var in raw_variables]
+        
         node = self._create_base_node('input', node_uid)
         node.update({
-            'value': parts[1].strip().split(','),
+            'value': variables,
             'special_align': True,
             'expected_next': ['output', 'begin']
         })
@@ -292,9 +394,13 @@ class LinesParser:
             self.diag_handler.set_line_error(node_uid, IcbEType.MISSING_COLON)
             return None
         
+        # 分割逗号分隔的变量列表，并去除每个变量名前后的空格
+        raw_variables = parts[1].strip().split(',')
+        variables = [var.strip() for var in raw_variables]
+        
         node = self._create_base_node('output', node_uid)
         node.update({
-            'value': parts[1].strip().split(','),
+            'value': variables,
             'special_align': True,
             'expected_next': ['begin']
         })
@@ -319,19 +425,19 @@ class LinesParser:
     def _parse_behavior_step_with_child(self, line_content: str, node_uid: int) -> Dict[str, Any]:
         parts = line_content.split(':', 1)
         node = self._create_base_node('behavior_step_with_child', node_uid)
-        if parts[1].strip():
+        if len(parts) > 1 and parts[1].strip():
             # 子代码块可能在同一行且只有一行，体现为冒号后存在非空白内容，此时禁止进一步换行缩进
             child_content = parts[1].strip()
             node.update({
-                'value': line_content,
-                'is_block_start': False,
-                'expected_child': ['var', 'behavior_step', 'behavior_step_with_child'],
+                'value': parts[0].strip(),  # 只保留冒号前的部分作为value
+                'is_block_start': False,  # 同行内容不需要进一步缩进
+                'expected_child': [],  # 没有子节点
                 'expected_next': ['var', 'behavior_step', 'behavior_step_with_child']
             })
         else:
             # 没有同一行子内容时添加expected_child
             node.update({
-                'value': line_content,
+                'value': parts[0].strip(),  # 只保留冒号前的部分作为value
                 'is_block_start': True,
                 'expected_child': ['var', 'behavior_step', 'behavior_step_with_child'],
                 'expected_next': ['var', 'behavior_step', 'behavior_step_with_child']
