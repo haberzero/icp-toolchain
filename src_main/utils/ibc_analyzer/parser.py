@@ -17,10 +17,10 @@ class NodeType(Enum):
 
 class ASTNode:
     """AST节点类"""
-    def __init__(self, uid: str = "", parent_uid: str = "", children_uids: List[str] = [], 
+    def __init__(self, uid: str = "", parent_uid: str = "", children_uids: Optional[List[str]] = None, 
                  node_type: NodeType = NodeType.DEFAULT, line_number: int = 0, identifier: str = "",
                  content: str = "", external_desc: str = "", intent_comment: str = "",
-                 params: Dict[str, str] = {}, symbol_refs: Dict[str, str] = {}):
+                 params: Optional[Dict[str, str]] = None, symbol_refs: Optional[Dict[str, str]] = None):
         self.uid = uid
         self.parent_uid = parent_uid
         self.children_uids = children_uids if children_uids is not None else []
@@ -51,6 +51,16 @@ class ASTNode:
 
     def __repr__(self):
         return f"ASTNode(uid={self.uid}, type={self.node_type}, identifier={self.identifier})"
+
+    def add_child(self, child_uid: str) -> None:
+        """添加子节点"""
+        if child_uid not in self.children_uids:
+            self.children_uids.append(child_uid)
+
+    def remove_child(self, child_uid: str) -> None:
+        """移除子节点"""
+        if child_uid in self.children_uids:
+            self.children_uids.remove(child_uid)
 
 
 class ParseError(Exception):
