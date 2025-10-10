@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pydantic import SecretStr
 from typing import Callable, Optional, Dict, List
 
-from typedef.data_types import ChatApiConfig
+from typedef.cmd_data_types import ChatApiConfig
 
 from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI

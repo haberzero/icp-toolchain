@@ -2,7 +2,7 @@ import sys, os
 import json
 
 from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
-from typedef.data_types import Colors
+from typedef.cmd_data_types import Colors
 
 # 本文件涉及对用户工程中的持久性文件的存取
 

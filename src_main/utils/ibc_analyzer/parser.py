@@ -1,66 +1,7 @@
 from typing import Dict, List, Optional, Any
 from lexer import Lexer, IbcTokenType, IbcKeywords, Token
-from enum import Enum
 
-
-class NodeType(Enum):
-    """AST节点类型枚举"""
-    DEFAULT = "DEFAULT"
-    MODULE = "MODULE"
-    CLASS = "CLASS"
-    FUNCTION = "FUNCTION"
-    VARIABLE = "VARIABLE"
-    DESCRIPTION = "DESCRIPTION"
-    BEHAVIOR_STEP = "BEHAVIOR_STEP"
-    ERROR = "ERROR"
-
-
-class ASTNode:
-    """AST节点类"""
-    def __init__(self, uid: str = "", parent_uid: str = "", children_uids: Optional[List[str]] = None, 
-                 node_type: NodeType = NodeType.DEFAULT, line_number: int = 0, identifier: str = "",
-                 content: str = "", external_desc: str = "", intent_comment: str = "",
-                 params: Optional[Dict[str, str]] = None, symbol_refs: Optional[Dict[str, str]] = None):
-        self.uid = uid
-        self.parent_uid = parent_uid
-        self.children_uids = children_uids if children_uids is not None else []
-        self.node_type = node_type
-        self.line_number = line_number
-        self.identifier = identifier
-        self.content = content
-        self.external_desc = external_desc
-        self.intent_comment = intent_comment
-        self.params = params if params is not None else {}
-        self.symbol_refs = symbol_refs if symbol_refs is not None else {}
-
-    def to_dict(self) -> Dict[str, Any]:
-        """将节点转换为字典表示"""
-        return {
-            "uid": self.uid,
-            "parent_uid": self.parent_uid,
-            "children_uids": self.children_uids,
-            "node_type": self.node_type.value if self.node_type else None,
-            "line_number": self.line_number,
-            "identifier": self.identifier,
-            "content": self.content,
-            "external_desc": self.external_desc,
-            "intent_comment": self.intent_comment,
-            "params": self.params,
-            "symbol_refs": self.symbol_refs
-        }
-
-    def __repr__(self):
-        return f"ASTNode(uid={self.uid}, type={self.node_type}, identifier={self.identifier})"
-
-    def add_child(self, child_uid: str) -> None:
-        """添加子节点"""
-        if child_uid not in self.children_uids:
-            self.children_uids.append(child_uid)
-
-    def remove_child(self, child_uid: str) -> None:
-        """移除子节点"""
-        if child_uid in self.children_uids:
-            self.children_uids.remove(child_uid)
+from typedef.ibc_data_types import NodeType, ASTNode
 
 
 class ParseError(Exception):

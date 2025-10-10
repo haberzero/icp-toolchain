@@ -2,7 +2,7 @@ import requests
 from dataclasses import dataclass
 from pydantic import SecretStr
 
-from typedef.data_types import EmbeddingApiConfig
+from typedef.cmd_data_types import EmbeddingApiConfig
 
 from langchain.embeddings.base import Embeddings
 

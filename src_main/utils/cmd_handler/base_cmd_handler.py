@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from typedef.data_types import CommandInfo, CmdProcStatus
+from typedef.cmd_data_types import CommandInfo, CmdProcStatus
 
 
 class BaseCmdHandler(ABC):

@@ -5,7 +5,7 @@ from typing import List
 
 from pydantic import SecretStr
 
-from typedef.data_types import CommandInfo, CmdProcStatus, ChatApiConfig, Colors
+from typedef.cmd_data_types import CommandInfo, CmdProcStatus, ChatApiConfig, Colors
 
 from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
 from cfg.app_data_manager import get_instance as get_app_data_manager

@@ -1,40 +1,6 @@
-from enum import Enum
-from typing import List, Optional, Tuple, Union
+from typing import List
 
-
-class IbcTokenType(Enum):
-    """Token类型枚举"""
-    KEYWORDS = "KEYWORDS"  # 保留关键字
-    IDENTIFIER = "IDENTIFIER"  # 一般文本
-    LPAREN = "LPAREN"  # 左括号
-    RPAREN = "RPAREN"  # 右括号
-    COMMA = "COMMA"  # 逗号
-    COLON = "COLON"  # 冒号
-    REF_IDENTIFIER = "REF_IDENTIFIER"  # 符号引用
-    INTENT_COMMENT = "INTENT_COMMENT"  # 意图注释
-    INDENT_LEVEL = "INDENT_LEVEL"  # 缩进等级
-    NEWLINE = "NEWLINE"  # 换行符
-    EOF = "EOF"  # 文件结束
-
-
-class IbcKeywords(Enum):
-    """关键字枚举"""
-    MODULE = "module"
-    FUNC = "func"
-    CLASS = "class"
-    VAR = "var"
-    DESCRIPTION = "description"
-
-
-class Token:
-    """Token类"""
-    def __init__(self, type_: IbcTokenType, value: str, line_num: int):
-        self.type = type_
-        self.value = value
-        self.line_num = line_num
-
-    def __repr__(self):
-        return f"Token({self.type}, {self.value}, {self.line_num})"
+from typedef.ibc_data_types import IbcKeywords, IbcTokenType, Token
 
 
 class LexerError(Exception):
@@ -51,13 +17,14 @@ class Lexer:
     """Intent Behavior Code 词法分析器"""
     def __init__(self, text: str):
         self.text = text
+        # 修复：正确处理空字符串的情况
         self.lines = text.split('\n') if text else []
         self.line_num = 0
         self.current_line = ""
         self.tokens: List[Token] = []
         
-        # 如果文件为空，添加一个空行
-        if not self.lines:
+        # 如果文件为空，添加一个空行以确保后续处理逻辑正常工作
+        if not self.lines or (len(self.lines) == 1 and self.lines[0] == ""):
             self.lines = [""]
     
     def _get_next_line(self) -> bool:

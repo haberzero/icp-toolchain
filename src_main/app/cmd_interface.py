@@ -13,7 +13,7 @@ from threading import Thread
 from queue import Queue, Empty
 from enum import Enum
 
-from typedef.data_types import Colors
+from typedef.cmd_data_types import Colors
 
 from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
 from data_exchange.user_data_manager import get_instance as get_user_data_manager
