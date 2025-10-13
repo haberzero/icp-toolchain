@@ -48,9 +48,7 @@ class AstNodeType(Enum):
     CLASS = "CLASS"
     FUNCTION = "FUNCTION"
     VARIABLE = "VARIABLE"
-    DESCRIPTION = "DESCRIPTION"
     BEHAVIOR_STEP = "BEHAVIOR_STEP"
-    ERROR = "ERROR"
 
 
 @dataclass
@@ -189,16 +187,3 @@ class BehaviorStepNode(AstNode):
 
     def __repr__(self):
         return f"BehaviorStepNode(uid={self.uid})"
-
-
-@dataclass
-class ErrorNode(AstNode):
-    """Error节点类"""
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """将节点转换为字典表示"""
-        return super().to_dict()
-
-    def __repr__(self):
-        return f"ErrorNode(uid={self.uid})"
-    
