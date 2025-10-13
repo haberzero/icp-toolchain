@@ -4,7 +4,7 @@ import os
 # 正确添加src_main目录到sys.path，以便能够导入libs中的模块
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from utils.ibc_analyzer.lexer import Lexer, IbcTokenType, IbcKeywords, LexerError
+from utils.ibc_analyzer.ibc_lexer import Lexer, IbcTokenType, IbcKeywords, LexerError
 
 def test_empty_file():
     """测试空文件"""

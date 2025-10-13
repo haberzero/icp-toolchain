@@ -22,6 +22,7 @@ class Lexer:
         self.line_num = 0
         self.current_line = ""
         self.tokens: List[Token] = []
+        self.indent_stack: List[int] = [0]  # 用于跟踪缩进级别的栈，初始为0
         
         # 如果文件为空，添加一个空行以确保后续处理逻辑正常工作
         if not self.lines or (len(self.lines) == 1 and self.lines[0] == ""):
@@ -36,23 +37,23 @@ class Lexer:
         self.line_num += 1
         return True
     
-    def _calc_indent_level(self, current_line: str) -> str:
+    def _calc_indent_level(self, current_line: str) -> int:
         """计算缩进等级"""
         lstriped_line = current_line.lstrip(' ')
         if lstriped_line.startswith('\t'):
             print(f"Line {self.line_num}: Tab indentation is not allowed")
-            return "-1"
+            return -1
 
         left_spaces_num = len(current_line) - len(lstriped_line)
         if left_spaces_num % 4 != 0:
             print(f"Line {self.line_num}: Invalid indentation level")
-            return "-1"
+            return -1
             
-        return str(left_spaces_num // 4)
+        return left_spaces_num // 4
     
     def _process_keyword(self, striped_line: str):
         """处理关键字，仅在每一行起始且被空格或:分隔开的关键字被认为是关键字，其余时候识别为普通 IDENTIFIER"""
-        # 使用空格和冒号作为分隔符分割字符串
+        # 使用空格和冒号作为分隔符分割字符串，仅在识别关键字时会出现空格识别
         parts = striped_line.replace(':', ' ', 1).split()
         
         # 如果没有分割出任何部分，或者输入为空，则直接返回原字符串
@@ -160,11 +161,31 @@ class Lexer:
 
                 # 处理缩进
                 indent_level = self._calc_indent_level(self.current_line)
-                if indent_level == "-1":
+                if indent_level == -1:
                     raise LexerError(f"Line {self.line_num}: Invalid indentation")
-                elif indent_level != "0":  # 有缩进
-                    self.tokens.append(Token(IbcTokenType.INDENT_LEVEL, indent_level, self.line_num))
-                
+                else:
+                    # 处理缩进变化
+                    current_indent = self.indent_stack[-1]
+                    if indent_level > current_indent:
+                        # 检查缩进是否跳变（一次增加超过1级）
+                        if indent_level - current_indent > 1:
+                            raise LexerError(
+                                f"Line {self.line_num}: Indentation jump is not allowed, "
+                                f"expected {current_indent + 1}, but got {indent_level}")
+                        
+                        # 增加缩进
+                        self.tokens.append(Token(IbcTokenType.INDENT, "", self.line_num))
+                        self.indent_stack.append(indent_level)
+                    elif indent_level < current_indent:
+                        # 减少缩进
+                        while self.indent_stack and self.indent_stack[-1] > indent_level:
+                            self.tokens.append(Token(IbcTokenType.DEDENT, "", self.line_num))
+                            self.indent_stack.pop()
+                        
+                        # 检查缩进是否对齐
+                        if not self.indent_stack or self.indent_stack[-1] != indent_level:
+                            raise LexerError(f"Line {self.line_num}: Inconsistent indentation")
+                    
                 # 识别并处理行开头可能存在的关键字
                 content_line = self._process_keyword(striped_line)
 
@@ -174,7 +195,12 @@ class Lexer:
                 # 每行结束后添加换行符
                 self.tokens.append(Token(IbcTokenType.NEWLINE, 'NEWLINE', self.line_num))
             
-            # 文件结束前添加换行符和EOF
+            # 文件结束前处理剩余的DEDENT
+            while len(self.indent_stack) > 1:
+                self.tokens.append(Token(IbcTokenType.DEDENT, "", self.line_num))
+                self.indent_stack.pop()
+            
+            # 添加最终的换行符和EOF
             self.tokens.append(Token(IbcTokenType.NEWLINE, 'NEWLINE', self.line_num))
             self.tokens.append(Token(IbcTokenType.EOF, 'EOF', self.line_num))
             

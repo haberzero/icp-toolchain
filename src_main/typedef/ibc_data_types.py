@@ -14,7 +14,8 @@ class IbcTokenType(Enum):
     COLON = "COLON"  # 冒号
     REF_IDENTIFIER = "REF_IDENTIFIER"  # 符号引用
     INTENT_COMMENT = "INTENT_COMMENT"  # 意图注释
-    INDENT_LEVEL = "INDENT_LEVEL"  # 缩进等级
+    INDENT = "INDENT"  # 缩进
+    DEDENT = "DEDENT"  # 退格
     NEWLINE = "NEWLINE"  # 换行符
     EOF = "EOF"  # 文件结束
 
@@ -40,7 +41,7 @@ class Token:
 
 
 # ====== Parser 模块 数据类型定义 ======
-class NodeType(Enum):
+class AstNodeType(Enum):
     """AST节点类型枚举"""
     DEFAULT = "DEFAULT"
     MODULE = "MODULE"
@@ -53,19 +54,13 @@ class NodeType(Enum):
 
 
 @dataclass
-class ASTNode:
-    """AST节点类"""
+class AstNode:
+    """AST基础节点类"""
     uid: str = ""
     parent_uid: str = ""
     children_uids: List[str] = field(default_factory=list)
-    node_type: NodeType = NodeType.DEFAULT
+    node_type: AstNodeType = AstNodeType.DEFAULT
     line_number: int = 0
-    identifier: str = ""
-    content: str = ""
-    external_desc: str = ""
-    intent_comment: str = ""
-    params: Dict[str, str] = field(default_factory=dict)
-    symbol_refs: Dict[str, str] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
         """将节点转换为字典表示"""
@@ -74,17 +69,11 @@ class ASTNode:
             "parent_uid": self.parent_uid,
             "children_uids": self.children_uids,
             "node_type": self.node_type.value if self.node_type else None,
-            "line_number": self.line_number,
-            "identifier": self.identifier,
-            "content": self.content,
-            "external_desc": self.external_desc,
-            "intent_comment": self.intent_comment,
-            "params": self.params,
-            "symbol_refs": self.symbol_refs
+            "line_number": self.line_number
         }
 
     def __repr__(self):
-        return f"ASTNode(uid={self.uid}, type={self.node_type}, identifier={self.identifier})"
+        return f"AstNode(uid={self.uid}, type={self.node_type})"
 
     def add_child(self, child_uid: str) -> None:
         """添加子节点"""
@@ -95,3 +84,121 @@ class ASTNode:
         """移除子节点"""
         if child_uid in self.children_uids:
             self.children_uids.remove(child_uid)
+
+
+@dataclass
+class ModuleNode(AstNode):
+    """Module节点类"""
+    identifier: str = ""
+    content: str = ""
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """将节点转换为字典表示"""
+        result = super().to_dict()
+        result.update({
+            "identifier": self.identifier,
+            "content": self.content
+        })
+        return result
+
+    def __repr__(self):
+        return f"ModuleNode(uid={self.uid}, identifier={self.identifier})"
+
+
+@dataclass
+class ClassNode(AstNode):
+    """Class节点类"""
+    identifier: str = ""
+    external_desc: str = ""
+    intent_comment: str = ""
+    params: Dict[str, str] = field(default_factory=dict)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """将节点转换为字典表示"""
+        result = super().to_dict()
+        result.update({
+            "identifier": self.identifier,
+            "external_desc": self.external_desc,
+            "intent_comment": self.intent_comment,
+            "params": self.params
+        })
+        return result
+
+    def __repr__(self):
+        return f"ClassNode(uid={self.uid}, identifier={self.identifier})"
+
+
+@dataclass
+class FunctionNode(AstNode):
+    """Function节点类"""
+    identifier: str = ""
+    external_desc: str = ""
+    intent_comment: str = ""
+    params: Dict[str, str] = field(default_factory=dict)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """将节点转换为字典表示"""
+        result = super().to_dict()
+        result.update({
+            "identifier": self.identifier,
+            "external_desc": self.external_desc,
+            "intent_comment": self.intent_comment,
+            "params": self.params
+        })
+        return result
+
+    def __repr__(self):
+        return f"FunctionNode(uid={self.uid}, identifier={self.identifier})"
+
+
+@dataclass
+class VariableNode(AstNode):
+    """Variable节点类"""
+    identifier: str = ""
+    content: str = ""
+    external_desc: str = ""
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """将节点转换为字典表示"""
+        result = super().to_dict()
+        result.update({
+            "identifier": self.identifier,
+            "content": self.content,
+            "external_desc": self.external_desc
+        })
+        return result
+
+    def __repr__(self):
+        return f"VariableNode(uid={self.uid}, identifier={self.identifier})"
+
+
+@dataclass
+class BehaviorStepNode(AstNode):
+    """BehaviorStep节点类"""
+    content: str = ""
+    symbol_refs: Dict[str, str] = field(default_factory=dict)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """将节点转换为字典表示"""
+        result = super().to_dict()
+        result.update({
+            "content": self.content,
+            "symbol_refs": self.symbol_refs
+        })
+        return result
+
+    def __repr__(self):
+        return f"BehaviorStepNode(uid={self.uid})"
+
+
+@dataclass
+class ErrorNode(AstNode):
+    """Error节点类"""
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """将节点转换为字典表示"""
+        return super().to_dict()
+
+    def __repr__(self):
+        return f"ErrorNode(uid={self.uid})"
+    

@@ -1,7 +1,5 @@
 from typing import Dict, List, Optional, Any
-from lexer import Lexer, IbcTokenType, IbcKeywords, Token
-
-from typedef.ibc_data_types import NodeType, ASTNode
+from typedef.ibc_data_types import IbcKeywords, IbcTokenType, Token, AstNodeType, AstNode
 
 
 class ParseError(Exception):
@@ -19,13 +17,11 @@ class ParseError(Exception):
 
 class Parser:
     """IBC语法解析器"""
-    
     def __init__(self, text: str):
         self.text = text
-        self.lexer = Lexer(text)
         self.tokens: List[Token] = []
         self.current_token_index = 0
-        self.ast_nodes: Dict[str, ASTNode] = {}
+        self.ast_nodes: Dict[str, AstNode] = {}
         self.node_counter = 0
         
     def _generate_node_uid(self) -> str:
@@ -70,7 +66,7 @@ class Parser:
             content_parts.append(token.value)
         return "".join(content_parts)
     
-    def _parse_module_decl(self, line_num: int) -> ASTNode:
+    def _parse_module_decl(self, line_num: int) -> AstNode:
         """解析模块声明"""
         # module关键字已经被消费
         module_token = self._match_token(IbcTokenType.IDENTIFIER)
@@ -83,9 +79,9 @@ class Parser:
             # 确保行结束
             self._match_optional_token(IbcTokenType.NEWLINE)
         
-        node = ASTNode(
+        node = AstNode(
             uid=self._generate_node_uid(),
-            node_type=NodeType.MODULE,
+            node_type=AstNodeType.MODULE,
             line_number=line_num,
             identifier=module_token.value,
             content=description.strip()
@@ -94,15 +90,15 @@ class Parser:
         self.ast_nodes[node.uid] = node
         return node
     
-    def _parse_var_decl(self, line_num: int) -> ASTNode:
+    def _parse_var_decl(self, line_num: int) -> AstNode:
         """解析变量声明"""
         # var关键字已经被消费
         vars_content = self._collect_until_newline()
         
         # 简单解析变量声明 (实际应用中可能需要更复杂的解析)
-        node = ASTNode(
+        node = AstNode(
             uid=self._generate_node_uid(),
-            node_type=NodeType.VARIABLE,
+            node_type=AstNodeType.VARIABLE,
             line_number=line_num,
             content=vars_content.strip()
         )
@@ -110,15 +106,15 @@ class Parser:
         self.ast_nodes[node.uid] = node
         return node
     
-    def _parse_description(self, line_num: int) -> ASTNode:
+    def _parse_description(self, line_num: int) -> AstNode:
         """解析描述声明"""
         # description关键字已经被消费
         self._match_token(IbcTokenType.COLON)
         description_content = self._collect_until_newline()
         
-        node = ASTNode(
+        node = AstNode(
             uid=self._generate_node_uid(),
-            node_type=NodeType.DESCRIPTION,
+            node_type=AstNodeType.DESCRIPTION,
             line_number=line_num,
             content=description_content.strip()
         )
@@ -126,14 +122,14 @@ class Parser:
         self.ast_nodes[node.uid] = node
         return node
     
-    def _parse_intent_comment(self, line_num: int) -> ASTNode:
+    def _parse_intent_comment(self, line_num: int) -> AstNode:
         """解析意图注释"""
         # @符号已经被消费
         comment_content = self._collect_until_newline()
         
-        node = ASTNode(
+        node = AstNode(
             uid=self._generate_node_uid(),
-            node_type=NodeType.BEHAVIOR_STEP,  # 意图注释暂时作为行为步骤处理
+            node_type=AstNodeType.BEHAVIOR_STEP,  # 意图注释暂时作为行为步骤处理
             line_number=line_num,
             intent_comment=comment_content.strip()
         )
@@ -141,7 +137,7 @@ class Parser:
         self.ast_nodes[node.uid] = node
         return node
     
-    def _parse_func_decl(self, line_num: int) -> ASTNode:
+    def _parse_func_decl(self, line_num: int) -> AstNode:
         """解析函数声明"""
         # func关键字已经被消费
         func_name_token = self._match_token(IbcTokenType.IDENTIFIER)
@@ -175,9 +171,9 @@ class Parser:
         self._match_token(IbcTokenType.COLON)
         self._match_token(IbcTokenType.NEWLINE)
         
-        node = ASTNode(
+        node = AstNode(
             uid=self._generate_node_uid(),
-            node_type=NodeType.FUNCTION,
+            node_type=AstNodeType.FUNCTION,
             line_number=line_num,
             identifier=func_name_token.value,
             params=params
@@ -186,7 +182,7 @@ class Parser:
         self.ast_nodes[node.uid] = node
         return node
     
-    def _parse_class_decl(self, line_num: int) -> ASTNode:
+    def _parse_class_decl(self, line_num: int) -> AstNode:
         """解析类声明"""
         # class关键字已经被消费
         class_name_token = self._match_token(IbcTokenType.IDENTIFIER)
@@ -204,9 +200,9 @@ class Parser:
         self._match_token(IbcTokenType.COLON)
         self._match_token(IbcTokenType.NEWLINE)
         
-        node = ASTNode(
+        node = AstNode(
             uid=self._generate_node_uid(),
-            node_type=NodeType.CLASS,
+            node_type=AstNodeType.CLASS,
             line_number=line_num,
             identifier=class_name_token.value,
             content=inherit_info.strip()
@@ -252,10 +248,10 @@ class Parser:
                 # 普通行为步骤
                 content = self._collect_until_newline()
                 if content.strip():  # 忽略空行
-                    node = ASTNode(
+                    node = AstNode(
                         uid=self._generate_node_uid(),
                         parent_uid=parent_uid,
-                        node_type=NodeType.BEHAVIOR_STEP,
+                        node_type=AstNodeType.BEHAVIOR_STEP,
                         line_number=first_token.line_num,
                         content=content.strip()
                     )
@@ -271,7 +267,7 @@ class Parser:
                 
         return child_uids
     
-    def parse(self) -> Dict[str, ASTNode]:
+    def parse(self) -> Dict[str, AstNode]:
         """执行语法解析，返回AST节点字典"""
         # 首先进行词法分析
         self.tokens = self.lexer.tokenize()

@@ -4,7 +4,7 @@ import os
 # 正确添加src_main目录到sys.path，以便能够导入libs中的模块
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from utils.ibc_analyzer.parser import parse_ibc_code
+from utils.ibc_analyzer.ibc_parser import parse_ibc_code
 
 def test_simple_module():
     """测试简单模块解析"""
