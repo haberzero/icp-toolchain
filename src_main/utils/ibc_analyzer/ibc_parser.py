@@ -23,6 +23,9 @@ class ParseError(Exception):
         self.line_num = line_num
         self.message = message
         super().__init__(f"Line {line_num}: {message}")
+    
+    def __str__(self):
+        return f"ParserError: {self.message}"
 
 
 class IbcParser:
@@ -31,9 +34,9 @@ class IbcParser:
     def __init__(self, tokens: List[Token]):
         self.tokens = tokens
         self.pos = 0
-        self.state_stack: List[Tuple[ParserState, Optional[str]]] = [(ParserState.TOP_LEVEL, None)]
-        self.ast_nodes: Dict[str, AstNode] = {}
-        self.node_counter = 0
+        self.state_stack: List[Tuple[ParserState, Optional[int]]] = [(ParserState.TOP_LEVEL, None)]
+        self.ast_nodes: Dict[int, AstNode] = {}
+        self.node_counter = 1
         
         # 用于暂存特殊行内容
         self.pending_intent_comment = ""
@@ -42,10 +45,10 @@ class IbcParser:
         # 用于跟踪上一个AST节点
         self.last_ast_node: Optional[AstNode] = None
         
-    def _generate_uid(self) -> str:
+    def _generate_uid(self) -> int:
         """生成唯一ID"""
         self.node_counter += 1
-        return f"node_{self.node_counter}"
+        return self.node_counter
     
     def _peek_token(self) -> Token:
         """查看当前token"""
@@ -70,15 +73,15 @@ class IbcParser:
         """检查是否到达文件末尾"""
         return self._peek_token().type == IbcTokenType.EOF
     
-    def _get_current_state(self) -> Tuple[ParserState, Optional[str]]:
+    def _get_current_state(self) -> Tuple[ParserState, Optional[int]]:
         """获取当前状态"""
         return self.state_stack[-1] if self.state_stack else (ParserState.TOP_LEVEL, None)
     
-    def _push_state(self, state: ParserState, parent_uid: Optional[str] = None):
+    def _push_state(self, state: ParserState, parent_uid: Optional[int] = None):
         """压入状态栈"""
         self.state_stack.append((state, parent_uid))
     
-    def _pop_state(self) -> Tuple[ParserState, Optional[str]]:
+    def _pop_state(self) -> Tuple[ParserState, Optional[int]]:
         """弹出状态栈"""
         if not self.state_stack:
             raise ParseError(self._peek_token().line_num, "State stack is empty")
@@ -88,9 +91,13 @@ class IbcParser:
         """添加AST节点"""
         self.ast_nodes[node.uid] = node
         self.last_ast_node = node
+
+        # 没有父节点直接返回
+        if not node.parent_uid:
+            return
         
-        # 如果有父节点，则建立父子关系
-        if node.parent_uid and node.parent_uid in self.ast_nodes:
+        # 如果有父节点，向父节点添加子节点
+        if node.parent_uid in self.ast_nodes:
             parent_node = self.ast_nodes[node.parent_uid]
             parent_node.add_child(node.uid)
     
@@ -205,7 +212,7 @@ class IbcParser:
         _, parent_uid = self._get_current_state()
         class_node = ClassNode(
             uid=self._generate_uid(),
-            parent_uid=parent_uid if parent_uid else "",
+            parent_uid=parent_uid if parent_uid else 0,
             node_type=AstNodeType.CLASS,
             line_number=token.line_num,
             identifier=class_name_token.value,
@@ -235,7 +242,7 @@ class IbcParser:
         _, parent_uid = self._get_current_state()
         func_node = FunctionNode(
             uid=self._generate_uid(),
-            parent_uid=parent_uid if parent_uid else "",
+            parent_uid=parent_uid if parent_uid else 0,
             node_type=AstNodeType.FUNCTION,
             line_number=token.line_num,
             identifier=func_name_token.value,
@@ -273,7 +280,7 @@ class IbcParser:
         _, parent_uid = self._get_current_state()
         var_node = VariableNode(
             uid=self._generate_uid(),
-            parent_uid=parent_uid if parent_uid else "",
+            parent_uid=parent_uid if parent_uid else 0,
             node_type=AstNodeType.VARIABLE,
             line_number=token.line_num,
             identifier=var_name_token.value,
@@ -321,7 +328,7 @@ class IbcParser:
         _, parent_uid = self._get_current_state()
         behavior_node = BehaviorStepNode(
             uid=self._generate_uid(),
-            parent_uid=parent_uid if parent_uid else "",
+            parent_uid=parent_uid if parent_uid else 0,
             node_type=AstNodeType.BEHAVIOR_STEP,
             line_number=self._peek_token().line_num,
             content=line_content.strip(),
@@ -364,7 +371,7 @@ class IbcParser:
             
         return False
     
-    def parse(self) -> Dict[str, AstNode]:
+    def parse(self) -> Dict[int, AstNode]:
         """执行解析"""
         while not self._is_at_end():
             token = self._peek_token()

@@ -54,9 +54,9 @@ class AstNodeType(Enum):
 @dataclass
 class AstNode:
     """AST基础节点类"""
-    uid: str = ""
-    parent_uid: str = ""
-    children_uids: List[str] = field(default_factory=list)
+    uid: int = 0
+    parent_uid: int = 0
+    children_uids: List[int] = field(default_factory=list)
     node_type: AstNodeType = AstNodeType.DEFAULT
     line_number: int = 0
     
@@ -73,12 +73,12 @@ class AstNode:
     def __repr__(self):
         return f"AstNode(uid={self.uid}, type={self.node_type})"
 
-    def add_child(self, child_uid: str) -> None:
+    def add_child(self, child_uid: int) -> None:
         """添加子节点"""
         if child_uid not in self.children_uids:
             self.children_uids.append(child_uid)
 
-    def remove_child(self, child_uid: str) -> None:
+    def remove_child(self, child_uid: int) -> None:
         """移除子节点"""
         if child_uid in self.children_uids:
             self.children_uids.remove(child_uid)
