@@ -155,6 +155,7 @@ class VariableNode(AstNode):
     identifier: str = ""
     content: str = ""
     external_desc: str = ""
+    intent_comment: str = ""
     
     def to_dict(self) -> Dict[str, Any]:
         """将节点转换为字典表示"""
@@ -162,7 +163,8 @@ class VariableNode(AstNode):
         result.update({
             "identifier": self.identifier,
             "content": self.content,
-            "external_desc": self.external_desc
+            "external_desc": self.external_desc,
+            "intent_comment": self.intent_comment
         })
         return result
 
@@ -175,13 +177,15 @@ class BehaviorStepNode(AstNode):
     """BehaviorStep节点类"""
     content: str = ""
     symbol_refs: Dict[str, str] = field(default_factory=dict)
+    new_block_flag: bool = False
     
     def to_dict(self) -> Dict[str, Any]:
         """将节点转换为字典表示"""
         result = super().to_dict()
         result.update({
             "content": self.content,
-            "symbol_refs": self.symbol_refs
+            "symbol_refs": self.symbol_refs,
+            "new_block_flag": self.new_block_flag
         })
         return result
 
