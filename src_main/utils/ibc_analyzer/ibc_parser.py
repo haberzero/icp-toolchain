@@ -11,10 +11,6 @@ class ParserState(Enum):
     TOP_LEVEL = "TOP_LEVEL"  # 顶层状态
     CLASS_CONTENT = "CLASS_CONTENT"  # 类内容状态
     FUNCTION_CONTENT = "FUNCTION_CONTENT"  # 函数内容状态（行为步骤状态）
-    CLASS_DECL = "CLASS_DECL"  # 类定义解析状态
-    FUNCTION_DECL = "FUNCTION_DECL"  # 函数定义解析状态
-    VARIABLE_DECL = "VARIABLE_DECL"  # 变量定义解析状态
-    MODULE_DECL = "MODULE_DECL"  # 模块应用解析状态
 
 
 class ParseError(Exception):
@@ -34,15 +30,15 @@ class IbcParser:
     def __init__(self, tokens: List[Token]):
         self.tokens = tokens
         self.pos = 0
-        self.state_stack: List[Tuple[ParserState, Optional[int]]] = [(ParserState.TOP_LEVEL, None)]
+        self.state_stack: List[Tuple[ParserState, int]] = [(ParserState.TOP_LEVEL, 0)]
         self.ast_nodes: Dict[int, AstNode] = {}
         self.node_counter = 1
         
-        # 用于暂存特殊行内容
+        # 暂存的特殊行内容
         self.pending_intent_comment = ""
         self.pending_description = ""
         
-        # 用于跟踪上一个AST节点
+        # 跟踪上一个AST节点
         self.last_ast_node: Optional[AstNode] = None
         
     def _generate_uid(self) -> int:
@@ -68,20 +64,27 @@ class IbcParser:
         if token.type == expected_type:
             return self._consume_token()
         raise ParseError(token.line_num, f"Expected {expected_type}, but got {token.type}")
+
+    def _take_token_until(self, stop_token: IbcTokenType) -> str:
+        """从当前位置开始，直到遇到指定token，返回所有token的值。用于获取直到特定token前的总字符串"""
+        tokens = []
+        while self._peek_token().type != stop_token:
+            tokens.append(self._consume_token())
+        return "".join(token.value for token in tokens)
     
     def _is_at_end(self) -> bool:
         """检查是否到达文件末尾"""
         return self._peek_token().type == IbcTokenType.EOF
     
-    def _get_current_state(self) -> Tuple[ParserState, Optional[int]]:
+    def _get_current_state(self) -> Tuple[ParserState, int]:
         """获取当前状态"""
-        return self.state_stack[-1] if self.state_stack else (ParserState.TOP_LEVEL, None)
+        return self.state_stack[-1] if self.state_stack else (ParserState.TOP_LEVEL, 0)
     
-    def _push_state(self, state: ParserState, parent_uid: Optional[int] = None):
+    def _push_state(self, state: ParserState, parent_uid: int):
         """压入状态栈"""
         self.state_stack.append((state, parent_uid))
     
-    def _pop_state(self) -> Tuple[ParserState, Optional[int]]:
+    def _pop_state(self) -> Tuple[ParserState, int]:
         """弹出状态栈"""
         if not self.state_stack:
             raise ParseError(self._peek_token().line_num, "State stack is empty")
@@ -93,7 +96,7 @@ class IbcParser:
         self.last_ast_node = node
 
         # 没有父节点直接返回
-        if not node.parent_uid:
+        if node.parent_uid == 0:
             return
         
         # 如果有父节点，向父节点添加子节点
@@ -101,111 +104,134 @@ class IbcParser:
             parent_node = self.ast_nodes[node.parent_uid]
             parent_node.add_child(node.uid)
     
-    def _handle_indent_dedent(self) -> bool:
+    def _handle_indent_dedent(self):
         """处理缩进/退格token，返回是否有缩进变化"""
         token = self._peek_token()
         current_state, parent_uid = self._get_current_state()
-        
         if token.type == IbcTokenType.INDENT:
             self._consume_token()
+
+            # 没有已存在的AST Node, 不允许出现缩进
+            if not self.last_ast_node:
+                raise ParseError(token.line_num, "Unexpected indent")
             
-            # 检查上一个节点是否需要缩进
-            if self.last_ast_node:
-                # 需要缩进的情况：函数、类或带有new_block_flag的行为步骤
-                if ((isinstance(self.last_ast_node, (FunctionNode, ClassNode))) or
-                    (isinstance(self.last_ast_node, BehaviorStepNode) and 
-                     getattr(self.last_ast_node, 'new_block_flag', False))):
-                    # 正确的缩进，无需报错
-                    pass
-                else:
-                    raise ParseError(token.line_num, "Unexpected indent")
+            # 不允许出现连续的 indent token
+            if self._peek_token().type == IbcTokenType.INDENT:
+                raise ParseError(token.line_num, "Indent should not repeatedly occur")
             
-            return True
+            # 需要缩进的情况：函数、类或带有new_block_flag的行为步骤
+            if isinstance(self.last_ast_node, FunctionNode):
+                self._push_state(ParserState.FUNCTION_CONTENT, self.last_ast_node.uid)
+                return 
+            elif isinstance(self.last_ast_node, BehaviorStepNode) and \
+                    getattr(self.last_ast_node, 'new_block_flag', False):
+                self._push_state(ParserState.FUNCTION_CONTENT, self.last_ast_node.uid)
+                return
+            elif isinstance(self.last_ast_node, ClassNode):
+                self._push_state(ParserState.CLASS_CONTENT, self.last_ast_node.uid)
+                return
+            
+            else:
+                raise ParseError(token.line_num, "Unexpected indent")
             
         elif token.type == IbcTokenType.DEDENT:
-            self._consume_token()
-            
-            # 出栈直到匹配正确的缩进级别
-            if len(self.state_stack) > 1:
+            while self._consume_token().type == IbcTokenType.DEDENT:
                 self._pop_state()
-            
-            return True
-            
-        return False
+            return
     
     def _handle_special_lines(self) -> bool:
         """处理特殊行（意图注释、描述），返回是否处理了特殊行"""
-        token = self._peek_token()
+        current_token = self._peek_token()
         
         # 处理意图注释
-        if token.type == IbcTokenType.INTENT_COMMENT:
-            self.pending_intent_comment = self._consume_token().value
-            # 消费换行符
-            self._match_token(IbcTokenType.NEWLINE)
+        if current_token.type == IbcTokenType.INTENT_COMMENT:
+            # 消费所有token并全部作为意图注释的字符处理，直到换行
+            _tmp_token = self._consume_token()
+            _tmp_str = _tmp_token.value
+            while _tmp_token.type != IbcTokenType.NEWLINE:
+                _tmp_str += _tmp_token.value
+                _tmp_token = self._consume_token()
+
+            # 禁止行末冒号
+            if _tmp_str.endswith(":"):
+                raise ParseError(current_token.line_num, "Intent comment cannot end with colon")
+            
             return True
-            
+
         # 处理描述行
-        if (token.type == IbcTokenType.KEYWORDS and 
-            token.value == "description" and
-            self._get_token_by_index(offset=2).type == IbcTokenType.COLON):  # 查看 "description" ":" 的模式
-            self._consume_token()  # 消费 "description"
-            self._match_token(IbcTokenType.COLON)  # 消费 ":"
+        elif current_token.type == IbcTokenType.KEYWORDS and \
+            current_token.value == "description":
             
-            # 获取描述内容
-            content_token = self._consume_token()  # 消费描述内容
-            if content_token.type == IbcTokenType.IDENTIFIER:
-                self.pending_description = content_token.value
-            else:
-                self.pending_description = ""
-                
-            # 消费换行符
-            self._match_token(IbcTokenType.NEWLINE)
+            self._consume_token()  # 消费 description token
+            self._match_token(IbcTokenType.COLON)  # 检测冒号存在性
+
+            # 消费所有剩余token并全部作为对外描述内容的字符处理，直到换行
+            _tmp_token = self._consume_token()
+            _tmp_str = _tmp_token.value
+            while _tmp_token.type != IbcTokenType.NEWLINE:
+                _tmp_str += _tmp_token.value
+                _tmp_token = self._consume_token()
+            
+            # 禁止行末冒号
+            if _tmp_str.endswith(":"):
+                raise ParseError(current_token.line_num, "Description cannot end with colon")
+
             return True
             
         return False
     
-    def _get_token_by_index(self, offset: int = 0) -> Token:
-        """查看指定index位置的token"""
-        if self.pos + offset < len(self.tokens):
-            return self.tokens[self.pos + offset]
-        return Token(IbcTokenType.EOF, "EOF", -1)
-    
     def _parse_module_decl(self):
         """解析模块声明"""
-        token = self._consume_token()  # 消费 "module"
-        module_name_token = self._consume_token()  # 模块名
-        
-        if module_name_token.type != IbcTokenType.IDENTIFIER:
-            raise ParseError(module_name_token.line_num, "Expected module name")
+        token = self._match_token(IbcTokenType.KEYWORDS)  # 消费 "module" 关键字
+        module_name_token = self._match_token(IbcTokenType.IDENTIFIER)  # 消费模块名
+        module_name = module_name_token.value
+
+        if self._peek_token().type == IbcTokenType.NEWLINE:
+            # 无描述，直接生成节点
+            module_node = ModuleNode(
+                uid=self._generate_uid(),
+                node_type=AstNodeType.MODULE,
+                line_number=token.line_num,
+                identifier=module_name,
+                content=""
+            )
+            self._add_ast_node(module_node)
+            self._consume_token()   # 消费换行符
+            return
+
+        elif self._peek_token().type == IbcTokenType.COLON:
+            # 消费所有剩余token并全部作为对外描述内容的字符处理，直到换行
+            _tmp_token = self._consume_token()
+            _tmp_str = _tmp_token.value
+            while _tmp_token.type != IbcTokenType.NEWLINE:
+                _tmp_str += _tmp_token.value
+                _tmp_token = self._consume_token()
             
-        self._match_token(IbcTokenType.COLON)  # 消费 ":"
-        
-        # 获取模块描述
-        desc_token = self._consume_token()
-        module_desc = ""
-        if desc_token.type == IbcTokenType.IDENTIFIER:
-            module_desc = desc_token.value
+            # 禁止行末冒号
+            if _tmp_str.endswith(":"):
+                raise ParseError(token.line_num, "Unexpected colon at the end of line")
             
-        # 创建模块节点
-        module_node = ModuleNode(
-            uid=self._generate_uid(),
-            node_type=AstNodeType.MODULE,
-            line_number=token.line_num,
-            identifier=module_name_token.value,
-            content=module_desc
-        )
+            module_desc = _tmp_str
+
+            # 生成AST Node
+            module_node = ModuleNode(
+                uid=self._generate_uid(),
+                node_type=AstNodeType.MODULE,
+                line_number=token.line_num,
+                identifier=module_name,
+                content=module_desc
+            )
+            self._add_ast_node(module_node)
+            self._match_token(IbcTokenType.NEWLINE)  # 消费换行符
         
-        self._add_ast_node(module_node)
-        self._match_token(IbcTokenType.NEWLINE)  # 消费换行符
+        else:
+            raise ParseError(token.line_num, "Unexpected token")
     
     def _parse_class_decl(self):
         """解析类声明"""
-        token = self._consume_token()  # 消费 "class"
-        class_name_token = self._consume_token()  # 类名
-        
-        if class_name_token.type != IbcTokenType.IDENTIFIER:
-            raise ParseError(class_name_token.line_num, "Expected class name")
-            
+        token = self._consume_token()  # 消费 "class" 关键字
+        class_name_token = self._match_token(IbcTokenType.IDENTIFIER)  # 类名
+        class_name = class_name_token.value
         self._match_token(IbcTokenType.COLON)  # 消费 ":"
         
         # 创建类节点
@@ -215,28 +241,33 @@ class IbcParser:
             parent_uid=parent_uid if parent_uid else 0,
             node_type=AstNodeType.CLASS,
             line_number=token.line_num,
-            identifier=class_name_token.value,
+            identifier=class_name,
+            external_desc=self.pending_description,
             intent_comment=self.pending_intent_comment
         )
-        
-        # 清空暂存的意图注释
-        self.pending_intent_comment = ""
-        
         self._add_ast_node(class_node)
         
-        # 压入类内容状态
+        # 清空暂存的意图注释以及对外描述
+        self.pending_intent_comment = ""
+        self.pending_description = ""
+        
+        # 压入类内容状态（TODO: 存疑，应该统一在缩进处理的那一段进行？）
         self._push_state(ParserState.CLASS_CONTENT, class_node.uid)
         self._match_token(IbcTokenType.NEWLINE)  # 消费换行符
     
     def _parse_function_decl(self):
         """解析函数声明"""
         token = self._consume_token()  # 消费 "func"
-        func_name_token = self._consume_token()  # 函数名
-        
-        if func_name_token.type != IbcTokenType.IDENTIFIER:
-            raise ParseError(func_name_token.line_num, "Expected function name")
-            
-        self._match_token(IbcTokenType.COLON)  # 消费 ":"
+        func_name_token = self._match_token(IbcTokenType.IDENTIFIER)    # 函数名
+        self._match_token(IbcTokenType.LPAREN)
+        while self._peek_token().type != IbcTokenType.RPAREN:
+            current_token = self._peek_token()
+
+
+
+
+
+
         
         # 创建函数节点
         _, parent_uid = self._get_current_state()
@@ -256,8 +287,6 @@ class IbcParser:
         
         self._add_ast_node(func_node)
         
-        # 压入函数内容状态
-        self._push_state(ParserState.FUNCTION_CONTENT, func_node.uid)
         self._match_token(IbcTokenType.NEWLINE)  # 消费换行符
     
     def _parse_variable_decl(self):
@@ -344,61 +373,56 @@ class IbcParser:
             
         self._match_token(IbcTokenType.NEWLINE)  # 消费换行符
     
-    def _handle_keyword_declarations(self) -> bool:
-        """处理关键字声明，返回是否处理了关键字"""
+    def _handle_normal_line(self):
+        """处理常规行, 行首第一个单词被认为是关键字 标点符号不允许出现在行首"""
+        # TODO: !!! 施工未完成!!! 明天继续处理
         token = self._peek_token()
-        
-        if token.type != IbcTokenType.KEYWORDS:
-            return False
-            
         current_state, _ = self._get_current_state()
         
-        # 根据当前状态和关键字类型决定如何处理
-        if token.value == "module":
+        # 根据当前状态以及行内首个非缩进token内容决定后续处理方法
+        if token.type == IbcTokenType.KEYWORDS and token.value == "module":
             if current_state != ParserState.TOP_LEVEL:
-                raise ParseError(token.line_num, "Module declaration only allowed at top level")
+                raise ParseError(token.line_num, "Module declaration only allowed at file top")
             self._parse_module_decl()
-            return True
-        elif token.value == "class":
+            return
+        elif token.type == IbcTokenType.KEYWORDS and token.value == "class":
             self._parse_class_decl()
-            return True
-        elif token.value == "func":
+            return
+        elif token.type == IbcTokenType.KEYWORDS and token.value == "func":
             self._parse_function_decl()
-            return True
-        elif token.value == "var":
+            return
+        elif token.type == IbcTokenType.KEYWORDS and token.value == "var":
             self._parse_variable_decl()
-            return True
-            
-        return False
+            return
+        elif token.type == IbcTokenType.IDENTIFIER:
+            if current_state != ParserState.FUNCTION_CONTENT:
+                raise ParseError(token.line_num, "behavior step must be inside function")
+            self._parse_behavior_step()
+        else:
+            raise ParseError(token.line_num, "Invalid content at the beginning of the line")
     
     def parse(self) -> Dict[int, AstNode]:
         """执行解析"""
         while not self._is_at_end():
             token = self._peek_token()
-            
-            # 如果是文件结束符，退出循环
-            if token.type == IbcTokenType.EOF:
-                break
-                
-            # 如果是换行符，直接消费
+
+            # 如果是换行符，直接消费（所有处理应确保换行符被消费，此分支理论上不应该进入）
             if token.type == IbcTokenType.NEWLINE:
+                print(f"Warning: Unexpected newline at line {token.line_num}")
                 self._consume_token()
                 continue
             
-            # 处理缩进/退格
-            if self._handle_indent_dedent():
-                continue
-                
-            # 处理特殊行（意图注释、描述）
+            # 检查并处理缩进, 出现dedent时出栈 (压栈操作在其它解析流程中处理)
+            # TODO: 其实感觉还是有不合理的地方, 压栈也应该在此就处理完毕. 压栈操作不应该零碎分布
+            self._handle_indent_dedent()
+
+            # 处理特殊行（意图注释、对外描述）
             if self._handle_special_lines():
+                # 特殊行处理后直接进入下一行
                 continue
                 
-            # 处理关键字声明
-            if self._handle_keyword_declarations():
-                continue
-                
-            # 默认处理为行为步骤
-            self._parse_behavior_step()
+            # 依据当前栈顶状态处理常规行
+            self._handle_normal_line()
         
         return self.ast_nodes
 

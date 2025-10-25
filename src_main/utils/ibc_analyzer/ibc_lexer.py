@@ -33,7 +33,7 @@ class Lexer:
         if self.line_num >= len(self.lines):
             return False
         
-        self.current_line = self.lines[self.line_num]
+        self.current_line = self.lines[self.line_num].rstrip()
         self.line_num += 1
         return True
     
@@ -136,7 +136,7 @@ class Lexer:
                 self.tokens.append(Token(IbcTokenType.COLON, ':', self.line_num))
                 i += 1
             else:
-                # 收集非保留符号的常规字符，包括空格也被保留
+                # 收集非保留符号的常规字符，包括空格也被直接作为常规字符收集
                 start = i
                 while i < n and text[i] not in '(),:':
                     i += 1
@@ -148,8 +148,8 @@ class Lexer:
         try:
             # 空文件也应该添加NEWLINE和EOF
             if not self.lines:
-                self.tokens.append(Token(IbcTokenType.NEWLINE, 'NEWLINE', 1))
-                self.tokens.append(Token(IbcTokenType.EOF, 'EOF', 1))
+                self.tokens.append(Token(IbcTokenType.NEWLINE, '', 1))
+                self.tokens.append(Token(IbcTokenType.EOF, '', 1))
                 return self.tokens
             
             # 处理每一行
@@ -193,7 +193,7 @@ class Lexer:
                 self._tokenize_line(content_line)
                 
                 # 每行结束后添加换行符
-                self.tokens.append(Token(IbcTokenType.NEWLINE, 'NEWLINE', self.line_num))
+                self.tokens.append(Token(IbcTokenType.NEWLINE, '', self.line_num))
             
             # 文件结束前处理剩余的DEDENT
             while len(self.indent_stack) > 1:
@@ -201,8 +201,8 @@ class Lexer:
                 self.indent_stack.pop()
             
             # 添加最终的换行符和EOF
-            self.tokens.append(Token(IbcTokenType.NEWLINE, 'NEWLINE', self.line_num))
-            self.tokens.append(Token(IbcTokenType.EOF, 'EOF', self.line_num))
+            self.tokens.append(Token(IbcTokenType.NEWLINE, '', self.line_num))
+            self.tokens.append(Token(IbcTokenType.EOF, '', self.line_num))
             
             return self.tokens
         
