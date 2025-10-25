@@ -41,13 +41,11 @@ class Lexer:
         """计算缩进等级"""
         lstriped_line = current_line.lstrip(' ')
         if lstriped_line.startswith('\t'):
-            print(f"Line {self.line_num}: Tab indentation is not allowed")
-            return -1
+            raise LexerError(f"Line {self.line_num}: Tab indentation is not allowed")
 
         left_spaces_num = len(current_line) - len(lstriped_line)
         if left_spaces_num % 4 != 0:
-            print(f"Line {self.line_num}: Invalid indentation level")
-            return -1
+            raise LexerError(f"Line {self.line_num}: Indentation must be a multiple of 4 spaces")
             
         return left_spaces_num // 4
     

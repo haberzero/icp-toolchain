@@ -176,7 +176,7 @@ class VariableNode(AstNode):
 class BehaviorStepNode(AstNode):
     """BehaviorStep节点类"""
     content: str = ""
-    symbol_refs: Dict[str, str] = field(default_factory=dict)
+    symbol_refs: List[str] = field(default_factory=list)
     new_block_flag: bool = False
     
     def to_dict(self) -> Dict[str, Any]:

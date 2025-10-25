@@ -15,7 +15,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__)))
 # 测试开关变量，设置为1表示运行对应测试，设置为0表示跳过
 RUN_DIR_JSON_FUNCS_TEST = 0  # 目录JSON功能测试
 RUN_IBC_LEXER_TEST = 0       # IBC词法分析器测试
-RUN_IBC_PARSER_TEST = 0      # IBC解析器测试
+RUN_IBC_PARSER_TEST = 1      # IBC解析器测试
 
 def run_dir_json_funcs_test():
     """运行目录JSON功能测试"""

@@ -69,8 +69,17 @@ class IbcParser:
         """从当前位置开始，直到遇到指定token，返回所有token的值。用于获取直到特定token前的总字符串"""
         tokens = []
         while self._peek_token().type != stop_token:
+            if self._is_at_end():
+                raise ParseError(self._peek_token().line_num, "Unexpected end of file")
             tokens.append(self._consume_token())
         return "".join(token.value for token in tokens)
+    
+    def _discard_token_until(self, stop_token: IbcTokenType):
+        """从当前位置开始，直到遇到指定token，丢弃期间所获取到的所有token"""
+        while self._peek_token().type != stop_token:
+            if self._is_at_end():
+                raise ParseError(self._peek_token().line_num, "Unexpected end of file")
+            self._consume_token()
     
     def _is_at_end(self) -> bool:
         """检查是否到达文件末尾"""
@@ -146,11 +155,7 @@ class IbcParser:
         # 处理意图注释
         if current_token.type == IbcTokenType.INTENT_COMMENT:
             # 消费所有token并全部作为意图注释的字符处理，直到换行
-            _tmp_token = self._consume_token()
-            _tmp_str = _tmp_token.value
-            while _tmp_token.type != IbcTokenType.NEWLINE:
-                _tmp_str += _tmp_token.value
-                _tmp_token = self._consume_token()
+            _tmp_str = self._take_token_until(IbcTokenType.NEWLINE)
 
             # 禁止行末冒号
             if _tmp_str.endswith(":"):
@@ -166,11 +171,7 @@ class IbcParser:
             self._match_token(IbcTokenType.COLON)  # 检测冒号存在性
 
             # 消费所有剩余token并全部作为对外描述内容的字符处理，直到换行
-            _tmp_token = self._consume_token()
-            _tmp_str = _tmp_token.value
-            while _tmp_token.type != IbcTokenType.NEWLINE:
-                _tmp_str += _tmp_token.value
-                _tmp_token = self._consume_token()
+            _tmp_str = self._take_token_until(IbcTokenType.NEWLINE)
             
             # 禁止行末冒号
             if _tmp_str.endswith(":"):
@@ -251,23 +252,47 @@ class IbcParser:
         self.pending_intent_comment = ""
         self.pending_description = ""
         
-        # 压入类内容状态（TODO: 存疑，应该统一在缩进处理的那一段进行？）
-        self._push_state(ParserState.CLASS_CONTENT, class_node.uid)
         self._match_token(IbcTokenType.NEWLINE)  # 消费换行符
     
     def _parse_function_decl(self):
         """解析函数声明"""
         token = self._consume_token()  # 消费 "func"
         func_name_token = self._match_token(IbcTokenType.IDENTIFIER)    # 函数名
-        self._match_token(IbcTokenType.LPAREN)
+        self._match_token(IbcTokenType.LPAREN)  # 消费 "("
+        
+        # 解析参数列表
+        params = {}
         while self._peek_token().type != IbcTokenType.RPAREN:
-            current_token = self._peek_token()
+            # 函数定义时，可能出现为了美观换行编写参数列表。因此忽略过程中的换行以及缩进相关token、直到identifier出现。
+            self._discard_token_until(IbcTokenType.IDENTIFIER)
+            param_name_token = self._consume_token()
+            param_name = param_name_token.value
+            param_desc = ""
 
-
-
-
-
-
+            # 不合法的多个左括号
+            if self._peek_token().type == IbcTokenType.LPAREN:
+                raise ParseError(token.line_num, "Unexpected left parenthesis")
+            
+            # 检查是否有参数描述
+            if self._peek_token().type == IbcTokenType.COLON:
+                self._consume_token()  # 消费 ":"
+                
+                # 收集参数描述直到逗号或右括号
+                while (self._peek_token().type not in [IbcTokenType.COMMA, IbcTokenType.RPAREN]):
+                    if self._peek_token().type == IbcTokenType.EOF:
+                        raise ParseError(self._peek_token().line_num, "Unexpected EOF")
+                    desc_token = self._consume_token()
+                    param_desc += desc_token.value
+            
+            # 添加参数描述内容到参数字典
+            params[param_name] = param_desc.strip()  # strip参数描述
+            
+            # 如果是逗号，继续下一个参数
+            if self._peek_token().type == IbcTokenType.COMMA:
+                self._consume_token()  # 消费逗号
+        
+        self._match_token(IbcTokenType.RPAREN)  # 消费 ")"
+        self._match_token(IbcTokenType.COLON)   # 消费 ":"
         
         # 创建函数节点
         _, parent_uid = self._get_current_state()
@@ -278,10 +303,11 @@ class IbcParser:
             line_number=token.line_num,
             identifier=func_name_token.value,
             intent_comment=self.pending_intent_comment,
-            external_desc=self.pending_description
+            external_desc=self.pending_description,
+            params=params
         )
         
-        # 清空暂存的内容
+        # 清空暂存的对外描述以及意图注释
         self.pending_intent_comment = ""
         self.pending_description = ""
         
@@ -292,19 +318,21 @@ class IbcParser:
     def _parse_variable_decl(self):
         """解析变量声明"""
         token = self._consume_token()  # 消费 "var"
-        var_name_token = self._consume_token()  # 变量名
+        var_name_token = self._match_token(IbcTokenType.IDENTIFIER)  # 变量名
         
-        if var_name_token.type != IbcTokenType.IDENTIFIER:
-            raise ParseError(var_name_token.line_num, "Expected variable name")
-            
         self._match_token(IbcTokenType.COLON)  # 消费 ":"
         
         # 获取变量描述
-        desc_token = self._consume_token()
         var_desc = ""
-        if desc_token.type == IbcTokenType.IDENTIFIER:
-            var_desc = desc_token.value
-            
+        # 收集所有剩余token直到换行符
+        while self._peek_token().type != IbcTokenType.NEWLINE:
+            desc_token = self._consume_token()
+            var_desc += desc_token.value
+        
+        # 检查变量描述末尾是否包含不允许的符号
+        if var_desc and var_desc[-1] in ":,()":
+            raise ParseError(token.line_num, f"Variable description cannot end with these symbols --- ': , ( )'")
+        
         # 创建变量节点
         _, parent_uid = self._get_current_state()
         var_node = VariableNode(
@@ -313,7 +341,8 @@ class IbcParser:
             node_type=AstNodeType.VARIABLE,
             line_number=token.line_num,
             identifier=var_name_token.value,
-            external_desc=var_desc,
+            content=var_desc.strip(),
+            external_desc=var_desc.strip(),
             intent_comment=self.pending_intent_comment
         )
         
@@ -324,34 +353,25 @@ class IbcParser:
         self._match_token(IbcTokenType.NEWLINE)  # 消费换行符
     
     def _parse_behavior_step(self):
-        """解析行为步骤"""
+        """解析行为步骤行"""
         # 收集整行内容直到换行符
         line_content = ""
-        symbol_refs = {}
+        symbol_refs = []
         new_block_flag = False
         
-        # 收集这行的所有token直到换行符
-        while not self._is_at_end() and self._peek_token().type != IbcTokenType.NEWLINE:
+        # 收集这行的所有token内容直到换行符，过程中记录符号引用
+        while self._peek_token().type != IbcTokenType.NEWLINE:
             token = self._consume_token()
+            line_content += token.value
             if token.type == IbcTokenType.REF_IDENTIFIER:
                 # 记录符号引用
-                ref_id = f"ref_{len(symbol_refs)}"
-                symbol_refs[ref_id] = token.value
-                line_content += f"${token.value}$"
-            elif token.type == IbcTokenType.COLON:
-                # 检查冒号是否在行末
-                if (self._peek_token().type == IbcTokenType.NEWLINE or 
-                    (self._peek_token().type == IbcTokenType.EOF)):
-                    new_block_flag = True
-                    line_content += ":"
-                else:
-                    line_content += token.value
-            else:
-                line_content += token.value
-        
-        # 移除可能的行尾冒号（如果它是新块标记）
-        if new_block_flag and line_content.endswith(":"):
+                symbol_refs.append(token.value)
+
+        # 移除可能的行尾冒号，行为描述过程中的行尾冒号意味着新块以及缩进的开始
+        line_content = line_content.strip()
+        if line_content.endswith(":"):
             line_content = line_content[:-1]
+            new_block_flag = True
         
         # 创建行为步骤节点
         _, parent_uid = self._get_current_state()
@@ -366,16 +386,10 @@ class IbcParser:
         )
         
         self._add_ast_node(behavior_node)
-        
-        # 如果有新的代码块，压入状态
-        if new_block_flag:
-            self._push_state(ParserState.FUNCTION_CONTENT, behavior_node.uid)
-            
         self._match_token(IbcTokenType.NEWLINE)  # 消费换行符
     
     def _handle_normal_line(self):
         """处理常规行, 行首第一个单词被认为是关键字 标点符号不允许出现在行首"""
-        # TODO: !!! 施工未完成!!! 明天继续处理
         token = self._peek_token()
         current_state, _ = self._get_current_state()
         
@@ -412,8 +426,7 @@ class IbcParser:
                 self._consume_token()
                 continue
             
-            # 检查并处理缩进, 出现dedent时出栈 (压栈操作在其它解析流程中处理)
-            # TODO: 其实感觉还是有不合理的地方, 压栈也应该在此就处理完毕. 压栈操作不应该零碎分布
+            # 检查并处理缩进，同时处理状态栈
             self._handle_indent_dedent()
 
             # 处理特殊行（意图注释、对外描述）
