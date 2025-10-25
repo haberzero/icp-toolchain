@@ -411,7 +411,8 @@ class IbcParser:
                 raise ParseError(token.line_num, "behavior step must be inside function")
             self._parse_behavior_step()
         else:
-            raise ParseError(token.line_num, "Invalid content at the beginning of the line")
+            token = self._peek_token()
+            raise ParseError(token.line_num, f"Unexpected token --- {token.type}")
     
     def parse(self) -> Dict[int, AstNode]:
         """执行解析"""

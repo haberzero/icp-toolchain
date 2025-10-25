@@ -159,30 +159,26 @@ class Lexer:
 
                 # 处理缩进
                 indent_level = self._calc_indent_level(self.current_line)
-                if indent_level == -1:
-                    raise LexerError(f"Line {self.line_num}: Invalid indentation")
-                else:
-                    # 处理缩进变化
-                    current_indent = self.indent_stack[-1]
-                    if indent_level > current_indent:
-                        # 检查缩进是否跳变（一次增加超过1级）
-                        if indent_level - current_indent > 1:
-                            raise LexerError(
-                                f"Line {self.line_num}: Indentation jump is not allowed, "
-                                f"expected {current_indent + 1}, but got {indent_level}")
-                        
-                        # 增加缩进
-                        self.tokens.append(Token(IbcTokenType.INDENT, "", self.line_num))
-                        self.indent_stack.append(indent_level)
-                    elif indent_level < current_indent:
-                        # 减少缩进
-                        while self.indent_stack and self.indent_stack[-1] > indent_level:
-                            self.tokens.append(Token(IbcTokenType.DEDENT, "", self.line_num))
-                            self.indent_stack.pop()
-                        
-                        # 检查缩进是否对齐
-                        if not self.indent_stack or self.indent_stack[-1] != indent_level:
-                            raise LexerError(f"Line {self.line_num}: Inconsistent indentation")
+                current_indent = self.indent_stack[-1]
+                if indent_level > current_indent:
+                    # 检查缩进是否跳变（一次增加超过1级）
+                    if indent_level - current_indent > 1:
+                        raise LexerError(
+                            f"Line {self.line_num}: Indentation jump is not allowed, "
+                            f"expected {current_indent + 1}, but got {indent_level}")
+                    
+                    # 增加缩进
+                    self.tokens.append(Token(IbcTokenType.INDENT, "", self.line_num))
+                    self.indent_stack.append(indent_level)
+                elif indent_level < current_indent:
+                    # 减少缩进
+                    while self.indent_stack and self.indent_stack[-1] > indent_level:
+                        self.tokens.append(Token(IbcTokenType.DEDENT, "", self.line_num))
+                        self.indent_stack.pop()
+                    
+                    # 检查缩进是否对齐
+                    if not self.indent_stack or self.indent_stack[-1] != indent_level:
+                        raise LexerError(f"Line {self.line_num}: Inconsistent indentation")
                     
                 # 识别并处理行开头可能存在的关键字
                 content_line = self._process_keyword(striped_line)
