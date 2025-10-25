@@ -65,7 +65,7 @@ class IbcParser:
             return self._consume_token()
         raise ParseError(token.line_num, f"Expected {expected_type}, but got {token.type}")
 
-    def _take_token_until(self, stop_token: IbcTokenType) -> str:
+    def _take_token_str_until(self, stop_token: IbcTokenType) -> str:
         """从当前位置开始，直到遇到指定token，返回所有token的值。用于获取直到特定token前的总字符串"""
         tokens = []
         while self._peek_token().type != stop_token:
@@ -155,7 +155,7 @@ class IbcParser:
         # 处理意图注释
         if current_token.type == IbcTokenType.INTENT_COMMENT:
             # 消费所有token并全部作为意图注释的字符处理，直到换行
-            _tmp_str = self._take_token_until(IbcTokenType.NEWLINE)
+            _tmp_str = self._take_token_str_until(IbcTokenType.NEWLINE)
 
             # 禁止行末冒号
             if _tmp_str.endswith(":"):
@@ -171,7 +171,7 @@ class IbcParser:
             self._match_token(IbcTokenType.COLON)  # 检测冒号存在性
 
             # 消费所有剩余token并全部作为对外描述内容的字符处理，直到换行
-            _tmp_str = self._take_token_until(IbcTokenType.NEWLINE)
+            _tmp_str = self._take_token_str_until(IbcTokenType.NEWLINE)
             
             # 禁止行末冒号
             if _tmp_str.endswith(":"):
@@ -325,9 +325,7 @@ class IbcParser:
         # 获取变量描述
         var_desc = ""
         # 收集所有剩余token直到换行符
-        while self._peek_token().type != IbcTokenType.NEWLINE:
-            desc_token = self._consume_token()
-            var_desc += desc_token.value
+        var_desc = self._take_token_str_until(IbcTokenType.NEWLINE)
         
         # 检查变量描述末尾是否包含不允许的符号
         if var_desc and var_desc[-1] in ":,()":
