@@ -17,9 +17,9 @@ class ParserState(Enum):
     DESCRIPTION = "DESCRIPTION"  # 对外描述解析
     INTENT_COMMENT = "INTENT_COMMENT"  # 意图注释解析
     CLASS_DECL = "CLASS_DECL"  # 类声明解析
-    CLASS_CONTENT = "CLASS_CONTENT"  # 类内容解析, 没有对应状态机, 主要在主循环中处理
+    CLASS_CONTENT = "CLASS_CONTENT"  # 类内容解析
     FUNC_DECL = "FUNC_DECL"  # 函数声明解析
-    FUNC_CONTENT = "FUNCTION_CONTENT"  # 函数内容解析, 没有对应状态机, 主要在主循环中处理
+    FUNC_CONTENT = "FUNCTION_CONTENT"  # 函数内容解析
     BEHAVIOR_STEP = "BEHAVIOR_STEP"  # 行为步骤解析
 
 
@@ -29,9 +29,13 @@ class BaseState:
         self.state_type = ParserState.BASE_STATE
         self.parent_uid = parent_uid
         self.uid_generator = uid_generator
-        self.last_token: Optional[Token] = None
+        self.current_token: Optional[Token] = None
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
+        self.current_token = token
+
+    def process_last_token(self, token: Token) -> None:
+        # 派生类应当在各自的逻辑处理结束后调用此方法
         self.last_token = token
 
     def is_pop_state(self) -> bool:
@@ -39,7 +43,7 @@ class BaseState:
 
 
 class TopLevelState(BaseState):
-    """顶层状态类"""
+    """顶层状态类, 实际上不会被调用。token的处理逻辑主要集中在各自的状态机逻辑中 """
     def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator):
         super().__init__(parent_uid, uid_generator)
         self.state_type = ParserState.TOP_LEVEL
@@ -49,6 +53,14 @@ class TopLevelState(BaseState):
         # 顶层状态不处理token，只在主循环中处理关键字
 
 
+# 模块声明的子状态枚举
+class ModuleDeclSubState(Enum):
+    EXPECTING_MODULE_NAME = "EXPECTING_MODULE_NAME"
+    EXPECTING_COLON = "EXPECTING_COLON"
+    EXPECTING_CONTENT = "EXPECTING_CONTENT"
+    COMPLETE = "COMPLETE"
+
+
 class ModuleDeclState(BaseState):
     """模块声明状态类"""
     def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator):
@@ -56,41 +68,74 @@ class ModuleDeclState(BaseState):
         self.state_type = ParserState.MODULE_DECL
         self.module_name = ""
         self.content = ""
-        self.expecting_module_name = True
-        self.expecting_colon = False
-        self.expecting_content = False
+        self.sub_state = ModuleDeclSubState.EXPECTING_MODULE_NAME
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         super().process_token(token, ast_node_dict)
         
-        if token.type == IbcTokenType.IDENTIFIER and self.expecting_module_name:
-            self.module_name = token.value
-            self.expecting_module_name = False
-            self.expecting_colon = True
-        elif token.type == IbcTokenType.COLON and self.expecting_colon:
-            self.expecting_colon = False
-            self.expecting_content = True
-        elif token.type == IbcTokenType.IDENTIFIER and self.expecting_content:
-            self.content = token.value
-        elif token.type == IbcTokenType.NEWLINE:
-            # 模块声明结束，创建节点
-            uid = self.uid_generator.gen_uid()
-            line_num = self.last_token.line_num if self.last_token else 0
-            module_node = ModuleNode(
-                uid=uid,
-                parent_uid=self.parent_uid,
-                node_type=AstNodeType.MODULE,
-                line_number=line_num,
-                identifier=self.module_name,
-                content=self.content
-            )
-            
-            ast_node_dict[uid] = module_node
-            if self.parent_uid in ast_node_dict:
-                ast_node_dict[self.parent_uid].add_child(uid)
+        if self.sub_state == ModuleDeclSubState.EXPECTING_MODULE_NAME:
+            if token.type == IbcTokenType.IDENTIFIER:
+                self.module_name = token.value
+                self.sub_state = ModuleDeclSubState.EXPECTING_COLON
+            else:
+                # 错误：期望模块名但得到了其他token
+                line_num = token.line_num if token else 0
+                # 这里可以添加错误处理，但暂时保持简化
                 
+        elif self.sub_state == ModuleDeclSubState.EXPECTING_COLON:
+            if token.type == IbcTokenType.COLON:
+                self.sub_state = ModuleDeclSubState.EXPECTING_CONTENT
+            elif token.type == IbcTokenType.NEWLINE:
+                # 没有描述内容直接结束
+                self.sub_state = ModuleDeclSubState.COMPLETE
+                self._create_module_node(ast_node_dict)
+            else:
+                # 错误：期望冒号或换行符
+                line_num = token.line_num if token else 0
+                
+        elif self.sub_state == ModuleDeclSubState.EXPECTING_CONTENT:
+            if token.type == IbcTokenType.IDENTIFIER:
+                self.content = token.value
+                # 内容解析完成
+            elif token.type == IbcTokenType.NEWLINE:
+                self.sub_state = ModuleDeclSubState.COMPLETE
+                self._create_module_node(ast_node_dict)
+                
+        elif self.sub_state == ModuleDeclSubState.COMPLETE:
+            if token.type == IbcTokenType.NEWLINE:
+                # 确保节点只创建一次
+                pass
+
+    def _create_module_node(self, ast_node_dict: Dict[int, AstNode]) -> None:
+        """创建模块节点"""
+        uid = self.uid_generator.gen_uid()
+        line_num = self.current_token.line_num if self.current_token else 0
+        module_node = ModuleNode(
+            uid=uid,
+            parent_uid=self.parent_uid,
+            node_type=AstNodeType.MODULE,
+            line_number=line_num,
+            identifier=self.module_name,
+            content=self.content
+        )
+        
+        ast_node_dict[uid] = module_node
+        if self.parent_uid in ast_node_dict:
+            ast_node_dict[self.parent_uid].add_child(uid)
+
     def is_pop_state(self) -> bool:
-        return self.last_token is not None and self.last_token.type == IbcTokenType.NEWLINE
+        return (self.sub_state == ModuleDeclSubState.COMPLETE and 
+                self.current_token is not None and 
+                self.current_token.type == IbcTokenType.NEWLINE)
+
+
+# 变量声明的子状态枚举
+class VarDeclSubState(Enum):
+    EXPECTING_VAR_NAME = "EXPECTING_VAR_NAME"
+    EXPECTING_COLON = "EXPECTING_COLON"
+    EXPECTING_VAR_DESC = "EXPECTING_VAR_DESC"
+    VAR_COMPLETE = "VAR_COMPLETE"
+    COMPLETE = "COMPLETE"
 
 
 class VarDeclState(BaseState):
@@ -101,62 +146,83 @@ class VarDeclState(BaseState):
         self.variables: List[Tuple[str, str]] = []  # [(name, description), ...]
         self.current_var_name = ""
         self.current_var_desc = ""
-        self.expecting_var_name = True
-        self.expecting_colon = False
-        self.expecting_var_desc = False
+        self.sub_state = VarDeclSubState.EXPECTING_VAR_NAME
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         super().process_token(token, ast_node_dict)
         
-        if token.type == IbcTokenType.IDENTIFIER and self.expecting_var_name:
-            self.current_var_name = token.value
-            self.expecting_var_name = False
-            self.expecting_colon = True
-        elif token.type == IbcTokenType.COLON and self.expecting_colon:
-            self.expecting_colon = False
-            self.expecting_var_desc = True
-        elif token.type == IbcTokenType.IDENTIFIER and self.expecting_var_desc:
-            self.current_var_desc = token.value
-            # 添加变量到列表
-            self.variables.append((self.current_var_name, self.current_var_desc))
-            # 重置状态以处理下一个变量
-            self.current_var_name = ""
-            self.current_var_desc = ""
-            self.expecting_var_name = True
-            self.expecting_colon = False
-            self.expecting_var_desc = False
-        elif token.type == IbcTokenType.COMMA:
-            # 添加变量到列表
-            if self.current_var_name:
+        if self.sub_state == VarDeclSubState.EXPECTING_VAR_NAME:
+            if token.type == IbcTokenType.IDENTIFIER:
+                self.current_var_name = token.value
+                self.sub_state = VarDeclSubState.EXPECTING_COLON
+            else:
+                # 错误：期望变量名但得到了其他token
+                line_num = token.line_num if token else 0
+                # 这里可以添加错误处理，但暂时保持简化
+                
+        elif self.sub_state == VarDeclSubState.EXPECTING_COLON:
+            if token.type == IbcTokenType.COLON:
+                self.sub_state = VarDeclSubState.EXPECTING_VAR_DESC
+            elif token.type == IbcTokenType.COMMA:
+                # 没有描述的变量，直接完成当前变量
+                self.variables.append((self.current_var_name, ""))
+                self.current_var_name = ""
+                self.current_var_desc = ""
+                # 继续期待下一个变量名
+                self.sub_state = VarDeclSubState.EXPECTING_VAR_NAME
+            elif token.type == IbcTokenType.NEWLINE:
+                # 没有描述的变量，行结束
+                self.variables.append((self.current_var_name, ""))
+                self.sub_state = VarDeclSubState.COMPLETE
+                self._create_variable_nodes(ast_node_dict)
+            else:
+                # 错误：期望冒号、逗号或换行符
+                line_num = token.line_num if token else 0
+                
+        elif self.sub_state == VarDeclSubState.EXPECTING_VAR_DESC:
+            if token.type == IbcTokenType.IDENTIFIER:
+                if self.current_var_desc:
+                    self.current_var_desc += " " + token.value
+                else:
+                    self.current_var_desc = token.value
+            elif token.type == IbcTokenType.COMMA:
+                # 完成当前变量，开始下一个
                 self.variables.append((self.current_var_name, self.current_var_desc))
-            # 重置状态以处理下一个变量
-            self.current_var_name = ""
-            self.current_var_desc = ""
-            self.expecting_var_name = True
-            self.expecting_colon = False
-            self.expecting_var_desc = False
-        elif token.type == IbcTokenType.NEWLINE:
-            # 添加最后一个变量（如果没有冒号和描述）
-            if self.current_var_name:
+                self.current_var_name = ""
+                self.current_var_desc = ""
+                self.sub_state = VarDeclSubState.EXPECTING_VAR_NAME
+            elif token.type == IbcTokenType.NEWLINE:
+                # 完成最后一个变量
                 self.variables.append((self.current_var_name, self.current_var_desc))
-            # 为每个变量创建节点
-            line_num = self.last_token.line_num if self.last_token else 0
-            for var_name, var_desc in self.variables:
-                uid = self.uid_generator.gen_uid()
-                var_node = VariableNode(
-                    uid=uid,
-                    parent_uid=self.parent_uid,
-                    node_type=AstNodeType.VARIABLE,
-                    line_number=line_num,
-                    identifier=var_name,
-                    content=var_desc
-                )
-                ast_node_dict[uid] = var_node
-                if self.parent_uid in ast_node_dict:
-                    ast_node_dict[self.parent_uid].add_child(uid)
+                self.sub_state = VarDeclSubState.COMPLETE
+                self._create_variable_nodes(ast_node_dict)
+                
+        elif self.sub_state == VarDeclSubState.COMPLETE:
+            if token.type == IbcTokenType.NEWLINE:
+                # 确保节点只创建一次
+                pass
+
+    def _create_variable_nodes(self, ast_node_dict: Dict[int, AstNode]) -> None:
+        """为所有变量创建节点"""
+        line_num = self.current_token.line_num if self.current_token else 0
+        for var_name, var_desc in self.variables:
+            uid = self.uid_generator.gen_uid()
+            var_node = VariableNode(
+                uid=uid,
+                parent_uid=self.parent_uid,
+                node_type=AstNodeType.VARIABLE,
+                line_number=line_num,
+                identifier=var_name,
+                content=var_desc
+            )
+            ast_node_dict[uid] = var_node
+            if self.parent_uid in ast_node_dict:
+                ast_node_dict[self.parent_uid].add_child(uid)
 
     def is_pop_state(self) -> bool:
-        return self.last_token is not None and self.last_token.type == IbcTokenType.NEWLINE
+        return (self.sub_state == VarDeclSubState.COMPLETE and 
+                self.current_token is not None and 
+                self.current_token.type == IbcTokenType.NEWLINE)
 
 
 class DescriptionState(BaseState):
@@ -184,7 +250,7 @@ class DescriptionState(BaseState):
             pass  # 内容将在关联节点创建时使用
 
     def is_pop_state(self) -> bool:
-        return self.last_token is not None and self.last_token.type == IbcTokenType.NEWLINE
+        return self.current_token is not None and self.current_token.type == IbcTokenType.NEWLINE
 
     def get_content(self) -> str:
         return self.content
@@ -207,10 +273,20 @@ class IntentCommentState(BaseState):
                 self.content = token.value
 
     def is_pop_state(self) -> bool:
-        return self.last_token is not None and self.last_token.type == IbcTokenType.NEWLINE
+        return self.current_token is not None and self.current_token.type == IbcTokenType.NEWLINE
 
     def get_content(self) -> str:
         return self.content
+
+
+# 类声明的子状态枚举
+class ClassDeclSubState(Enum):
+    EXPECTING_CLASS_NAME = "EXPECTING_CLASS_NAME"
+    EXPECTING_LPAREN = "EXPECTING_LPAREN"
+    PARSING_PARENT_CLASS = "PARSING_PARENT_CLASS"
+    EXPECTING_RPAREN = "EXPECTING_RPAREN"
+    EXPECTING_COLON = "EXPECTING_COLON"
+    COMPLETE = "COMPLETE"
 
 
 class ClassDeclState(BaseState):
@@ -222,58 +298,107 @@ class ClassDeclState(BaseState):
         self.parent_class = ""
         self.inheritance_desc = ""
         self.params: Dict[str, str] = {}
-        self.expecting_class_name = True
-        self.expecting_lparen = False
-        self.expecting_param_content = False
-        self.expecting_rparen = False
-        self.expecting_colon = False
+        self.sub_state = ClassDeclSubState.EXPECTING_CLASS_NAME
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         super().process_token(token, ast_node_dict)
         
-        if token.type == IbcTokenType.IDENTIFIER and self.expecting_class_name:
-            self.class_name = token.value
-            self.expecting_class_name = False
-            self.expecting_lparen = True
-        elif token.type == IbcTokenType.LPAREN and self.expecting_lparen:
-            self.expecting_lparen = False
-            self.expecting_param_content = True
-        elif token.type == IbcTokenType.IDENTIFIER and self.expecting_param_content:
-            # 这里需要处理参数，可能是父类名或继承描述
-            if not self.parent_class:
-                self.parent_class = token.value
+        if self.sub_state == ClassDeclSubState.EXPECTING_CLASS_NAME:
+            if token.type == IbcTokenType.IDENTIFIER:
+                self.class_name = token.value
+                self.sub_state = ClassDeclSubState.EXPECTING_LPAREN
             else:
-                if self.inheritance_desc:
-                    self.inheritance_desc += " " + token.value
+                # 错误：期望类名但得到了其他token
+                line_num = token.line_num if token else 0
+                # 这里可以添加错误处理，但暂时保持简化
+                
+        elif self.sub_state == ClassDeclSubState.EXPECTING_LPAREN:
+            if token.type == IbcTokenType.LPAREN:
+                self.sub_state = ClassDeclSubState.PARSING_PARENT_CLASS
+            elif token.type == IbcTokenType.COLON:
+                self.sub_state = ClassDeclSubState.EXPECTING_COLON
+            else:
+                # 错误：期望左括号或冒号
+                line_num = token.line_num if token else 0
+                
+        elif self.sub_state == ClassDeclSubState.PARSING_PARENT_CLASS:
+            if token.type == IbcTokenType.IDENTIFIER:
+                if not self.parent_class:
+                    self.parent_class = token.value
                 else:
-                    self.inheritance_desc = token.value
-        elif token.type == IbcTokenType.COMMA and self.expecting_param_content:
-            # 参数分隔符
-            pass
-        elif token.type == IbcTokenType.RPAREN and self.expecting_param_content:
-            self.expecting_param_content = False
-            self.expecting_colon = True
-        elif token.type == IbcTokenType.COLON and self.expecting_colon:
-            self.expecting_colon = False
-        elif token.type == IbcTokenType.NEWLINE:
-            # 类声明结束，创建节点
-            uid = self.uid_generator.gen_uid()
-            line_num = self.last_token.line_num if self.last_token else 0
-            class_node = ClassNode(
-                uid=uid,
-                parent_uid=self.parent_uid,
-                node_type=AstNodeType.CLASS,
-                line_number=line_num,
-                identifier=self.class_name,
-                params=self.params
-            )
-            
-            ast_node_dict[uid] = class_node
-            if self.parent_uid in ast_node_dict:
-                ast_node_dict[self.parent_uid].add_child(uid)
+                    if self.inheritance_desc:
+                        self.inheritance_desc += " " + token.value
+                    else:
+                        self.inheritance_desc = token.value
+            elif token.type == IbcTokenType.COLON:
+                self.sub_state = ClassDeclSubState.EXPECTING_RPAREN
+            elif token.type == IbcTokenType.RPAREN:
+                self.sub_state = ClassDeclSubState.EXPECTING_COLON
+                
+        elif self.sub_state == ClassDeclSubState.EXPECTING_RPAREN:
+            if token.type == IbcTokenType.RPAREN:
+                self.sub_state = ClassDeclSubState.EXPECTING_COLON
+            else:
+                # 错误：期望右括号
+                line_num = token.line_num if token else 0
+                
+        elif self.sub_state == ClassDeclSubState.EXPECTING_COLON:
+            if token.type == IbcTokenType.COLON:
+                self.sub_state = ClassDeclSubState.COMPLETE
+            else:
+                # 错误：期望冒号
+                line_num = token.line_num if token else 0
+                
+        elif self.sub_state == ClassDeclSubState.COMPLETE:
+            if token.type == IbcTokenType.NEWLINE:
+                # 类声明结束，创建节点
+                uid = self.uid_generator.gen_uid()
+                line_num = self.current_token.line_num if self.current_token else 0
+                class_node = ClassNode(
+                    uid=uid,
+                    parent_uid=self.parent_uid,
+                    node_type=AstNodeType.CLASS,
+                    line_number=line_num,
+                    identifier=self.class_name,
+                    params=self.params
+                )
+                
+                ast_node_dict[uid] = class_node
+                if self.parent_uid in ast_node_dict:
+                    ast_node_dict[self.parent_uid].add_child(uid)
 
     def is_pop_state(self) -> bool:
-        return self.last_token is not None and self.last_token.type == IbcTokenType.NEWLINE
+        return (self.sub_state == ClassDeclSubState.COMPLETE and 
+                self.current_token is not None and 
+                self.current_token.type == IbcTokenType.NEWLINE)
+
+
+class ClassContentState(BaseState):
+    """类内容状态类, 实际上不会被调用。token的处理逻辑主要集中在各自的状态机逻辑中 """
+    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator):
+        super().__init__(parent_uid, uid_generator)
+        self.state_type = ParserState.CLASS_CONTENT
+
+    def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
+        super().process_token(token, ast_node_dict)
+
+
+# 函数声明的子状态枚举
+class FuncDeclSubState(Enum):
+    EXPECTING_FUNC_NAME = "EXPECTING_FUNC_NAME"
+    EXPECTING_LPAREN = "EXPECTING_LPAREN"
+    PARSING_PARAMS = "PARSING_PARAMS"
+    EXPECTING_RPAREN = "EXPECTING_RPAREN"
+    EXPECTING_COLON = "EXPECTING_COLON"
+    COMPLETE = "COMPLETE"
+
+
+# 参数解析的子状态枚举
+class ParamSubState(Enum):
+    EXPECTING_PARAM_NAME = "EXPECTING_PARAM_NAME"
+    EXPECTING_COLON = "EXPECTING_COLON"
+    EXPECTING_PARAM_DESC = "EXPECTING_PARAM_DESC"
+    PARAM_COMPLETE = "PARAM_COMPLETE"
 
 
 class FuncDeclState(BaseState):
@@ -285,78 +410,104 @@ class FuncDeclState(BaseState):
         self.params: Dict[str, str] = {}
         self.current_param_name = ""
         self.current_param_desc = ""
-        self.expecting_func_name = True
-        self.expecting_lparen = False
-        self.expecting_params = False
-        self.expecting_param_name = True
-        self.expecting_param_colon = False
-        self.expecting_param_desc = False
-        self.expecting_rparen = False
-        self.expecting_colon = False
+        self.sub_state = FuncDeclSubState.EXPECTING_FUNC_NAME
+        self.param_sub_state = ParamSubState.EXPECTING_PARAM_NAME
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         super().process_token(token, ast_node_dict)
         
-        if token.type == IbcTokenType.IDENTIFIER and self.expecting_func_name:
-            self.func_name = token.value
-            self.expecting_func_name = False
-            self.expecting_lparen = True
-        elif token.type == IbcTokenType.LPAREN and self.expecting_lparen:
-            self.expecting_lparen = False
-            self.expecting_params = True
-            self.expecting_param_name = True
-        elif token.type == IbcTokenType.IDENTIFIER and self.expecting_params and self.expecting_param_name:
-            self.current_param_name = token.value
-            self.expecting_param_name = False
-            self.expecting_param_colon = True
-        elif token.type == IbcTokenType.COLON and self.expecting_params and self.expecting_param_colon:
-            self.expecting_param_colon = False
-            self.expecting_param_desc = True
-        elif token.type == IbcTokenType.IDENTIFIER and self.expecting_params and self.expecting_param_desc:
-            self.current_param_desc = token.value
-            self.params[self.current_param_name] = self.current_param_desc
-            self.current_param_name = ""
-            self.current_param_desc = ""
-            self.expecting_param_name = True
-            self.expecting_param_colon = False
-            self.expecting_param_desc = False
-        elif token.type == IbcTokenType.COMMA and self.expecting_params:
-            # 如果有当前参数但没有描述，也要添加
-            if self.current_param_name:
-                self.params[self.current_param_name] = self.current_param_desc
+        if self.sub_state == FuncDeclSubState.EXPECTING_FUNC_NAME:
+            if token.type == IbcTokenType.IDENTIFIER:
+                self.func_name = token.value
+                self.sub_state = FuncDeclSubState.EXPECTING_LPAREN
+            else:
+                # 错误：期望函数名但得到了其他token
+                line_num = token.line_num if token else 0
+                # 这里可以添加错误处理，但暂时保持简化
+                
+        elif self.sub_state == FuncDeclSubState.EXPECTING_LPAREN:
+            if token.type == IbcTokenType.LPAREN:
+                self.sub_state = FuncDeclSubState.PARSING_PARAMS
+                self.param_sub_state = ParamSubState.EXPECTING_PARAM_NAME
+            else:
+                # 错误：期望左括号
+                line_num = token.line_num if token else 0
+                
+        elif self.sub_state == FuncDeclSubState.PARSING_PARAMS:
+            if token.type == IbcTokenType.IDENTIFIER:
+                if self.param_sub_state == ParamSubState.EXPECTING_PARAM_NAME:
+                    self.current_param_name = token.value
+                    self.param_sub_state = ParamSubState.EXPECTING_COLON
+                elif self.param_sub_state == ParamSubState.EXPECTING_PARAM_DESC:
+                    self.current_param_desc = token.value
+                    self.param_sub_state = ParamSubState.PARAM_COMPLETE
+                    
+            elif token.type == IbcTokenType.COLON:
+                if self.param_sub_state == ParamSubState.EXPECTING_COLON:
+                    self.param_sub_state = ParamSubState.EXPECTING_PARAM_DESC
+                else:
+                    # 错误：意外的冒号
+                    line_num = token.line_num if token else 0
+                    
+            elif token.type == IbcTokenType.COMMA:
+                # 完成当前参数，开始下一个
+                if self.current_param_name:
+                    self.params[self.current_param_name] = self.current_param_desc
                 self.current_param_name = ""
                 self.current_param_desc = ""
-            self.expecting_param_name = True
-            self.expecting_param_colon = False
-            self.expecting_param_desc = False
-        elif token.type == IbcTokenType.RPAREN and self.expecting_params:
-            # 如果有当前参数但没有描述，也要添加
-            if self.current_param_name:
-                self.params[self.current_param_name] = self.current_param_desc
-            self.expecting_params = False
-            self.expecting_rparen = False
-            self.expecting_colon = True
-        elif token.type == IbcTokenType.COLON and self.expecting_colon:
-            self.expecting_colon = False
-        elif token.type == IbcTokenType.NEWLINE:
-            # 函数声明结束，创建节点
-            uid = self.uid_generator.gen_uid()
-            line_num = self.last_token.line_num if self.last_token else 0
-            func_node = FunctionNode(
-                uid=uid,
-                parent_uid=self.parent_uid,
-                node_type=AstNodeType.FUNCTION,
-                line_number=line_num,
-                identifier=self.func_name,
-                params=self.params
-            )
-            
-            ast_node_dict[uid] = func_node
-            if self.parent_uid in ast_node_dict:
-                ast_node_dict[self.parent_uid].add_child(uid)
+                self.param_sub_state = ParamSubState.EXPECTING_PARAM_NAME
+                
+            elif token.type == IbcTokenType.RPAREN:
+                # 完成最后一个参数
+                if self.current_param_name:
+                    self.params[self.current_param_name] = self.current_param_desc
+                self.current_param_name = ""
+                self.current_param_desc = ""
+                self.sub_state = FuncDeclSubState.EXPECTING_COLON
+                
+            else:
+                # 其他token处理
+                pass
+                
+        elif self.sub_state == FuncDeclSubState.EXPECTING_COLON:
+            if token.type == IbcTokenType.COLON:
+                self.sub_state = FuncDeclSubState.COMPLETE
+            else:
+                # 错误：期望冒号
+                line_num = token.line_num if token else 0
+                
+        elif self.sub_state == FuncDeclSubState.COMPLETE:
+            if token.type == IbcTokenType.NEWLINE:
+                # 函数声明结束，创建节点
+                uid = self.uid_generator.gen_uid()
+                line_num = self.current_token.line_num if self.current_token else 0
+                func_node = FunctionNode(
+                    uid=uid,
+                    parent_uid=self.parent_uid,
+                    node_type=AstNodeType.FUNCTION,
+                    line_number=line_num,
+                    identifier=self.func_name,
+                    params=self.params
+                )
+                
+                ast_node_dict[uid] = func_node
+                if self.parent_uid in ast_node_dict:
+                    ast_node_dict[self.parent_uid].add_child(uid)
 
     def is_pop_state(self) -> bool:
-        return self.last_token is not None and self.last_token.type == IbcTokenType.NEWLINE
+        return (self.sub_state == FuncDeclSubState.COMPLETE and 
+                self.current_token is not None and 
+                self.current_token.type == IbcTokenType.NEWLINE)
+
+
+class FuncContentState(BaseState):
+    """函数内容状态类, 实际上不会被调用。token的处理逻辑主要集中在各自的状态机逻辑中 """
+    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator):
+        super().__init__(parent_uid, uid_generator)
+        self.state_type = ParserState.FUNC_CONTENT
+
+    def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
+        super().process_token(token, ast_node_dict)
 
 
 class BehaviorStepState(BaseState):
@@ -380,7 +531,6 @@ class BehaviorStepState(BaseState):
                 self.content = token.value
         elif token.type == IbcTokenType.COLON:
             self.content += ":"
-            self.new_block_flag = True
         elif token.type == IbcTokenType.COMMA:
             self.content += ","
         elif token.type == IbcTokenType.LPAREN:
@@ -389,8 +539,12 @@ class BehaviorStepState(BaseState):
             self.content += ")"
         elif token.type == IbcTokenType.NEWLINE:
             # 行为步骤结束，创建节点
+            # 如果出现行末冒号，则认为需要开启新代码块
+            self.new_block_flag = (self.current_token is not None and 
+                                    self.current_token.type == IbcTokenType.COLON)
+
             uid = self.uid_generator.gen_uid()
-            line_num = self.last_token.line_num if self.last_token else 0
+            line_num = self.current_token.line_num if self.current_token else 0
             behavior_node = BehaviorStepNode(
                 uid=uid,
                 parent_uid=self.parent_uid,
@@ -406,4 +560,4 @@ class BehaviorStepState(BaseState):
                 ast_node_dict[self.parent_uid].add_child(uid)
 
     def is_pop_state(self) -> bool:
-        return self.last_token is not None and self.last_token.type == IbcTokenType.NEWLINE
+        return self.current_token is not None and self.current_token.type == IbcTokenType.NEWLINE

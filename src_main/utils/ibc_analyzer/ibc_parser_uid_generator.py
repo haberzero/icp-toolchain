@@ -10,3 +10,7 @@ class IbcParserUidGenerator:
         """获取下一个可用的编号"""
         self.uid += 1   # 从1开始，0被认为是root
         return self.uid
+    
+    def get_current_uid(self) -> int:
+        """获取当前编号"""
+        return self.uid

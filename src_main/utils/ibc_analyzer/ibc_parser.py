@@ -39,6 +39,7 @@ class IbcParser:
         
         # 跟踪上一个AST节点
         self.last_ast_node: Optional[AstNode] = self.ast_nodes[0]
+        self.last_ast_node_uid = 0
 
     def _peek_token(self) -> Token:
         """查看当前token"""
@@ -116,24 +117,18 @@ class IbcParser:
         if token.value == "module" and current_state != ParserState.TOP_LEVEL:
             raise ParserError(f"Line {token.line_num}: 'module' keyword only allowed at top level")
         
-        # 根据关键字类型压入相应的状态机
+        # 根据关键字类型压入相应的状态
         if token.type == IbcTokenType.KEYWORDS and token.value == "module":
-            state_obj = ModuleDeclState(parent_uid, self.uid_generator)
             self.state_stack.append((ParserState.MODULE_DECL, parent_uid))
         elif token.type == IbcTokenType.KEYWORDS and token.value == "var":
-            state_obj = VarDeclState(parent_uid, self.uid_generator)
             self.state_stack.append((ParserState.VAR_DECL, parent_uid))
         elif token.type == IbcTokenType.KEYWORDS and token.value == "description":
-            state_obj = DescriptionState(parent_uid, self.uid_generator)
             self.state_stack.append((ParserState.DESCRIPTION, parent_uid))
         elif token.type == IbcTokenType.KEYWORDS and token.value == "class":
-            state_obj = ClassDeclState(parent_uid, self.uid_generator)
             self.state_stack.append((ParserState.CLASS_DECL, parent_uid))
         elif token.type == IbcTokenType.KEYWORDS and token.value == "func":
-            state_obj = FuncDeclState(parent_uid, self.uid_generator)
             self.state_stack.append((ParserState.FUNC_DECL, parent_uid))
         elif token.type == IbcTokenType.INTENT_COMMENT:
-            state_obj = IntentCommentState(parent_uid, self.uid_generator)
             self.state_stack.append((ParserState.INTENT_COMMENT, parent_uid))
     
     def _process_token_in_current_state(self, token: Token) -> None:
@@ -148,18 +143,27 @@ class IbcParser:
         
         # 处理token
         state_obj.process_token(token, self.ast_nodes)
-        
-        # 更新last_ast_node
-        # 查找最新添加的节点
-        if self.ast_nodes:
-            max_uid = max(self.ast_nodes.keys())
-            self.last_ast_node = self.ast_nodes[max_uid]
+
+        # 检查是否存在uid的更新
+        current_uid = self.uid_generator.get_current_uid()
+        if current_uid > self.last_ast_node_uid:
+            self.last_ast_node_uid = current_uid
+            self.last_ast_node = self.ast_nodes[current_uid]
+            # 如果是类声明或函数声明节点，附加对外描述和意图注释
+            if isinstance(self.last_ast_node, (ClassNode, FunctionNode)):
+                self.last_ast_node.external_desc = self.pending_description
+                self.last_ast_node.intent_comment = self.pending_intent_comment
+                self.pending_description = ""
+                self.pending_intent_comment = ""
+            else:
+                self.pending_description = ""
+                self.pending_intent_comment = ""
         
         # 检查是否需要弹出状态
         if state_obj.is_pop_state():
             popped_state = self.state_stack.pop()
             
-            # 如果是描述或意图注释状态，暂存内容
+            # 如果是描述或意图注释状态，暂存内容。状态栈是元组，第一个元素是状态类型
             if popped_state[0] == ParserState.DESCRIPTION and isinstance(state_obj, DescriptionState):
                 self.pending_description = state_obj.get_content()
             elif popped_state[0] == ParserState.INTENT_COMMENT and isinstance(state_obj, IntentCommentState):
