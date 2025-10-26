@@ -21,7 +21,7 @@ class ParseError(Exception):
         super().__init__(f"Line {line_num}: {message}")
     
     def __str__(self):
-        return f"ParserError: {self.message}"
+        return f"ParserError at line {self.line_num}: {self.message}"
 
 
 class IbcParser:
@@ -50,7 +50,7 @@ class IbcParser:
         """查看当前token"""
         if self.pos < len(self.tokens):
             return self.tokens[self.pos]
-        return Token(IbcTokenType.EOF, "EOF", -1)
+        return Token(IbcTokenType.EOF, "", -1)
     
     def _consume_token(self) -> Token:
         """消费当前token"""
@@ -63,7 +63,7 @@ class IbcParser:
         token = self._peek_token()
         if token.type == expected_type:
             return self._consume_token()
-        raise ParseError(token.line_num, f"Expected {expected_type}, but got {token.type}")
+        raise ParseError(token.line_num, f"Expected {expected_type}, but got {token.type}, token value: {token.value}")
 
     def _take_token_str_until(self, stop_token: IbcTokenType) -> str:
         """从当前位置开始，直到遇到指定token，返回所有token的值。用于获取直到特定token前的总字符串"""
@@ -83,7 +83,9 @@ class IbcParser:
     
     def _is_at_end(self) -> bool:
         """检查是否到达文件末尾"""
-        return self._peek_token().type == IbcTokenType.EOF
+        if self._peek_token().type == IbcTokenType.EOF:
+            return True
+        return False
     
     def _get_current_state(self) -> Tuple[ParserState, int]:
         """获取当前状态"""
@@ -223,7 +225,6 @@ class IbcParser:
                 content=module_desc
             )
             self._add_ast_node(module_node)
-            self._match_token(IbcTokenType.NEWLINE)  # 消费换行符
         
         else:
             raise ParseError(token.line_num, "Unexpected token")
@@ -251,9 +252,7 @@ class IbcParser:
         # 清空暂存的意图注释以及对外描述
         self.pending_intent_comment = ""
         self.pending_description = ""
-        
-        self._match_token(IbcTokenType.NEWLINE)  # 消费换行符
-    
+
     def _parse_function_decl(self):
         """解析函数声明"""
         token = self._consume_token()  # 消费 "func"
@@ -313,8 +312,6 @@ class IbcParser:
         
         self._add_ast_node(func_node)
         
-        self._match_token(IbcTokenType.NEWLINE)  # 消费换行符
-    
     def _parse_variable_decl(self):
         """解析变量声明"""
         token = self._consume_token()  # 消费 "var"
@@ -348,7 +345,6 @@ class IbcParser:
         self.pending_intent_comment = ""
         
         self._add_ast_node(var_node)
-        self._match_token(IbcTokenType.NEWLINE)  # 消费换行符
     
     def _parse_behavior_step(self):
         """解析行为步骤行"""
@@ -384,7 +380,6 @@ class IbcParser:
         )
         
         self._add_ast_node(behavior_node)
-        self._match_token(IbcTokenType.NEWLINE)  # 消费换行符
     
     def _handle_normal_line(self):
         """处理常规行, 行首第一个单词被认为是关键字 标点符号不允许出现在行首"""
@@ -411,7 +406,6 @@ class IbcParser:
                 raise ParseError(token.line_num, "behavior step must be inside function")
             self._parse_behavior_step()
         else:
-            token = self._peek_token()
             raise ParseError(token.line_num, f"Unexpected token --- {token.type}")
     
     def parse(self) -> Dict[int, AstNode]:
@@ -419,9 +413,7 @@ class IbcParser:
         while not self._is_at_end():
             token = self._peek_token()
 
-            # 如果是换行符，直接消费（所有处理应确保换行符被消费，此分支理论上不应该进入）
             if token.type == IbcTokenType.NEWLINE:
-                print(f"Warning: Unexpected newline at line {token.line_num}")
                 self._consume_token()
                 continue
             
