@@ -221,7 +221,7 @@ class VarDeclState(BaseState):
 
 
 class DescriptionState(BaseState):
-    """描述状态类"""
+    """描述状态类, 不产生节点, 直接返回解析内容"""
     def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator):
         super().__init__(parent_uid, uid_generator)
         self.state_type = ParserState.DESCRIPTION
@@ -253,7 +253,7 @@ class DescriptionState(BaseState):
 
 
 class IntentCommentState(BaseState):
-    """意图注释状态类"""
+    """意图注释状态类, 不产生节点, 直接返回解析内容"""
     def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator):
         super().__init__(parent_uid, uid_generator)
         self.state_type = ParserState.INTENT_COMMENT
