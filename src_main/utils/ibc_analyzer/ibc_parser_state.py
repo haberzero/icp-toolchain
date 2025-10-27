@@ -343,24 +343,27 @@ class ClassDeclState(BaseState):
         elif self.sub_state == ClassDeclSubState.EXPECTING_COLON:
             if token.type == IbcTokenType.COLON:
                 # 类声明结束，创建节点
-                uid = self.uid_generator.gen_uid()
-                line_num = self.current_token.line_num if self.current_token else 0
-                class_node = ClassNode(
-                    uid=uid,
-                    parent_uid=self.parent_uid,
-                    node_type=AstNodeType.CLASS,
-                    line_number=line_num,
-                    identifier=self.class_name,
-                    params=self.params
-                )
-                
-                ast_node_dict[uid] = class_node
-                if self.parent_uid in ast_node_dict:
-                    ast_node_dict[self.parent_uid].add_child(uid)
-                    
+                self._create_class_node(ast_node_dict)
                 self.pop_flag = True
             else:
                 raise IbcParserStateError(f"Line {token.line_num} ClassDeclState: Expecting colon but got {token.type}")
+
+    def _create_class_node(self, ast_node_dict: Dict[int, AstNode]) -> None:
+        """创建类节点"""
+        uid = self.uid_generator.gen_uid()
+        line_num = self.current_token.line_num if self.current_token else 0
+        class_node = ClassNode(
+            uid=uid,
+            parent_uid=self.parent_uid,
+            node_type=AstNodeType.CLASS,
+            line_number=line_num,
+            identifier=self.class_name,
+            params=self.params
+        )
+        
+        ast_node_dict[uid] = class_node
+        if self.parent_uid in ast_node_dict:
+            ast_node_dict[self.parent_uid].add_child(uid)
 
     def is_need_pop(self) -> bool:
         return self.pop_flag
@@ -381,16 +384,12 @@ class FuncDeclSubState(Enum):
     EXPECTING_FUNC_NAME = "EXPECTING_FUNC_NAME"
     EXPECTING_LPAREN = "EXPECTING_LPAREN"
     PARSING_PARAMS = "PARSING_PARAMS"
+    EXPECTING_PARAM_NAME = "EXPECTING_PARAM_NAME"
+    EXPECTING_PARAM_COLON = "EXPECTING_PARAM_COLON"
+    EXPECTING_PARAM_DESC = "EXPECTING_PARAM_DESC"
+    EXPECTING_PARAM_COMMA = "EXPECTING_PARAM_COMMA"
     EXPECTING_RPAREN = "EXPECTING_RPAREN"
     EXPECTING_COLON = "EXPECTING_COLON"
-
-
-# 参数解析的子状态枚举
-class ParamSubState(Enum):
-    EXPECTING_PARAM_NAME = "EXPECTING_PARAM_NAME"
-    EXPECTING_COLON = "EXPECTING_COLON"
-    EXPECTING_PARAM_DESC = "EXPECTING_PARAM_DESC"
-    PARAM_COMPLETE = "PARAM_COMPLETE"
 
 
 class FuncDeclState(BaseState):
@@ -403,7 +402,6 @@ class FuncDeclState(BaseState):
         self.current_param_name = ""
         self.current_param_desc = ""
         self.sub_state = FuncDeclSubState.EXPECTING_FUNC_NAME
-        self.param_sub_state = ParamSubState.EXPECTING_PARAM_NAME
         self.pop_flag = False
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
@@ -419,32 +417,38 @@ class FuncDeclState(BaseState):
         elif self.sub_state == FuncDeclSubState.EXPECTING_LPAREN:
             if token.type == IbcTokenType.LPAREN:
                 self.sub_state = FuncDeclSubState.PARSING_PARAMS
-                self.param_sub_state = ParamSubState.EXPECTING_PARAM_NAME
             else:
                 raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting left parenthesis but got {token.type}")
                 
         elif self.sub_state == FuncDeclSubState.PARSING_PARAMS:
             if token.type == IbcTokenType.IDENTIFIER:
-                if self.param_sub_state == ParamSubState.EXPECTING_PARAM_NAME:
+                if self.sub_state == FuncDeclSubState.PARSING_PARAMS or \
+                   self.sub_state == FuncDeclSubState.EXPECTING_PARAM_NAME:
+                    # 开始解析第一个或下一个参数
                     self.current_param_name = token.value
-                    self.param_sub_state = ParamSubState.EXPECTING_COLON
-                elif self.param_sub_state == ParamSubState.EXPECTING_PARAM_DESC:
+                    self.sub_state = FuncDeclSubState.EXPECTING_PARAM_COLON
+                elif self.sub_state == FuncDeclSubState.EXPECTING_PARAM_DESC:
+                    # 解析参数描述
                     self.current_param_desc = token.value
-                    self.param_sub_state = ParamSubState.PARAM_COMPLETE
+                    self.sub_state = FuncDeclSubState.EXPECTING_PARAM_COMMA
                     
             elif token.type == IbcTokenType.COLON:
-                if self.param_sub_state == ParamSubState.EXPECTING_COLON:
-                    self.param_sub_state = ParamSubState.EXPECTING_PARAM_DESC
+                if self.sub_state == FuncDeclSubState.EXPECTING_PARAM_COLON:
+                    self.sub_state = FuncDeclSubState.EXPECTING_PARAM_DESC
                 else:
                     raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Unexpected colon in parameter parsing")
                     
             elif token.type == IbcTokenType.COMMA:
-                # 完成当前参数，开始下一个
-                if self.current_param_name:
-                    self.params[self.current_param_name] = self.current_param_desc
-                self.current_param_name = ""
-                self.current_param_desc = ""
-                self.param_sub_state = ParamSubState.EXPECTING_PARAM_NAME
+                if self.sub_state in [FuncDeclSubState.EXPECTING_PARAM_COMMA, 
+                                    FuncDeclSubState.EXPECTING_PARAM_DESC]:
+                    # 完成当前参数，准备解析下一个参数
+                    if self.current_param_name:
+                        self.params[self.current_param_name] = self.current_param_desc
+                    self.current_param_name = ""
+                    self.current_param_desc = ""
+                    self.sub_state = FuncDeclSubState.EXPECTING_PARAM_NAME
+                else:
+                    raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Unexpected comma in parameter parsing")
                 
             elif token.type == IbcTokenType.RPAREN:
                 # 完成最后一个参数
@@ -453,30 +457,34 @@ class FuncDeclState(BaseState):
                 self.current_param_name = ""
                 self.current_param_desc = ""
                 self.sub_state = FuncDeclSubState.EXPECTING_COLON
+                
             else:
                 raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Unexpected token in parameter parsing")
                 
         elif self.sub_state == FuncDeclSubState.EXPECTING_COLON:
             if token.type == IbcTokenType.COLON:
                 # 函数声明结束，创建节点
-                uid = self.uid_generator.gen_uid()
-                line_num = self.current_token.line_num if self.current_token else 0
-                func_node = FunctionNode(
-                    uid=uid,
-                    parent_uid=self.parent_uid,
-                    node_type=AstNodeType.FUNCTION,
-                    line_number=line_num,
-                    identifier=self.func_name,
-                    params=self.params
-                )
-                
-                ast_node_dict[uid] = func_node
-                if self.parent_uid in ast_node_dict:
-                    ast_node_dict[self.parent_uid].add_child(uid)
-                    
+                self._create_function_node(ast_node_dict)
                 self.pop_flag = True
             else:
                 raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting colon but got {token.type}")
+
+    def _create_function_node(self, ast_node_dict: Dict[int, AstNode]) -> None:
+        """创建函数节点"""
+        uid = self.uid_generator.gen_uid()
+        line_num = self.current_token.line_num if self.current_token else 0
+        func_node = FunctionNode(
+            uid=uid,
+            parent_uid=self.parent_uid,
+            node_type=AstNodeType.FUNCTION,
+            line_number=line_num,
+            identifier=self.func_name,
+            params=self.params
+        )
+        
+        ast_node_dict[uid] = func_node
+        if self.parent_uid in ast_node_dict:
+            ast_node_dict[self.parent_uid].add_child(uid)
 
     def is_need_pop(self) -> bool:
         return self.pop_flag
@@ -526,23 +534,26 @@ class BehaviorStepState(BaseState):
             self.new_block_flag = (self.current_token is not None and 
                                     self.current_token.type == IbcTokenType.COLON)
 
-            uid = self.uid_generator.gen_uid()
-            line_num = self.current_token.line_num if self.current_token else 0
-            behavior_node = BehaviorStepNode(
-                uid=uid,
-                parent_uid=self.parent_uid,
-                node_type=AstNodeType.BEHAVIOR_STEP,
-                line_number=line_num,
-                content=self.content,
-                symbol_refs=self.symbol_refs,
-                new_block_flag=self.new_block_flag
-            )
-            
-            ast_node_dict[uid] = behavior_node
-            if self.parent_uid in ast_node_dict:
-                ast_node_dict[self.parent_uid].add_child(uid)
-                
+            self._create_behavior_node(ast_node_dict)
             self.pop_flag = True
+
+    def _create_behavior_node(self, ast_node_dict: Dict[int, AstNode]) -> None:
+        """创建行为步骤节点"""
+        uid = self.uid_generator.gen_uid()
+        line_num = self.current_token.line_num if self.current_token else 0
+        behavior_node = BehaviorStepNode(
+            uid=uid,
+            parent_uid=self.parent_uid,
+            node_type=AstNodeType.BEHAVIOR_STEP,
+            line_number=line_num,
+            content=self.content,
+            symbol_refs=self.symbol_refs,
+            new_block_flag=self.new_block_flag
+        )
+        
+        ast_node_dict[uid] = behavior_node
+        if self.parent_uid in ast_node_dict:
+            ast_node_dict[self.parent_uid].add_child(uid)
 
     def is_need_pop(self) -> bool:
         return self.pop_flag
