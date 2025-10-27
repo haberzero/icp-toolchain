@@ -144,6 +144,8 @@ class IbcParser:
             state_obj = FuncDeclState(parent_uid, self.uid_generator)
         elif token.type == IbcTokenType.INTENT_COMMENT:
             state_obj = IntentCommentState(parent_uid, self.uid_generator)
+        else:
+            raise ParserError(f"Line {token.line_num}: Invalid keyword token'{token.value}', check your code please")
             
         if state_obj:
             self.state_stack.append((state_obj, parent_uid))
