@@ -13,7 +13,7 @@ class LexerError(Exception):
         return f"LexerError: {self.message}"
 
 
-class Lexer:
+class IbcLexer:
     """Intent Behavior Code 词法分析器"""
     def __init__(self, text: str):
         self.text = text

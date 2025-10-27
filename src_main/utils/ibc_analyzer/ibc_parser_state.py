@@ -8,6 +8,16 @@ from typedef.ibc_data_types import (
 from utils.ibc_analyzer.ibc_parser_uid_generator import IbcParserUidGenerator
 
 
+class IbcParserStateError(Exception):
+    """词法分析器异常"""
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(self.message)
+    
+    def __str__(self):
+        return f"ParserError: {self.message}"
+
+
 class ParserState(Enum):
     """解析器状态枚举"""
     BASE_STATE = "BASE_STATE"  # 默认状态，不起作用，仅占位
@@ -32,25 +42,20 @@ class BaseState:
         self.current_token: Optional[Token] = None
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
-        self.current_token = token
-
-    def process_last_token(self, token: Token) -> None:
-        # 派生类应当在各自的逻辑处理结束后调用此方法
-        self.last_token = token
+        pass
 
     def is_pop_state(self) -> bool:
         return False
 
 
 class TopLevelState(BaseState):
-    """顶层状态类, 实际上不会被调用。token的处理逻辑主要集中在各自的状态机逻辑中 """
+    """顶层状态类, 目前实际上不会被调用。token的处理逻辑主要集中在各自的状态机逻辑中 """
     def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator):
         super().__init__(parent_uid, uid_generator)
         self.state_type = ParserState.TOP_LEVEL
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
-        super().process_token(token, ast_node_dict)
-        # 顶层状态不处理token，只在主循环中处理关键字
+        self.current_token = token
 
 
 # 模块声明的子状态枚举
@@ -58,7 +63,6 @@ class ModuleDeclSubState(Enum):
     EXPECTING_MODULE_NAME = "EXPECTING_MODULE_NAME"
     EXPECTING_COLON = "EXPECTING_COLON"
     EXPECTING_CONTENT = "EXPECTING_CONTENT"
-    COMPLETE = "COMPLETE"
 
 
 class ModuleDeclState(BaseState):
@@ -69,42 +73,41 @@ class ModuleDeclState(BaseState):
         self.module_name = ""
         self.content = ""
         self.sub_state = ModuleDeclSubState.EXPECTING_MODULE_NAME
+        self.pop_flag = False
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
-        super().process_token(token, ast_node_dict)
+        self.current_token = token
         
         if self.sub_state == ModuleDeclSubState.EXPECTING_MODULE_NAME:
             if token.type == IbcTokenType.IDENTIFIER:
                 self.module_name = token.value
                 self.sub_state = ModuleDeclSubState.EXPECTING_COLON
             else:
-                # 错误：期望模块名但得到了其他token
-                line_num = token.line_num if token else 0
-                # 这里可以添加错误处理，但暂时保持简化
+                raise IbcParserStateError(f"Line {token.line_num} ModuleDeclState: Expecting module name but got {token.type}")
                 
         elif self.sub_state == ModuleDeclSubState.EXPECTING_COLON:
             if token.type == IbcTokenType.COLON:
                 self.sub_state = ModuleDeclSubState.EXPECTING_CONTENT
             elif token.type == IbcTokenType.NEWLINE:
                 # 没有描述内容直接结束
-                self.sub_state = ModuleDeclSubState.COMPLETE
                 self._create_module_node(ast_node_dict)
+                self.pop_flag = True
             else:
-                # 错误：期望冒号或换行符
-                line_num = token.line_num if token else 0
+                raise IbcParserStateError(f"Line {token.line_num} ModuleDeclState: Expecting colon but got {token.type}")
                 
         elif self.sub_state == ModuleDeclSubState.EXPECTING_CONTENT:
+            # 解析直到换行
             if token.type == IbcTokenType.IDENTIFIER:
                 self.content = token.value
-                # 内容解析完成
-            elif token.type == IbcTokenType.NEWLINE:
-                self.sub_state = ModuleDeclSubState.COMPLETE
-                self._create_module_node(ast_node_dict)
                 
-        elif self.sub_state == ModuleDeclSubState.COMPLETE:
-            if token.type == IbcTokenType.NEWLINE:
-                # 确保节点只创建一次
-                pass
+            elif token.type == IbcTokenType.NEWLINE:
+                # 确保行末不以冒号结束
+                if self.content[-1] == ":":
+                    raise IbcParserStateError(f"Line {token.line_num} ModuleDeclState: Cannot end with colon")
+                self._create_module_node(ast_node_dict)
+                self.pop_flag = True
+
+        self.last_token = token
 
     def _create_module_node(self, ast_node_dict: Dict[int, AstNode]) -> None:
         """创建模块节点"""
@@ -124,9 +127,7 @@ class ModuleDeclState(BaseState):
             ast_node_dict[self.parent_uid].add_child(uid)
 
     def is_pop_state(self) -> bool:
-        return (self.sub_state == ModuleDeclSubState.COMPLETE and 
-                self.current_token is not None and 
-                self.current_token.type == IbcTokenType.NEWLINE)
+        return self.pop_flag
 
 
 # 变量声明的子状态枚举
@@ -149,16 +150,14 @@ class VarDeclState(BaseState):
         self.sub_state = VarDeclSubState.EXPECTING_VAR_NAME
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
-        super().process_token(token, ast_node_dict)
+        self.current_token = token
         
         if self.sub_state == VarDeclSubState.EXPECTING_VAR_NAME:
             if token.type == IbcTokenType.IDENTIFIER:
                 self.current_var_name = token.value
                 self.sub_state = VarDeclSubState.EXPECTING_COLON
             else:
-                # 错误：期望变量名但得到了其他token
-                line_num = token.line_num if token else 0
-                # 这里可以添加错误处理，但暂时保持简化
+                raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Expecting variable name but got {token.type}")
                 
         elif self.sub_state == VarDeclSubState.EXPECTING_COLON:
             if token.type == IbcTokenType.COLON:
@@ -176,8 +175,7 @@ class VarDeclState(BaseState):
                 self.sub_state = VarDeclSubState.COMPLETE
                 self._create_variable_nodes(ast_node_dict)
             else:
-                # 错误：期望冒号、逗号或换行符
-                line_num = token.line_num if token else 0
+                raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Expecting colon, comma or newline but got {token.type}")
                 
         elif self.sub_state == VarDeclSubState.EXPECTING_VAR_DESC:
             if token.type == IbcTokenType.IDENTIFIER:
@@ -196,6 +194,8 @@ class VarDeclState(BaseState):
                 self.variables.append((self.current_var_name, self.current_var_desc))
                 self.sub_state = VarDeclSubState.COMPLETE
                 self._create_variable_nodes(ast_node_dict)
+            else:
+                raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Unexpected token in variable description parsing")
                 
         elif self.sub_state == VarDeclSubState.COMPLETE:
             if token.type == IbcTokenType.NEWLINE:
@@ -235,7 +235,7 @@ class DescriptionState(BaseState):
         self.expecting_content = False
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
-        super().process_token(token, ast_node_dict)
+        self.current_token = token
         
         if token.type == IbcTokenType.COLON and self.expecting_colon:
             self.expecting_colon = False
@@ -264,7 +264,7 @@ class IntentCommentState(BaseState):
         self.content = ""
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
-        super().process_token(token, ast_node_dict)
+        self.current_token = token
         
         if token.type == IbcTokenType.IDENTIFIER:
             if self.content:
@@ -301,16 +301,14 @@ class ClassDeclState(BaseState):
         self.sub_state = ClassDeclSubState.EXPECTING_CLASS_NAME
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
-        super().process_token(token, ast_node_dict)
+        self.current_token = token
         
         if self.sub_state == ClassDeclSubState.EXPECTING_CLASS_NAME:
             if token.type == IbcTokenType.IDENTIFIER:
                 self.class_name = token.value
                 self.sub_state = ClassDeclSubState.EXPECTING_LPAREN
             else:
-                # 错误：期望类名但得到了其他token
-                line_num = token.line_num if token else 0
-                # 这里可以添加错误处理，但暂时保持简化
+                raise IbcParserStateError(f"Line {token.line_num} ClassDeclState: Expecting class name but got {token.type}")
                 
         elif self.sub_state == ClassDeclSubState.EXPECTING_LPAREN:
             if token.type == IbcTokenType.LPAREN:
@@ -318,8 +316,7 @@ class ClassDeclState(BaseState):
             elif token.type == IbcTokenType.COLON:
                 self.sub_state = ClassDeclSubState.EXPECTING_COLON
             else:
-                # 错误：期望左括号或冒号
-                line_num = token.line_num if token else 0
+                raise IbcParserStateError(f"Line {token.line_num} ClassDeclState: Expecting left parenthesis or colon but got {token.type}")
                 
         elif self.sub_state == ClassDeclSubState.PARSING_PARENT_CLASS:
             if token.type == IbcTokenType.IDENTIFIER:
@@ -334,20 +331,20 @@ class ClassDeclState(BaseState):
                 self.sub_state = ClassDeclSubState.EXPECTING_RPAREN
             elif token.type == IbcTokenType.RPAREN:
                 self.sub_state = ClassDeclSubState.EXPECTING_COLON
+            else:
+                raise IbcParserStateError(f"Line {token.line_num} ClassDeclState: Unexpected token in parent class parsing")
                 
         elif self.sub_state == ClassDeclSubState.EXPECTING_RPAREN:
             if token.type == IbcTokenType.RPAREN:
                 self.sub_state = ClassDeclSubState.EXPECTING_COLON
             else:
-                # 错误：期望右括号
-                line_num = token.line_num if token else 0
+                raise IbcParserStateError(f"Line {token.line_num} ClassDeclState: Expecting right parenthesis but got {token.type}")
                 
         elif self.sub_state == ClassDeclSubState.EXPECTING_COLON:
             if token.type == IbcTokenType.COLON:
                 self.sub_state = ClassDeclSubState.COMPLETE
             else:
-                # 错误：期望冒号
-                line_num = token.line_num if token else 0
+                raise IbcParserStateError(f"Line {token.line_num} ClassDeclState: Expecting colon but got {token.type}")
                 
         elif self.sub_state == ClassDeclSubState.COMPLETE:
             if token.type == IbcTokenType.NEWLINE:
@@ -374,13 +371,13 @@ class ClassDeclState(BaseState):
 
 
 class ClassContentState(BaseState):
-    """类内容状态类, 实际上不会被调用。token的处理逻辑主要集中在各自的状态机逻辑中 """
+    """类内容状态类, 目前实际上不会被调用。token的处理逻辑主要集中在各自的状态机逻辑中 """
     def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator):
         super().__init__(parent_uid, uid_generator)
         self.state_type = ParserState.CLASS_CONTENT
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
-        super().process_token(token, ast_node_dict)
+        self.current_token = token
 
 
 # 函数声明的子状态枚举
@@ -414,24 +411,21 @@ class FuncDeclState(BaseState):
         self.param_sub_state = ParamSubState.EXPECTING_PARAM_NAME
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
-        super().process_token(token, ast_node_dict)
+        self.current_token = token
         
         if self.sub_state == FuncDeclSubState.EXPECTING_FUNC_NAME:
             if token.type == IbcTokenType.IDENTIFIER:
                 self.func_name = token.value
                 self.sub_state = FuncDeclSubState.EXPECTING_LPAREN
             else:
-                # 错误：期望函数名但得到了其他token
-                line_num = token.line_num if token else 0
-                # 这里可以添加错误处理，但暂时保持简化
+                raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting function name but got {token.type}")
                 
         elif self.sub_state == FuncDeclSubState.EXPECTING_LPAREN:
             if token.type == IbcTokenType.LPAREN:
                 self.sub_state = FuncDeclSubState.PARSING_PARAMS
                 self.param_sub_state = ParamSubState.EXPECTING_PARAM_NAME
             else:
-                # 错误：期望左括号
-                line_num = token.line_num if token else 0
+                raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting left parenthesis but got {token.type}")
                 
         elif self.sub_state == FuncDeclSubState.PARSING_PARAMS:
             if token.type == IbcTokenType.IDENTIFIER:
@@ -446,8 +440,7 @@ class FuncDeclState(BaseState):
                 if self.param_sub_state == ParamSubState.EXPECTING_COLON:
                     self.param_sub_state = ParamSubState.EXPECTING_PARAM_DESC
                 else:
-                    # 错误：意外的冒号
-                    line_num = token.line_num if token else 0
+                    raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Unexpected colon in parameter parsing")
                     
             elif token.type == IbcTokenType.COMMA:
                 # 完成当前参数，开始下一个
@@ -464,17 +457,14 @@ class FuncDeclState(BaseState):
                 self.current_param_name = ""
                 self.current_param_desc = ""
                 self.sub_state = FuncDeclSubState.EXPECTING_COLON
-                
             else:
-                # 其他token处理
-                pass
+                raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Unexpected token in parameter parsing")
                 
         elif self.sub_state == FuncDeclSubState.EXPECTING_COLON:
             if token.type == IbcTokenType.COLON:
                 self.sub_state = FuncDeclSubState.COMPLETE
             else:
-                # 错误：期望冒号
-                line_num = token.line_num if token else 0
+                raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting colon but got {token.type}")
                 
         elif self.sub_state == FuncDeclSubState.COMPLETE:
             if token.type == IbcTokenType.NEWLINE:
@@ -501,13 +491,13 @@ class FuncDeclState(BaseState):
 
 
 class FuncContentState(BaseState):
-    """函数内容状态类, 实际上不会被调用。token的处理逻辑主要集中在各自的状态机逻辑中 """
+    """函数内容状态类, 目前实际上不会被调用。token的处理逻辑主要集中在各自的状态机逻辑中 """
     def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator):
         super().__init__(parent_uid, uid_generator)
         self.state_type = ParserState.FUNC_CONTENT
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
-        super().process_token(token, ast_node_dict)
+        self.current_token = token
 
 
 class BehaviorStepState(BaseState):
@@ -520,7 +510,7 @@ class BehaviorStepState(BaseState):
         self.new_block_flag = False
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
-        super().process_token(token, ast_node_dict)
+        self.current_token = token
         
         if token.type == IbcTokenType.REF_IDENTIFIER:
             self.symbol_refs.append(token.value)

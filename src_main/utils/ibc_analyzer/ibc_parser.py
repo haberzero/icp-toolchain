@@ -59,34 +59,39 @@ class IbcParser:
     
     def parse(self) -> Dict[int, AstNode]:
         """执行解析"""
-        while not self._is_at_end():
-            token = self._peek_token()
-            
-            # 处理缩进变化
-            if token.type == IbcTokenType.INDENT:
-                self._handle_indent()
-                self._consume_token()
-                continue
-            elif token.type == IbcTokenType.DEDENT:
-                self._handle_dedent()
-                self._consume_token()
-                continue
-            
-            # 处理关键字
-            if token.type == IbcTokenType.KEYWORDS:
-                self._handle_keyword(token)
-                self._consume_token()
-                continue
+        try:
+            while not self._is_at_end():
+                token = self._peek_token()
                 
-            # 将token传递给当前状态机处理
-            self._process_token_in_current_state(token)
-            self._consume_token()
+                # 处理缩进变化
+                if token.type == IbcTokenType.INDENT:
+                    self._handle_indent()
+                    self._consume_token()
+                    continue
+                elif token.type == IbcTokenType.DEDENT:
+                    self._handle_dedent()
+                    self._consume_token()
+                    continue
+                
+                # 处理关键字
+                if token.type == IbcTokenType.KEYWORDS:
+                    self._handle_keyword(token)
+                    self._consume_token()
+                    continue
+                    
+                # 将token传递给当前状态机处理
+                self._process_token_in_current_state(token)
+                self._consume_token()
+                
+            return self.ast_nodes
+        except ParserError:
+            raise ParserError(f"Line {token.line_num}: Parse error")
             
-        return self.ast_nodes
     
     def _handle_indent(self) -> None:
         """处理缩进"""
         # 根据最新的AST节点判断应该压入的状态
+        token = self._peek_token()
         if isinstance(self.last_ast_node, ClassNode):
             self.state_stack.append((ParserState.CLASS_CONTENT, self.last_ast_node.uid))
 
@@ -95,19 +100,20 @@ class IbcParser:
 
         elif isinstance(self.last_ast_node, BehaviorStepNode):
             if self.state_stack[-1] is not ParserState.FUNC_CONTENT:  # 行为步骤块
-                raise ParserError("Line {token.line_num}: Behavior step must be inside a function")
+                raise ParserError(f"Line {token.line_num}: Behavior step must be inside a function")
 
             if self.last_ast_node.new_block_flag:
                 self.state_stack.append((ParserState.FUNC_CONTENT, self.last_ast_node.uid))
             else:
-                raise ParserError("Line {token.line_num}: Invalid indent, missing colon after behavior step to start a new block")
+                raise ParserError(f"Line {token.line_num}: Invalid indent, missing colon after behavior step to start a new block")
 
     def _handle_dedent(self) -> None:
         """处理退格"""
+        token = self._peek_token()
         if len(self.state_stack) > 1:  # 不能弹出顶层状态
             self.state_stack.pop()
         else:
-            raise ParserError("Line {token.line_num}: pop state toplevel, check your code please")
+            raise ParserError(f"Line {token.line_num}: pop state toplevel, check your code please")
 
     def _handle_keyword(self, token: Token) -> None:
         """处理关键字"""
