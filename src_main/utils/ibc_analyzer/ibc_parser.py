@@ -30,7 +30,8 @@ class IbcParser:
         self.tokens = tokens
         self.pos = 0
         self.uid_generator = IbcParserUidGenerator()
-        self.state_stack: List[Tuple[ParserState, int]] = [(ParserState.TOP_LEVEL, 0)]  # 栈内容：(状态, 栈顶节点uid)
+        # 修改state_stack为直接存储状态机实例，而不是ParserState枚举
+        self.state_stack: List[Tuple[BaseState, int]] = [(TopLevelState(0, self.uid_generator), 0)]  # 栈内容：(状态机实例, 栈顶节点uid)
         self.ast_nodes: Dict[int, AstNode] = {0: AstNode(uid=0, node_type=AstNodeType.DEFAULT)}  # 根节点
         
         # 暂存的特殊行内容
@@ -93,17 +94,22 @@ class IbcParser:
         # 根据最新的AST节点判断应该压入的状态
         token = self._peek_token()
         if isinstance(self.last_ast_node, ClassNode):
-            self.state_stack.append((ParserState.CLASS_CONTENT, self.last_ast_node.uid))
+            # 压入类内容状态，而不是类声明状态
+            state_obj = TopLevelState(self.last_ast_node.uid, self.uid_generator)  # 使用TopLevelState作为类内容状态
+            self.state_stack.append((state_obj, self.last_ast_node.uid))
 
         elif isinstance(self.last_ast_node, FunctionNode):
-            self.state_stack.append((ParserState.FUNC_CONTENT, self.last_ast_node.uid))
+            # 压入函数内容状态，而不是函数声明状态
+            state_obj = TopLevelState(self.last_ast_node.uid, self.uid_generator)  # 使用TopLevelState作为函数内容状态
+            self.state_stack.append((state_obj, self.last_ast_node.uid))
 
         elif isinstance(self.last_ast_node, BehaviorStepNode):
-            if self.state_stack[-1] is not ParserState.FUNC_CONTENT:  # 行为步骤块
+            if not isinstance(self.state_stack[-1][0], FuncDeclState):  # 行为步骤块
                 raise ParserError(f"Line {token.line_num}: Behavior step must be inside a function")
 
             if self.last_ast_node.new_block_flag:
-                self.state_stack.append((ParserState.FUNC_CONTENT, self.last_ast_node.uid))
+                state_obj = TopLevelState(self.last_ast_node.uid, self.uid_generator)
+                self.state_stack.append((state_obj, self.last_ast_node.uid))
             else:
                 raise ParserError(f"Line {token.line_num}: Invalid indent, missing colon after behavior step to start a new block")
 
@@ -117,38 +123,41 @@ class IbcParser:
 
     def _handle_keyword(self, token: Token) -> None:
         """处理关键字"""
-        current_state, parent_uid = self.state_stack[-1]
+        current_state_obj, parent_uid = self.state_stack[-1]
+        current_state_type = current_state_obj.state_type
         
         # 检查关键字在当前位置是否合法
-        if token.value == "module" and current_state != ParserState.TOP_LEVEL:
+        if token.value == "module" and current_state_type != ParserState.TOP_LEVEL:
             raise ParserError(f"Line {token.line_num}: 'module' keyword only allowed at top level")
         
         # 根据关键字类型压入相应的状态
+        state_obj = None
         if token.type == IbcTokenType.KEYWORDS and token.value == "module":
-            self.state_stack.append((ParserState.MODULE_DECL, parent_uid))
+            state_obj = ModuleDeclState(parent_uid, self.uid_generator)
         elif token.type == IbcTokenType.KEYWORDS and token.value == "var":
-            self.state_stack.append((ParserState.VAR_DECL, parent_uid))
+            state_obj = VarDeclState(parent_uid, self.uid_generator)
         elif token.type == IbcTokenType.KEYWORDS and token.value == "description":
-            self.state_stack.append((ParserState.DESCRIPTION, parent_uid))
+            state_obj = DescriptionState(parent_uid, self.uid_generator)
         elif token.type == IbcTokenType.KEYWORDS and token.value == "class":
-            self.state_stack.append((ParserState.CLASS_DECL, parent_uid))
+            state_obj = ClassDeclState(parent_uid, self.uid_generator)
         elif token.type == IbcTokenType.KEYWORDS and token.value == "func":
-            self.state_stack.append((ParserState.FUNC_DECL, parent_uid))
+            state_obj = FuncDeclState(parent_uid, self.uid_generator)
         elif token.type == IbcTokenType.INTENT_COMMENT:
-            self.state_stack.append((ParserState.INTENT_COMMENT, parent_uid))
+            state_obj = IntentCommentState(parent_uid, self.uid_generator)
+            
+        if state_obj:
+            self.state_stack.append((state_obj, parent_uid))
     
     def _process_token_in_current_state(self, token: Token) -> None:
         """将token传递给当前状态机处理"""
         if not self.state_stack:
             raise ParserError(f"Line {token.line_num}: No state in stack")
             
-        current_state_type, parent_uid = self.state_stack[-1]
+        # 直接获取栈顶的状态机实例
+        current_state_obj, parent_uid = self.state_stack[-1]
         
-        # 创建对应的状态对象
-        state_obj = self._create_state_object(current_state_type, parent_uid)
-        
-        # 处理token
-        state_obj.process_token(token, self.ast_nodes)
+        # 直接使用状态机实例处理token
+        current_state_obj.process_token(token, self.ast_nodes)
 
         # 检查是否存在uid的更新
         current_uid = self.uid_generator.get_current_uid()
@@ -166,33 +175,12 @@ class IbcParser:
                 self.pending_intent_comment = ""
         
         # 检查是否需要弹出状态
-        if state_obj.is_need_pop():
-            popped_state = self.state_stack.pop()
+        if current_state_obj.is_need_pop():
+            popped_state_obj, popped_parent_uid = self.state_stack.pop()
             
-            # 如果是描述或意图注释状态，暂存内容。状态栈是元组，第一个元素是状态类型
-            if popped_state[0] == ParserState.DESCRIPTION and isinstance(state_obj, DescriptionState):
-                self.pending_description = state_obj.get_content()
-            elif popped_state[0] == ParserState.INTENT_COMMENT and isinstance(state_obj, IntentCommentState):
-                self.pending_intent_comment = state_obj.get_content()
+            # 如果是描述或意图注释状态，暂存内容
+            if isinstance(popped_state_obj, DescriptionState):
+                self.pending_description = popped_state_obj.get_content()
+            elif isinstance(popped_state_obj, IntentCommentState):
+                self.pending_intent_comment = popped_state_obj.get_content()
     
-    def _create_state_object(self, state_type: ParserState, parent_uid: int) -> BaseState:
-        """创建状态对象"""
-        if state_type == ParserState.TOP_LEVEL:
-            return TopLevelState(parent_uid, self.uid_generator)
-        elif state_type == ParserState.MODULE_DECL:
-            return ModuleDeclState(parent_uid, self.uid_generator)
-        elif state_type == ParserState.VAR_DECL:
-            return VarDeclState(parent_uid, self.uid_generator)
-        elif state_type == ParserState.DESCRIPTION:
-            return DescriptionState(parent_uid, self.uid_generator)
-        elif state_type == ParserState.INTENT_COMMENT:
-            return IntentCommentState(parent_uid, self.uid_generator)
-        elif state_type == ParserState.CLASS_DECL:
-            return ClassDeclState(parent_uid, self.uid_generator)
-        elif state_type == ParserState.FUNC_DECL:
-            return FuncDeclState(parent_uid, self.uid_generator)
-        elif state_type == ParserState.BEHAVIOR_STEP:
-            return BehaviorStepState(parent_uid, self.uid_generator)
-        else:
-            # 默认返回顶层状态
-            return TopLevelState(parent_uid, self.uid_generator)
