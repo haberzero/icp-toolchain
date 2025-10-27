@@ -4,7 +4,7 @@ import os
 # 正确添加src_main目录到sys.path，以便能够导入libs中的模块
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from utils.ibc_analyzer.ibc_lexer import Lexer, IbcTokenType, IbcKeywords, LexerError
+from utils.ibc_analyzer.ibc_lexer import IbcLexer, IbcTokenType, IbcKeywords, LexerError
 
 def test_empty_file():
     """测试空文件"""
@@ -17,7 +17,7 @@ def test_empty_file():
     ]
     
     try:
-        lexer = Lexer(code)
+        lexer = IbcLexer(code)
         tokens = lexer.tokenize()
         
         # assert len(tokens) == len(expected), f"Token数量不匹配: 预期 {len(expected)}, 实际 {len(tokens)}"
@@ -46,7 +46,7 @@ def test_comments_only():
     ]
     
     try:
-        lexer = Lexer(code)
+        lexer = IbcLexer(code)
         tokens = lexer.tokenize()
         
         # assert len(tokens) == len(expected), f"Token数量不匹配: 预期 {len(expected)}, 实际 {len(tokens)}"
@@ -88,7 +88,7 @@ module utils"""
     ]
     
     try:
-        lexer = Lexer(code)
+        lexer = IbcLexer(code)
         tokens = lexer.tokenize()
         
         # assert len(tokens) == len(expected), f"Token数量不匹配: 预期 {len(expected)}, 实际 {len(tokens)}"
@@ -134,7 +134,7 @@ func 计算订单总价(商品列表: 包含价格信息的商品对象数组, �
     ]
     
     try:
-        lexer = Lexer(code)
+        lexer = IbcLexer(code)
         tokens = lexer.tokenize()
         
         # assert len(tokens) == len(expected), f"Token数量不匹配: 预期 {len(expected)}, 实际 {len(tokens)}"
@@ -179,7 +179,7 @@ class UserManager(BaseManager: 使用公共基类管理生命周期):
     ]
     
     try:
-        lexer = Lexer(code)
+        lexer = IbcLexer(code)
         tokens = lexer.tokenize()
         
         # assert len(tokens) == len(expected), f"Token数量不匹配: 预期 {len(expected)}, 实际 {len(tokens)}"
@@ -220,7 +220,7 @@ class AuthService():"""
     ]
     
     try:
-        lexer = Lexer(code)
+        lexer = IbcLexer(code)
         tokens = lexer.tokenize()
         
         # assert len(tokens) == len(expected), f"Token数量不匹配: 预期 {len(expected)}, 实际 {len(tokens)}"
@@ -268,7 +268,7 @@ func test():
     ]
     
     try:
-        lexer = Lexer(code)
+        lexer = IbcLexer(code)
         tokens = lexer.tokenize()
         
         # assert len(tokens) == len(expected), f"Token数量不匹配: 预期 {len(expected)}, 实际 {len(tokens)}"
@@ -310,7 +310,7 @@ func 发送请求(请求数据):
     ]
     
     try:
-        lexer = Lexer(code)
+        lexer = IbcLexer(code)
         tokens = lexer.tokenize()
         
         # assert len(tokens) == len(expected), f"Token数量不匹配: 预期 {len(expected)}, 实际 {len(tokens)}"
@@ -360,7 +360,7 @@ func test():
     ]
     
     try:
-        lexer = Lexer(code)
+        lexer = IbcLexer(code)
         tokens = lexer.tokenize()
         
         # assert len(tokens) == len(expected), f"Token数量不匹配: 预期 {len(expected)}, 实际 {len(tokens)}"
@@ -386,7 +386,7 @@ def test_error_cases():
 func test():
     var ref = $unclosed_ref"""
     try:
-        lexer = Lexer(code1)
+        lexer = IbcLexer(code1)
         tokens = lexer.tokenize()
         # 应该返回空列表
         # assert len(tokens) == 0, "预期返回空列表但实际没有"
@@ -400,7 +400,7 @@ func test():
     code2 = """func test():
 \tvar tab_indented"""
     try:
-        lexer = Lexer(code2)
+        lexer = IbcLexer(code2)
         tokens = lexer.tokenize()
         # 应该返回空列表
         # assert len(tokens) == 0, "预期返回空列表但实际没有"
@@ -414,7 +414,7 @@ func test():
     code3 = """func test():
  var invalid_indent"""
     try:
-        lexer = Lexer(code3)
+        lexer = IbcLexer(code3)
         tokens = lexer.tokenize()
         # 应该返回空列表
         # assert len(tokens) == 0, "预期返回空列表但实际没有"
@@ -428,7 +428,7 @@ func test():
     code4 = """func test():
     var ref = $$"""
     try:
-        lexer = Lexer(code4)
+        lexer = IbcLexer(code4)
         tokens = lexer.tokenize()
         # 这种情况只是警告，不会返回空列表，应该有token
         # assert len(tokens) > 0, "预期返回token列表但实际为空"
