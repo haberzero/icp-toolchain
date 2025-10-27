@@ -44,7 +44,7 @@ class BaseState:
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         pass
 
-    def is_pop_state(self) -> bool:
+    def is_need_pop(self) -> bool:
         return False
 
 
@@ -111,8 +111,11 @@ class ModuleDeclState(BaseState):
 
     def _create_module_node(self, ast_node_dict: Dict[int, AstNode]) -> None:
         """创建模块节点"""
+        if not self.current_token:
+            raise IbcParserStateError("ModuleDeclState: current_token is None, check your code")
+        
         uid = self.uid_generator.gen_uid()
-        line_num = self.current_token.line_num if self.current_token else 0
+        line_num = self.current_token.line_num 
         module_node = ModuleNode(
             uid=uid,
             parent_uid=self.parent_uid,
@@ -126,7 +129,7 @@ class ModuleDeclState(BaseState):
         if self.parent_uid in ast_node_dict:
             ast_node_dict[self.parent_uid].add_child(uid)
 
-    def is_pop_state(self) -> bool:
+    def is_need_pop(self) -> bool:
         return self.pop_flag
 
 
@@ -136,7 +139,6 @@ class VarDeclSubState(Enum):
     EXPECTING_COLON = "EXPECTING_COLON"
     EXPECTING_VAR_DESC = "EXPECTING_VAR_DESC"
     VAR_COMPLETE = "VAR_COMPLETE"
-    COMPLETE = "COMPLETE"
 
 
 class VarDeclState(BaseState):
@@ -148,6 +150,7 @@ class VarDeclState(BaseState):
         self.current_var_name = ""
         self.current_var_desc = ""
         self.sub_state = VarDeclSubState.EXPECTING_VAR_NAME
+        self.pop_flag = False
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         self.current_token = token
@@ -172,7 +175,6 @@ class VarDeclState(BaseState):
             elif token.type == IbcTokenType.NEWLINE:
                 # 没有描述的变量，行结束
                 self.variables.append((self.current_var_name, ""))
-                self.sub_state = VarDeclSubState.COMPLETE
                 self._create_variable_nodes(ast_node_dict)
             else:
                 raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Expecting colon, comma or newline but got {token.type}")
@@ -192,16 +194,10 @@ class VarDeclState(BaseState):
             elif token.type == IbcTokenType.NEWLINE:
                 # 完成最后一个变量
                 self.variables.append((self.current_var_name, self.current_var_desc))
-                self.sub_state = VarDeclSubState.COMPLETE
                 self._create_variable_nodes(ast_node_dict)
             else:
                 raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Unexpected token in variable description parsing")
                 
-        elif self.sub_state == VarDeclSubState.COMPLETE:
-            if token.type == IbcTokenType.NEWLINE:
-                # 确保节点只创建一次
-                pass
-
     def _create_variable_nodes(self, ast_node_dict: Dict[int, AstNode]) -> None:
         """为所有变量创建节点"""
         line_num = self.current_token.line_num if self.current_token else 0
@@ -219,10 +215,8 @@ class VarDeclState(BaseState):
             if self.parent_uid in ast_node_dict:
                 ast_node_dict[self.parent_uid].add_child(uid)
 
-    def is_pop_state(self) -> bool:
-        return (self.sub_state == VarDeclSubState.COMPLETE and 
-                self.current_token is not None and 
-                self.current_token.type == IbcTokenType.NEWLINE)
+    def is_need_pop(self) -> bool:
+        return self.pop_flag
 
 
 class DescriptionState(BaseState):
@@ -233,6 +227,7 @@ class DescriptionState(BaseState):
         self.content = ""
         self.expecting_colon = True
         self.expecting_content = False
+        self.pop_flag = False
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         self.current_token = token
@@ -249,8 +244,8 @@ class DescriptionState(BaseState):
             # 描述结束，暂存内容
             pass  # 内容将在关联节点创建时使用
 
-    def is_pop_state(self) -> bool:
-        return self.current_token is not None and self.current_token.type == IbcTokenType.NEWLINE
+    def is_need_pop(self) -> bool:
+        return self.pop_flag
 
     def get_content(self) -> str:
         return self.content
@@ -262,6 +257,7 @@ class IntentCommentState(BaseState):
         super().__init__(parent_uid, uid_generator)
         self.state_type = ParserState.INTENT_COMMENT
         self.content = ""
+        self.pop_flag = False
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         self.current_token = token
@@ -272,8 +268,8 @@ class IntentCommentState(BaseState):
             else:
                 self.content = token.value
 
-    def is_pop_state(self) -> bool:
-        return self.current_token is not None and self.current_token.type == IbcTokenType.NEWLINE
+    def is_need_pop(self) -> bool:
+        return self.pop_flag
 
     def get_content(self) -> str:
         return self.content
@@ -299,6 +295,7 @@ class ClassDeclState(BaseState):
         self.inheritance_desc = ""
         self.params: Dict[str, str] = {}
         self.sub_state = ClassDeclSubState.EXPECTING_CLASS_NAME
+        self.pop_flag = False
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         self.current_token = token
@@ -364,10 +361,8 @@ class ClassDeclState(BaseState):
                 if self.parent_uid in ast_node_dict:
                     ast_node_dict[self.parent_uid].add_child(uid)
 
-    def is_pop_state(self) -> bool:
-        return (self.sub_state == ClassDeclSubState.COMPLETE and 
-                self.current_token is not None and 
-                self.current_token.type == IbcTokenType.NEWLINE)
+    def is_need_pop(self) -> bool:
+        return self.pop_flag
 
 
 class ClassContentState(BaseState):
@@ -409,6 +404,7 @@ class FuncDeclState(BaseState):
         self.current_param_desc = ""
         self.sub_state = FuncDeclSubState.EXPECTING_FUNC_NAME
         self.param_sub_state = ParamSubState.EXPECTING_PARAM_NAME
+        self.pop_flag = False
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         self.current_token = token
@@ -484,10 +480,8 @@ class FuncDeclState(BaseState):
                 if self.parent_uid in ast_node_dict:
                     ast_node_dict[self.parent_uid].add_child(uid)
 
-    def is_pop_state(self) -> bool:
-        return (self.sub_state == FuncDeclSubState.COMPLETE and 
-                self.current_token is not None and 
-                self.current_token.type == IbcTokenType.NEWLINE)
+    def is_need_pop(self) -> bool:
+        return self.pop_flag
 
 
 class FuncContentState(BaseState):
@@ -508,6 +502,7 @@ class BehaviorStepState(BaseState):
         self.content = ""
         self.symbol_refs: List[str] = []
         self.new_block_flag = False
+        self.pop_flag = False
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         self.current_token = token
@@ -549,5 +544,5 @@ class BehaviorStepState(BaseState):
             if self.parent_uid in ast_node_dict:
                 ast_node_dict[self.parent_uid].add_child(uid)
 
-    def is_pop_state(self) -> bool:
-        return self.current_token is not None and self.current_token.type == IbcTokenType.NEWLINE
+    def is_need_pop(self) -> bool:
+        return self.pop_flag

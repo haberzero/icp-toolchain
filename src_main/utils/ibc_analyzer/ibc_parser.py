@@ -166,7 +166,7 @@ class IbcParser:
                 self.pending_intent_comment = ""
         
         # 检查是否需要弹出状态
-        if state_obj.is_pop_state():
+        if state_obj.is_need_pop():
             popped_state = self.state_stack.pop()
             
             # 如果是描述或意图注释状态，暂存内容。状态栈是元组，第一个元素是状态类型
