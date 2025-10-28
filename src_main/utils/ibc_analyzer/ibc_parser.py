@@ -7,7 +7,7 @@ from typedef.ibc_data_types import (
 
 from utils.ibc_analyzer.ibc_parser_state import (
     ParserState, BaseState, TopLevelState, ModuleDeclState, 
-    VarDeclState, DescriptionState, IntentCommentState, 
+    VarDeclState, DescriptionState, 
     ClassDeclState, FuncDeclState, BehaviorStepState
 )
 from utils.ibc_analyzer.ibc_parser_uid_generator import IbcParserUidGenerator
@@ -73,6 +73,11 @@ class IbcParser:
                     self._handle_dedent()
                     self._consume_token()
                     continue
+
+                # 处理意图注释（未来应当改进，还是该把@当作关键字处理，逻辑能合并到关键字处理中，lexer也能再简化）
+                if token.type == IbcTokenType.INTENT_COMMENT:
+                    self.pending_intent_comment = token.value
+                    continue
                 
                 # 处理关键字
                 if token.type == IbcTokenType.KEYWORDS:
@@ -84,10 +89,20 @@ class IbcParser:
                 self._process_token_in_current_state(token)
                 self._consume_token()
                 
+                # 检查是否需要弹出状态
+                current_state_obj, _ = self.state_stack[-1]
+                if not current_state_obj.is_need_pop():
+                    continue
+                self.state_stack.pop()
+                
+                # 如果是描述暂存内容
+                if isinstance(current_state_obj, DescriptionState):
+                    self.pending_description = current_state_obj.get_content()
+                
             return self.ast_nodes
+        
         except ParserError:
             raise ParserError(f"Line {token.line_num}: Parse error")
-            
     
     def _handle_indent(self) -> None:
         """处理缩进"""
@@ -142,8 +157,6 @@ class IbcParser:
             state_obj = ClassDeclState(parent_uid, self.uid_generator)
         elif token.type == IbcTokenType.KEYWORDS and token.value == "func":
             state_obj = FuncDeclState(parent_uid, self.uid_generator)
-        elif token.type == IbcTokenType.INTENT_COMMENT:
-            state_obj = IntentCommentState(parent_uid, self.uid_generator)
         else:
             raise ParserError(f"Line {token.line_num}: Invalid keyword token'{token.value}', check your code please")
             
@@ -155,10 +168,10 @@ class IbcParser:
         if not self.state_stack:
             raise ParserError(f"Line {token.line_num}: No state in stack")
             
-        # 直接获取栈顶的状态机实例
+        # 获取栈顶的状态机实例
         current_state_obj, parent_uid = self.state_stack[-1]
         
-        # 直接使用状态机实例处理token
+        # 状态机实例处理token
         current_state_obj.process_token(token, self.ast_nodes)
 
         # 检查是否存在uid的更新
@@ -175,14 +188,3 @@ class IbcParser:
             else:
                 self.pending_description = ""
                 self.pending_intent_comment = ""
-        
-        # 检查是否需要弹出状态
-        if current_state_obj.is_need_pop():
-            popped_state_obj, popped_parent_uid = self.state_stack.pop()
-            
-            # 如果是描述或意图注释状态，暂存内容
-            if isinstance(popped_state_obj, DescriptionState):
-                self.pending_description = popped_state_obj.get_content()
-            elif isinstance(popped_state_obj, IntentCommentState):
-                self.pending_intent_comment = popped_state_obj.get_content()
-    

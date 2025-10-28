@@ -25,7 +25,6 @@ class ParserState(Enum):
     MODULE_DECL = "MODULE_DECL"  # 模块声明解析
     VAR_DECL = "VAR_DECL"  # 变量声明解析
     DESCRIPTION = "DESCRIPTION"  # 对外描述解析
-    INTENT_COMMENT = "INTENT_COMMENT"  # 意图注释解析
     CLASS_DECL = "CLASS_DECL"  # 类声明解析
     CLASS_CONTENT = "CLASS_CONTENT"  # 类内容解析
     FUNC_DECL = "FUNC_DECL"  # 函数声明解析
@@ -243,33 +242,6 @@ class DescriptionState(BaseState):
                 self.content = token.value
         elif token.type == IbcTokenType.NEWLINE:
             # 描述结束，设置pop_flag为True
-            self.pop_flag = True
-
-    def is_need_pop(self) -> bool:
-        return self.pop_flag
-
-    def get_content(self) -> str:
-        return self.content
-
-
-class IntentCommentState(BaseState):
-    """意图注释状态类, 不产生节点, 直接返回解析内容"""
-    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator):
-        super().__init__(parent_uid, uid_generator)
-        self.state_type = ParserState.INTENT_COMMENT
-        self.content = ""
-        self.pop_flag = False
-
-    def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
-        self.current_token = token
-        
-        if token.type == IbcTokenType.IDENTIFIER:
-            if self.content:
-                self.content += " " + token.value
-            else:
-                self.content = token.value
-        elif token.type == IbcTokenType.NEWLINE:
-            # 注释结束，设置pop_flag为True
             self.pop_flag = True
 
     def is_need_pop(self) -> bool:
@@ -515,27 +487,16 @@ class BehaviorStepState(BaseState):
         
         if token.type == IbcTokenType.REF_IDENTIFIER:
             self.symbol_refs.append(token.value)
-        elif token.type == IbcTokenType.IDENTIFIER:
-            if self.content:
-                self.content += " " + token.value
-            else:
-                self.content = token.value
-        elif token.type == IbcTokenType.COLON:
-            self.content += ":"
-        elif token.type == IbcTokenType.COMMA:
-            self.content += ","
-        elif token.type == IbcTokenType.LPAREN:
-            self.content += "("
-        elif token.type == IbcTokenType.RPAREN:
-            self.content += ")"
-        elif token.type == IbcTokenType.NEWLINE:
-            # 行为步骤结束，创建节点
-            # 如果出现行末冒号，则认为需要开启新代码块
-            self.new_block_flag = (self.current_token is not None and 
-                                    self.current_token.type == IbcTokenType.COLON)
 
+        elif token.type == IbcTokenType.NEWLINE:
+            # 行为步骤结束，创建节点。行末冒号意味着需要代码块缩进
+            if self.content[-1] == ":":
+                self.new_block_flag = True
             self._create_behavior_node(ast_node_dict)
             self.pop_flag = True
+            
+        else:
+            self.content += token.value
 
     def _create_behavior_node(self, ast_node_dict: Dict[int, AstNode]) -> None:
         """创建行为步骤节点"""
