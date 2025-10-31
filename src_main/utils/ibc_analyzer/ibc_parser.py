@@ -62,16 +62,14 @@ class IbcParser:
         """执行解析"""
         try:
             while not self._is_at_end():
-                token = self._peek_token()
+                token = self._consume_token()
                 
                 # 处理缩进变化
                 if token.type == IbcTokenType.INDENT:
                     self._handle_indent()
-                    self._consume_token()
                     continue
                 elif token.type == IbcTokenType.DEDENT:
                     self._handle_dedent()
-                    self._consume_token()
                     continue
 
                 # 处理意图注释（未来应当改进，还是该把@当作关键字处理，逻辑能合并到关键字处理中，lexer也能再简化）
@@ -82,12 +80,10 @@ class IbcParser:
                 # 处理关键字
                 if token.type == IbcTokenType.KEYWORDS:
                     self._handle_keyword(token)
-                    self._consume_token()
                     continue
-                    
+                
                 # 将token传递给当前状态机处理
                 self._process_token_in_current_state(token)
-                self._consume_token()
                 
                 # 检查是否需要弹出状态
                 current_state_obj, _ = self.state_stack[-1]

@@ -109,7 +109,7 @@ class ClassNode(AstNode):
     identifier: str = ""
     external_desc: str = ""
     intent_comment: str = ""
-    params: Dict[str, str] = field(default_factory=dict)
+    inh_params: Dict[str, str] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
         """将节点转换为字典表示"""
@@ -118,7 +118,7 @@ class ClassNode(AstNode):
             "identifier": self.identifier,
             "external_desc": self.external_desc,
             "intent_comment": self.intent_comment,
-            "params": self.params
+            "params": self.inh_params
         })
         return result
 
