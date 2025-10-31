@@ -6,7 +6,7 @@ from typedef.ibc_data_types import IbcKeywords, IbcTokenType, Token
 class LexerError(Exception):
     """词法分析器异常"""
     def __init__(self, message: str):
-        self.message = message
+        self.message:str = message
         super().__init__(self.message)
     
     def __str__(self):
@@ -23,6 +23,7 @@ class IbcLexer:
         self.current_line = ""
         self.tokens: List[Token] = []
         self.indent_stack: List[int] = [0]  # 用于跟踪缩进级别的栈，初始为0
+        self.is_keyword_line = False
         
         # 如果文件为空，添加一个空行以确保后续处理逻辑正常工作
         if not self.lines or (len(self.lines) == 1 and self.lines[0] == ""):
@@ -72,14 +73,15 @@ class IbcLexer:
         # 没有找到关键字，返回原始字符串
         return striped_line
     
+        # # 检查是否是意图注释行
+        # if content_line.startswith('@'):
+        #     content = content_line[1:].strip()
+        #     self.tokens.append(Token(IbcTokenType.INTENT_COMMENT, content, self.line_num))
+        #     return
+        
+    
     def _tokenize_line(self, content_line: str):
         """对当前行进行词法分析"""
-        # 检查是否是意图注释行
-        if content_line.startswith('@'):
-            content = content_line[1:].strip()
-            self.tokens.append(Token(IbcTokenType.INTENT_COMMENT, content, self.line_num))
-            return
-        
         # 检查是否包含符号引用
         ref_parts = content_line.split('$')
         if len(ref_parts) > 1:  # 包含$符号
@@ -200,12 +202,10 @@ class IbcLexer:
             
             return self.tokens
         
-        except LexerError as e:
-            # 出现错误时打印错误信息并返回空列表
-            print(e)
-            return []
+        except LexerError:
+            raise LexerError(f"Line {self.line_num}: Lexer error")
         
         except Exception as e:
-            # 其他异常时打印错误信息并返回空列表
             print(f"!!! Unexpected Error: {e}")
-            return []
+            raise LexerError(f"Line {self.line_num}: Lexer error")
+        

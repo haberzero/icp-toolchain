@@ -7,7 +7,7 @@ from typedef.ibc_data_types import (
 
 from utils.ibc_analyzer.ibc_parser_state import (
     ParserState, BaseState, TopLevelState, ModuleDeclState, 
-    VarDeclState, DescriptionState, 
+    VarDeclState, DescriptionState, ClassContentState, FuncContentState,
     ClassDeclState, FuncDeclState, BehaviorStepState
 )
 from utils.ibc_analyzer.ibc_parser_uid_generator import IbcParserUidGenerator
@@ -64,7 +64,7 @@ class IbcParser:
             while not self._is_at_end():
                 token = self._consume_token()
                 
-                # 处理缩进变化
+                # 处理缩进变化（目前逻辑有缺陷，应该统一给状态机逻辑处理，以提高统一性并且增强灵活性。现在的实现纯为了偷懒）
                 if token.type == IbcTokenType.INDENT:
                     self._handle_indent()
                     continue
@@ -72,7 +72,7 @@ class IbcParser:
                     self._handle_dedent()
                     continue
 
-                # 处理意图注释（未来应当改进，还是该把@当作关键字处理，逻辑能合并到关键字处理中，lexer也能再简化）
+                # 处理意图注释（未来应当改进，还是该把@当作行首关键字处理，逻辑能合并到关键字处理中，lexer也能再简化）
                 if token.type == IbcTokenType.INTENT_COMMENT:
                     self.pending_intent_comment = token.value
                     continue
@@ -81,6 +81,9 @@ class IbcParser:
                 if token.type == IbcTokenType.KEYWORDS:
                     self._handle_keyword(token)
                     continue
+
+                # TODO: 一个大缺陷：现在是限制行为步骤逻辑只能在函数中，所以显得工作正常。未来如果想支持脚本式目标代码可能会出现挺多麻烦
+                # 目前的行为步骤行状态机其实略有点难以归并为统一写法, 也许可以通过lexer人为插入虚构"行为步骤关键字token"来统一?
                 
                 # 将token传递给当前状态机处理
                 self._process_token_in_current_state(token)
@@ -105,21 +108,19 @@ class IbcParser:
         # 根据最新的AST节点判断应该压入的状态
         token = self._peek_token()
         if isinstance(self.last_ast_node, ClassNode):
-            # 压入类内容状态，而不是类声明状态
-            state_obj = TopLevelState(self.last_ast_node.uid, self.uid_generator)  # 使用TopLevelState作为类内容状态
+            state_obj = ClassContentState(self.last_ast_node.uid, self.uid_generator)
             self.state_stack.append((state_obj, self.last_ast_node.uid))
 
         elif isinstance(self.last_ast_node, FunctionNode):
-            # 压入函数内容状态，而不是函数声明状态
-            state_obj = TopLevelState(self.last_ast_node.uid, self.uid_generator)  # 使用TopLevelState作为函数内容状态
+            state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator)
             self.state_stack.append((state_obj, self.last_ast_node.uid))
 
         elif isinstance(self.last_ast_node, BehaviorStepNode):
-            if not isinstance(self.state_stack[-1][0], FuncDeclState):  # 行为步骤块
+            if not isinstance(self.state_stack[-1][0], (FuncDeclState, BehaviorStepState)):
                 raise ParserError(f"Line {token.line_num}: Behavior step must be inside a function")
 
             if self.last_ast_node.new_block_flag:
-                state_obj = TopLevelState(self.last_ast_node.uid, self.uid_generator)
+                state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator)
                 self.state_stack.append((state_obj, self.last_ast_node.uid))
             else:
                 raise ParserError(f"Line {token.line_num}: Invalid indent, missing colon after behavior step to start a new block")
@@ -168,6 +169,7 @@ class IbcParser:
         current_state_obj, parent_uid = self.state_stack[-1]
         
         # 状态机实例处理token
+        # TODO: 现在的process_token方法 不应该传递进去ast_nodes，这个变量应该在状态机实例创建时就被传递，以后改一下
         current_state_obj.process_token(token, self.ast_nodes)
 
         # 检查是否存在uid的更新

@@ -221,7 +221,7 @@ class VarDeclState(BaseState):
     def _create_variable_nodes(self, ast_node_dict: Dict[int, AstNode]) -> None:
         """为所有变量创建节点"""
         line_num = self.current_token.line_num if self.current_token else 0
-        for var_name, var_desc in self.variables:
+        for var_name, var_desc in self.variables.items():
             uid = self.uid_generator.gen_uid()
             var_node = VariableNode(
                 uid=uid,
