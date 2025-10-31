@@ -22,6 +22,8 @@ def main():
     proj_cfg_manager = get_proj_cfg_manager()
     user_data_manager = get_user_data_manager()
     
+    root = None
+    
     # 配置icp项目目标工作目录
     if args.work_dir:
         work_dir = args.work_dir
@@ -43,11 +45,13 @@ def main():
 
     if not proj_cfg_manager.set_work_dir(work_dir):
         print(f"错误: 无法设置工作目录为 {work_dir}")
-        root.destroy()
+        if root:
+            root.destroy()
         return
 
     app_data_manager.save_last_path(work_dir)
-    root.destroy()
+    if root:
+        root.destroy()
     
     if args.requirements:
         user_data_manager.set_user_prompt(args.requirements)
