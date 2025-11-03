@@ -124,15 +124,20 @@ var config"""
         assert len(root_node.children_uids) == 3, f"预期3个变量节点，实际 {len(root_node.children_uids)}"
         
         # 验证变量节点
-        var_names = []
+        var_dict = {}  # {name: description}
         for uid in root_node.children_uids:
             var_node = ast_nodes[uid]
             assert isinstance(var_node, VariableNode), "预期为VariableNode"
-            var_names.append(var_node.identifier)
+            var_dict[var_node.identifier] = var_node.content
         
-        assert "userCount" in var_names, "缺少userCount变量"
-        assert "cacheData" in var_names, "缺少cacheData变量"
-        assert "config" in var_names, "缺少config变量"
+        assert "userCount" in var_dict, "缺少userCount变量"
+        assert "cacheData" in var_dict, "缺少cacheData变量"
+        assert "config" in var_dict, "缺少config变量"
+        
+        # 验证描述
+        assert var_dict["userCount"] == "当前在线用户数量", f"userCount的描述不匹配: {var_dict['userCount']}"
+        assert var_dict["cacheData"] == "临时缓存数据", f"cacheData的描述不匹配: {var_dict['cacheData']}"
+        assert var_dict["config"] == "", f"config应该没有描述: {var_dict['config']}"
         
         print("  ✓ 成功解析变量声明")
         print("\nAST树结构:")

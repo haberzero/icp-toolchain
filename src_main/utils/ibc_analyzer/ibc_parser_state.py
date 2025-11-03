@@ -157,7 +157,7 @@ class VarDeclState(BaseState):
         
         if self.sub_state == VarDeclSubState.EXPECTING_VAR_NAME:
             if token.type == IbcTokenType.IDENTIFIER:
-                self.current_var_name = token.value
+                self.current_var_name = token.value.strip()
                 self.sub_state = VarDeclSubState.EXPECTING_COLON
             else:
                 raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Expecting variable name but got {token.type}")
@@ -301,16 +301,16 @@ class IntentCommentState(BaseState):
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         self.current_token = token
 
-        if self.sub_state == DescriptionSubState.EXPECTING_CONTENT:
+        if self.sub_state == IntentCommentSubState.EXPECTING_CONTENT:
             if token.type == IbcTokenType.NEWLINE:
                 # 行末不应以冒号结束
                 self.content = self.content.strip()
                 if self.content and self.content[-1] == ":":
-                    raise IbcParserStateError(f"Line {token.line_num} DescriptionState: Cannot end with colon")
+                    raise IbcParserStateError(f"Line {token.line_num} IntentCommentState: Cannot end with colon")
                 self.pop_flag = True
             else:
                 self.content += token.value
-                self.sub_state = DescriptionSubState.EXPECTING_CONTENT
+                # 保持在EXPECTING_CONTENT状态
 
     def is_need_pop(self) -> bool:
         return self.pop_flag
@@ -472,7 +472,7 @@ class FuncDeclState(BaseState):
         
         if self.sub_state == FuncDeclSubState.EXPECTING_FUNC_NAME:
             if token.type == IbcTokenType.IDENTIFIER:
-                self.func_name = token.value
+                self.func_name = token.value.strip()
                 self.sub_state = FuncDeclSubState.EXPECTING_LPAREN
             else:
                 raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting function name but got {token.type}")
@@ -487,7 +487,7 @@ class FuncDeclState(BaseState):
         
         elif self.sub_state == FuncDeclSubState.EXPECTING_PARAM_NAME:
             if token.type == IbcTokenType.IDENTIFIER:
-                self.current_param_name = token.value
+                self.current_param_name = token.value.strip()
                 self.sub_state = FuncDeclSubState.EXPECTING_PARAM_COLON
             elif token.type == IbcTokenType.RPAREN:
                 self.sub_state = FuncDeclSubState.EXPECTING_COLON

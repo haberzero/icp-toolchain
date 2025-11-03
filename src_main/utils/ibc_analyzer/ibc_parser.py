@@ -112,7 +112,7 @@ class IbcParser:
             self.state_stack.append((state_obj, self.last_ast_node.uid))
 
         elif isinstance(self.last_ast_node, BehaviorStepNode):
-            if not isinstance(self.state_stack[-1][0], (FuncDeclState, BehaviorStepState)):
+            if not isinstance(self.state_stack[-1][0], (FuncContentState, BehaviorStepState)):
                 raise ParserError(f"Line {token.line_num}: Behavior step must be inside a function")
 
             if self.last_ast_node.new_block_flag:
