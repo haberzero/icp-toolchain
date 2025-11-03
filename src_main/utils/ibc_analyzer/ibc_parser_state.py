@@ -80,7 +80,7 @@ class ModuleDeclState(BaseState):
         
         if self.sub_state == ModuleDeclSubState.EXPECTING_MODULE_NAME:
             if token.type == IbcTokenType.IDENTIFIER:
-                self.module_name = token.value
+                self.module_name = token.value.strip()
                 self.sub_state = ModuleDeclSubState.EXPECTING_COLON
             else:
                 raise IbcParserStateError(f"Line {token.line_num} ModuleDeclState: Expecting module name but got {token.type}")
@@ -351,7 +351,7 @@ class ClassDeclState(BaseState):
         
         if self.sub_state == ClassDeclSubState.EXPECTING_CLASS_NAME:
             if token.type == IbcTokenType.IDENTIFIER:
-                self.class_name = token.value
+                self.class_name = token.value.strip()
                 self.sub_state = ClassDeclSubState.EXPECTING_LPAREN
             else:
                 raise IbcParserStateError(f"Line {token.line_num} ClassDeclState: Expecting class name but got {token.type}")
@@ -364,7 +364,7 @@ class ClassDeclState(BaseState):
                 
         elif self.sub_state == ClassDeclSubState.EXPECTING_INH_CLASS:
             if token.type == IbcTokenType.IDENTIFIER:
-                self.parent_class = token.value
+                self.parent_class = token.value.strip()
                 self.sub_state = ClassDeclSubState.EXPECTING_INH_COLON
             elif token.type == IbcTokenType.RPAREN:
                 self.sub_state = ClassDeclSubState.EXPECTING_COLON
@@ -599,7 +599,7 @@ class BehaviorStepState(BaseState):
         self.current_token = token
         
         if token.type == IbcTokenType.REF_IDENTIFIER:
-            self.symbol_refs.append(token.value)
+            self.symbol_refs.append(token.value.strip())
             self.content += token.value
         elif token.type == IbcTokenType.NEWLINE:
             # 行为步骤结束，创建节点。行末冒号标志着开启新缩进代码块
