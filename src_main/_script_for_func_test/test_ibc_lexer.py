@@ -126,6 +126,7 @@ func 计算订单总价(商品列表: 包含价格信息的商品对象数组, �
         (IbcTokenType.COLON, ':'),
         (IbcTokenType.NEWLINE, ''),
         (IbcTokenType.INDENT, ''),
+        (IbcTokenType.KEYWORDS, IbcKeywords.BEHAVIOR.value),
         (IbcTokenType.IDENTIFIER, '初始化 总价 = 0'),
         (IbcTokenType.NEWLINE, ''),
         (IbcTokenType.DEDENT, ''),
@@ -207,7 +208,8 @@ class AuthService():"""
         (IbcTokenType.COLON, ':'),
         (IbcTokenType.IDENTIFIER, ' 处理用户登录请求，验证凭据并返回认证结果'),
         (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.INTENT_COMMENT, '线程安全设计，所有公共方法都内置锁机制'),
+        (IbcTokenType.KEYWORDS, IbcKeywords.INTENT.value),
+        (IbcTokenType.IDENTIFIER, '线程安全设计，所有公共方法都内置锁机制'),
         (IbcTokenType.NEWLINE, ''),
         (IbcTokenType.KEYWORDS, IbcKeywords.CLASS.value),
         (IbcTokenType.IDENTIFIER, 'AuthService'),
@@ -300,6 +302,7 @@ func 发送请求(请求数据):
         (IbcTokenType.COLON, ':'),
         (IbcTokenType.NEWLINE, ''),
         (IbcTokenType.INDENT, ''),
+        (IbcTokenType.KEYWORDS, IbcKeywords.BEHAVIOR.value),
         (IbcTokenType.IDENTIFIER, '当 重试计数 < '),
         (IbcTokenType.REF_IDENTIFIER, 'maxRetries'),
         (IbcTokenType.COLON, ':'),
@@ -342,11 +345,13 @@ func test():
         (IbcTokenType.COLON, ':'),
         (IbcTokenType.NEWLINE, ''),
         (IbcTokenType.INDENT, ''),
+        (IbcTokenType.KEYWORDS, IbcKeywords.BEHAVIOR.value),
         (IbcTokenType.REF_IDENTIFIER, 'httpClient.post'),
         (IbcTokenType.LPAREN, '('),
         (IbcTokenType.IDENTIFIER, '请求数据'),
         (IbcTokenType.RPAREN, ')'),
         (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.KEYWORDS, IbcKeywords.BEHAVIOR.value),
         (IbcTokenType.REF_IDENTIFIER, '记录错误'),
         (IbcTokenType.LPAREN, '('),
         (IbcTokenType.IDENTIFIER, '"配置加载失败'),
@@ -388,8 +393,10 @@ func test():
     try:
         lexer = IbcLexer(code1)
         tokens = lexer.tokenize()
-        # 应该返回空列表
-        # assert len(tokens) == 0, "预期返回空列表但实际没有"
+        # 应该抛出LexerError异常
+        print("    ❌ 测试失败: 应该抛出异常但没有")
+        return False
+    except LexerError as e:
         print("    ✓ 成功检测到不成对的$符号")
     except Exception as e:
         print(f"    ❌ 测试失败: {e}")
@@ -402,8 +409,10 @@ func test():
     try:
         lexer = IbcLexer(code2)
         tokens = lexer.tokenize()
-        # 应该返回空列表
-        # assert len(tokens) == 0, "预期返回空列表但实际没有"
+        # 应该抛出LexerError异常
+        print("    ❌ 测试失败: 应该抛出异常但没有")
+        return False
+    except LexerError as e:
         print("    ✓ 成功检测到Tab缩进")
     except Exception as e:
         print(f"    ❌ 测试失败: {e}")
@@ -416,8 +425,10 @@ func test():
     try:
         lexer = IbcLexer(code3)
         tokens = lexer.tokenize()
-        # 应该返回空列表
-        # assert len(tokens) == 0, "预期返回空列表但实际没有"
+        # 应该抛出LexerError异常
+        print("    ❌ 测试失败: 应该抛出异常但没有")
+        return False
+    except LexerError as e:
         print("    ✓ 成功检测到缩进不是4的倍数")
     except Exception as e:
         print(f"    ❌ 测试失败: {e}")
