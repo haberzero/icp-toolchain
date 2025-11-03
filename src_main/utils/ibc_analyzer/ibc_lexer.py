@@ -5,20 +5,20 @@ from typedef.ibc_data_types import IbcKeywords, IbcTokenType, Token
 
 class LexerError(Exception):
     """词法分析器异常"""
-    def __init__(self, message: str):
+    def __init__(self, message: str) -> None:
         self.message:str = message
         super().__init__(self.message)
     
-    def __str__(self):
+    def __str__(self) -> str:
         return f"LexerError: {self.message}"
 
 
 class IbcLexer:
     """Intent Behavior Code 词法分析器"""
-    def __init__(self, text: str):
-        self.text = text
+    def __init__(self, text: str) -> None:
+        self.text: str = text
         # 修复：正确处理空字符串的情况
-        self.lines = text.split('\n') if text else []
+        self.lines: list[str] = text.split(sep='\n') if text else []
         self.line_num = 0
         self.current_line = ""
         self.tokens: List[Token] = []
@@ -34,56 +34,52 @@ class IbcLexer:
         if self.line_num >= len(self.lines):
             return False
         
-        self.current_line = self.lines[self.line_num].rstrip()
+        self.current_line: str = self.lines[self.line_num].rstrip()
         self.line_num += 1
         return True
     
     def _calc_indent_level(self, current_line: str) -> int:
         """计算缩进等级"""
-        lstriped_line = current_line.lstrip(' ')
+        lstriped_line: str = current_line.lstrip(' ')
         if lstriped_line.startswith('\t'):
-            raise LexerError(f"Line {self.line_num}: Tab indentation is not allowed")
+            raise LexerError(message=f"Line {self.line_num}: Tab indentation is not allowed")
 
-        left_spaces_num = len(current_line) - len(lstriped_line)
+        left_spaces_num: int = len(current_line) - len(lstriped_line)
         if left_spaces_num % 4 != 0:
-            raise LexerError(f"Line {self.line_num}: Indentation must be a multiple of 4 spaces")
+            raise LexerError(message=f"Line {self.line_num}: Indentation must be a multiple of 4 spaces")
             
         return left_spaces_num // 4
     
-    def _process_keyword(self, striped_line: str):
+    def _process_keyword(self, striped_line: str) -> str:
         """处理关键字，仅在每一行起始且被空格或:分隔开的关键字被认为是关键字，其余时候识别为普通 IDENTIFIER"""
-        # 使用空格和冒号作为分隔符分割字符串，仅在识别关键字时会出现空格识别
-        parts = striped_line.replace(':', ' ', 1).split()
         
-        # 如果没有分割出任何部分，或者输入为空，则直接返回原字符串
-        if not parts:
+        parts: list[str] = [""]
+
+        if striped_line.startswith('@'):
+            # 意图注释开头的@被视为一个特殊关键字，考虑到不同人的书写习惯，暂时不强制要求空格分割
+            # 如果未来认为逻辑结构的统一性更重要，则可能在后续版本中规定@符号后必须有空格
+            parts[0] = '@'
+        else:
+            # 使用空格和冒号作为分隔符分割字符串。整个Lexer仅在识别关键字时会出现空格 split
+            parts = striped_line.replace(':', ' ', count=1).split()
+
+        first_part: str = parts[0]
+        if first_part not in [kw.value for kw in IbcKeywords]:
+            self.is_keyword_line = False
             return striped_line
-            
-        # 获取第一个分割出的部分，检查它是否是关键字
-        first_part = parts[0]
-        for keyword in IbcKeywords:
-            if keyword.value == first_part:
-                # 找到关键字，添加到tokens列表中
-                self.tokens.append(Token(IbcTokenType.KEYWORDS, first_part, self.line_num))
-                # 移除关键字部分并返回剩余内容
-                keyword_len = len(first_part)
-                content_line = striped_line[keyword_len:].lstrip()
-                return content_line
         
-        # 没有找到关键字，返回原始字符串
-        return striped_line
+        self.is_keyword_line = True
+        self.tokens.append(Token(type=IbcTokenType.KEYWORDS, value=first_part, line_num=self.line_num))
+
+        # 移除关键字部分并返回剩余内容
+        keyword_len: int = len(first_part)
+        content_line: str = striped_line[keyword_len:].lstrip()
+        return content_line
     
-        # # 检查是否是意图注释行
-        # if content_line.startswith('@'):
-        #     content = content_line[1:].strip()
-        #     self.tokens.append(Token(IbcTokenType.INTENT_COMMENT, content, self.line_num))
-        #     return
-        
-    
-    def _tokenize_line(self, content_line: str):
+    def _tokenize_line(self, content_line: str) -> None:
         """对当前行进行词法分析"""
         # 检查是否包含符号引用
-        ref_parts = content_line.split('$')
+        ref_parts: list[str] = content_line.split(sep='$')
         if len(ref_parts) > 1:  # 包含$符号
             # 处理包含符号引用的行
             self._tokenize_line_with_refs(content_line)
@@ -93,9 +89,9 @@ class IbcLexer:
         self._tokenize_text_part(content_line)
         return
     
-    def _tokenize_line_with_refs(self, content_line: str):
+    def _tokenize_line_with_refs(self, content_line: str) -> None:
         """处理包含符号引用的行"""
-        parts = content_line.split('$')
+        parts: list[str] = content_line.split(sep='$')
         
         # 检查$符号数量是否为偶数
         if len(parts) % 2 == 0:
@@ -181,9 +177,13 @@ class IbcLexer:
                     # 检查缩进是否对齐
                     if not self.indent_stack or self.indent_stack[-1] != indent_level:
                         raise LexerError(f"Line {self.line_num}: Inconsistent indentation")
-                    
+                
                 # 识别并处理行开头可能存在的关键字
-                content_line = self._process_keyword(striped_line)
+                content_line: str = self._process_keyword(striped_line)
+
+                # 没有识别到关键字，人为插入 BEHAVIOR 关键字token，便于后续parser的逻辑编写
+                if not self.is_keyword_line:
+                    self.tokens.append(Token(IbcTokenType.KEYWORDS, 'behavior', self.line_num))
 
                 # 处理行
                 self._tokenize_line(content_line)

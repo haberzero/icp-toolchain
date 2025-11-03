@@ -8,8 +8,9 @@ from typedef.ibc_data_types import (
 from utils.ibc_analyzer.ibc_parser_state import (
     ParserState, BaseState, TopLevelState, ModuleDeclState, 
     VarDeclState, DescriptionState, ClassContentState, FuncContentState,
-    ClassDeclState, FuncDeclState, BehaviorStepState
+    ClassDeclState, FuncDeclState, BehaviorStepState, IntentCommentState
 )
+
 from utils.ibc_analyzer.ibc_parser_uid_generator import IbcParserUidGenerator
 
 
@@ -30,6 +31,7 @@ class IbcParser:
         self.tokens = tokens
         self.pos = 0
         self.uid_generator = IbcParserUidGenerator()
+        self.line_num = 0
         # 修改state_stack为直接存储状态机实例，而不是ParserState枚举
         self.state_stack: List[Tuple[BaseState, int]] = [(TopLevelState(0, self.uid_generator), 0)]  # 栈内容：(状态机实例, 栈顶节点uid)
         self.ast_nodes: Dict[int, AstNode] = {0: AstNode(uid=0, node_type=AstNodeType.DEFAULT)}  # 根节点
@@ -63,7 +65,7 @@ class IbcParser:
         try:
             while not self._is_at_end():
                 token = self._consume_token()
-                
+                self.line_num = token.line_num
                 # 处理缩进变化（目前逻辑有缺陷，应该统一给状态机逻辑处理，以提高统一性并且增强灵活性。现在的实现纯为了偷懒）
                 if token.type == IbcTokenType.INDENT:
                     self._handle_indent()
@@ -72,18 +74,10 @@ class IbcParser:
                     self._handle_dedent()
                     continue
 
-                # 处理意图注释（未来应当改进，还是该把@当作行首关键字处理，逻辑能合并到关键字处理中，lexer也能再简化）
-                if token.type == IbcTokenType.INTENT_COMMENT:
-                    self.pending_intent_comment = token.value
-                    continue
-                
-                # 处理关键字
+                # 处理关键字。注意所有行包括行为步骤行都有起始的关键字，步骤行的关键字由Lexer自动添加
                 if token.type == IbcTokenType.KEYWORDS:
                     self._handle_keyword(token)
                     continue
-
-                # TODO: 一个大缺陷：现在是限制行为步骤逻辑只能在函数中，所以显得工作正常。未来如果想支持脚本式目标代码可能会出现挺多麻烦
-                # 目前的行为步骤行状态机其实略有点难以归并为统一写法, 也许可以通过lexer人为插入虚构"行为步骤关键字token"来统一?
                 
                 # 将token传递给当前状态机处理
                 self._process_token_in_current_state(token)
@@ -97,11 +91,13 @@ class IbcParser:
                 # 如果是描述暂存内容
                 if isinstance(current_state_obj, DescriptionState):
                     self.pending_description = current_state_obj.get_content()
+                if isinstance(current_state_obj, IntentCommentState):
+                    self.pending_intent_comment = current_state_obj.get_content()
                 
             return self.ast_nodes
         
         except ParserError:
-            raise ParserError(f"Line {token.line_num}: Parse error")
+            raise ParserError(f"Line {self.line_num}: Parse error")
     
     def _handle_indent(self) -> None:
         """处理缩进"""
@@ -154,6 +150,10 @@ class IbcParser:
             state_obj = ClassDeclState(parent_uid, self.uid_generator)
         elif token.type == IbcTokenType.KEYWORDS and token.value == "func":
             state_obj = FuncDeclState(parent_uid, self.uid_generator)
+        elif token.type == IbcTokenType.KEYWORDS and token.value == "behavior":
+            state_obj = BehaviorStepState(parent_uid, self.uid_generator)
+        elif token.type == IbcTokenType.KEYWORDS and token.value == "@":
+            state_obj = IntentCommentState(parent_uid, self.uid_generator)
         else:
             raise ParserError(f"Line {token.line_num}: Invalid keyword token'{token.value}', check your code please")
             

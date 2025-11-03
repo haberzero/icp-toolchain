@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 # ====== Lexer 模块 数据类型定义 ======
 class IbcTokenType(Enum):
     """Token类型枚举"""
-    KEYWORDS = "KEYWORDS"  # 保留关键字
+    KEYWORDS = "KEYWORDS"  # 关键字
     IDENTIFIER = "IDENTIFIER"  # 一般文本
     LPAREN = "LPAREN"  # 左括号
     RPAREN = "RPAREN"  # 右括号
@@ -27,16 +27,18 @@ class IbcKeywords(Enum):
     CLASS = "class"
     VAR = "var"
     DESCRIPTION = "description"
+    INTENT = "@"
+    BEHAVIOR = "behavior"   # 特殊关键字，不由用户书写，而是由lexer自动添加至token list
 
 
 class Token:
     """Token类"""
-    def __init__(self, type_: IbcTokenType, value: str, line_num: int):
-        self.type = type_
-        self.value = value
-        self.line_num = line_num
+    def __init__(self, type: IbcTokenType, value: str, line_num: int):
+        self.type: IbcTokenType = type
+        self.value: str = value
+        self.line_num: int = line_num
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Token({self.type}, {self.value}, {self.line_num})"
 
 

@@ -283,6 +283,40 @@ class DescriptionState(BaseState):
         return self.content
 
 
+# 意图注释解析的子状态枚举
+class IntentCommentSubState(Enum):
+    EXPECTING_CONTENT = "EXPECTING_CONTENT"
+
+class IntentCommentState(BaseState):
+    """描述状态类, 不产生节点, 产生解析内容"""
+    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator):
+        super().__init__(parent_uid, uid_generator)
+        self.state_type = ParserState.DESCRIPTION
+        self.content = ""
+        self.sub_state = DescriptionSubState.EXPECTING_COLON
+        self.pop_flag = False
+
+    def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
+        self.current_token = token
+
+        if self.sub_state == DescriptionSubState.EXPECTING_CONTENT:
+            if token.type == IbcTokenType.NEWLINE:
+                # 行末不应以冒号结束
+                self.content = self.content.strip()
+                if ":" == self.content[-1]:
+                    raise IbcParserStateError(f"Line {token.line_num} DescriptionState: Cannot end with colon")
+                self.pop_flag = True
+            else:
+                self.content += token.value
+                self.sub_state = DescriptionSubState.EXPECTING_CONTENT
+
+    def is_need_pop(self) -> bool:
+        return self.pop_flag
+
+    def get_content(self) -> str:
+        return self.content
+
+
 # 类声明的子状态枚举
 class ClassDeclSubState(Enum):
     EXPECTING_CLASS_NAME = "EXPECTING_CLASS_NAME"
