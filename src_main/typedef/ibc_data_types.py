@@ -13,7 +13,6 @@ class IbcTokenType(Enum):
     COMMA = "COMMA"  # 逗号
     COLON = "COLON"  # 冒号
     REF_IDENTIFIER = "REF_IDENTIFIER"  # 符号引用
-    INTENT_COMMENT = "INTENT_COMMENT"  # 意图注释
     INDENT = "INDENT"  # 缩进
     DEDENT = "DEDENT"  # 退格
     NEWLINE = "NEWLINE"  # 换行符

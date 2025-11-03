@@ -25,6 +25,7 @@ class ParserState(Enum):
     MODULE_DECL = "MODULE_DECL"  # 模块声明解析
     VAR_DECL = "VAR_DECL"  # 变量声明解析
     DESCRIPTION = "DESCRIPTION"  # 对外描述解析
+    INTENT_COMMENT = "INTENT_COMMENT"  # 意图注释解析
     CLASS_DECL = "CLASS_DECL"  # 类声明解析
     CLASS_CONTENT = "CLASS_CONTENT"  # 类内容解析
     FUNC_DECL = "FUNC_DECL"  # 函数声明解析
@@ -99,7 +100,7 @@ class ModuleDeclState(BaseState):
             if token.type == IbcTokenType.NEWLINE:
                 self.content = self.content.strip()
                 # 行末不应以冒号结束
-                if ":" == self.content[-1]:
+                if self.content and self.content[-1] == ":":
                     raise IbcParserStateError(f"Line {token.line_num} ModuleDeclState: Cannot end with colon")
                 self._create_module_node(ast_node_dict)
                 self.pop_flag = True
@@ -114,6 +115,7 @@ class ModuleDeclState(BaseState):
         
         uid = self.uid_generator.gen_uid()
         line_num = self.current_token.line_num 
+        self.content = self.content.strip()
         module_node = ModuleNode(
             uid=uid,
             parent_uid=self.parent_uid,
@@ -187,7 +189,7 @@ class VarDeclState(BaseState):
                 self.pop_flag = True
             else:
                 raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Expecting colon, comma or newline but got {token.type}")
-         
+        
         elif self.sub_state == VarDeclSubState.EXPECTING_VAR_DESC:
             if token.type == IbcTokenType.IDENTIFIER:
                 self.current_var_desc = token.value.strip()
@@ -269,7 +271,7 @@ class DescriptionState(BaseState):
             if token.type == IbcTokenType.NEWLINE:
                 # 行末不应以冒号结束
                 self.content = self.content.strip()
-                if ":" == self.content[-1]:
+                if self.content and self.content[-1] == ":":
                     raise IbcParserStateError(f"Line {token.line_num} DescriptionState: Cannot end with colon")
                 self.pop_flag = True
             else:
@@ -291,9 +293,9 @@ class IntentCommentState(BaseState):
     """描述状态类, 不产生节点, 产生解析内容"""
     def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator):
         super().__init__(parent_uid, uid_generator)
-        self.state_type = ParserState.DESCRIPTION
+        self.state_type = ParserState.INTENT_COMMENT
         self.content = ""
-        self.sub_state = DescriptionSubState.EXPECTING_COLON
+        self.sub_state = IntentCommentSubState.EXPECTING_CONTENT
         self.pop_flag = False
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
@@ -303,7 +305,7 @@ class IntentCommentState(BaseState):
             if token.type == IbcTokenType.NEWLINE:
                 # 行末不应以冒号结束
                 self.content = self.content.strip()
-                if ":" == self.content[-1]:
+                if self.content and self.content[-1] == ":":
                     raise IbcParserStateError(f"Line {token.line_num} DescriptionState: Cannot end with colon")
                 self.pop_flag = True
             else:
@@ -478,6 +480,8 @@ class FuncDeclState(BaseState):
         elif self.sub_state == FuncDeclSubState.EXPECTING_LPAREN:
             if token.type == IbcTokenType.LPAREN:
                 self.sub_state = FuncDeclSubState.EXPECTING_PARAM_NAME
+            elif token.type == IbcTokenType.COLON:
+                self.sub_state = FuncDeclSubState.EXPECTING_NEWLIEN
             else:
                 raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting left parenthesis but got {token.type}")
         
@@ -515,7 +519,6 @@ class FuncDeclState(BaseState):
                 self.sub_state = FuncDeclSubState.EXPECTING_COLON
             else:
                 raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting colon, comma or right parenthesis but got {token.type}")
-
 
         elif self.sub_state == FuncDeclSubState.EXPECTING_PARAM_DESC:
             if token.type == IbcTokenType.IDENTIFIER:
@@ -601,7 +604,7 @@ class BehaviorStepState(BaseState):
         elif token.type == IbcTokenType.NEWLINE:
             # 行为步骤结束，创建节点。行末冒号标志着开启新缩进代码块
             self.content = self.content.strip()
-            if ":" == self.content[-1]:
+            if self.content and self.content[-1] == ":":
                 self.new_block_flag = True
             self._create_behavior_node(ast_node_dict)
             self.pop_flag = True
