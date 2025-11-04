@@ -40,12 +40,17 @@ class BaseState:
         self.parent_uid = parent_uid
         self.uid_generator = uid_generator
         self.current_token: Optional[Token] = None
+        self.pass_in_token_flag = False
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         pass
 
     def is_need_pop(self) -> bool:
         return False
+
+    def is_need_pass_in_token(self) -> bool:
+        """对于那些需要多行内容逻辑解析的状态机, 它们需要接收缩进相关token而不让顶层处理"""
+        return self.pass_in_token_flag
 
 
 class TopLevelState(BaseState):
@@ -151,6 +156,7 @@ class VarDeclState(BaseState):
         self.current_var_desc = ""
         self.sub_state = VarDeclSubState.EXPECTING_VAR_NAME
         self.pop_flag = False
+        # self.is_need_pass_token = False  # 未来如果支持换行多行声明变量，就可以启用
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         self.current_token = token
@@ -245,10 +251,10 @@ class VarDeclState(BaseState):
 class DescriptionSubState(Enum):
     EXPECTING_COLON = "EXPECTING_COLON"
     EXPECTING_CONTENT = "EXPECTING_CONTENT"
+    EXPECTING_ONELINE = "EXPECTING_ONELINE"
+    EXPECTING_MULTILINE = "EXPECTING_MULTILINE"
 
 
-# TODO: 未来也许应引入多行描述解析。当前逻辑只允许单行对外描述
-    # 意味着现在的缩进解析需要改，缩进解析需要纳入状态机的体系中
 class DescriptionState(BaseState):
     """描述状态类, 不产生节点, 产生解析内容"""
     def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator):
@@ -257,6 +263,7 @@ class DescriptionState(BaseState):
         self.content = ""
         self.sub_state = DescriptionSubState.EXPECTING_COLON
         self.pop_flag = False
+        self.pass_in_token_flag = False
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         self.current_token = token
@@ -269,6 +276,16 @@ class DescriptionState(BaseState):
         
         elif self.sub_state == DescriptionSubState.EXPECTING_CONTENT:
             if token.type == IbcTokenType.NEWLINE:
+                self.pass_in_token_flag = True
+                self.sub_state = DescriptionSubState.EXPECTING_MULTILINE
+            elif token.type == IbcTokenType.IDENTIFIER:
+                self.content += token.value
+                self.sub_state = DescriptionSubState.EXPECTING_CONTENT
+            else:
+                raise IbcParserStateError(f"Line {token.line_num} DescriptionState: Expecting newline or identifier but got {token.type}")
+
+        elif self.sub_state == DescriptionSubState.EXPECTING_ONELINE:
+            if token.type == IbcTokenType.NEWLINE:
                 # 行末不应以冒号结束
                 self.content = self.content.strip()
                 if self.content and self.content[-1] == ":":
@@ -276,7 +293,7 @@ class DescriptionState(BaseState):
                 self.pop_flag = True
             else:
                 self.content += token.value
-                self.sub_state = DescriptionSubState.EXPECTING_CONTENT
+                self.sub_state = DescriptionSubState.EXPECTING_ONELINE
 
     def is_need_pop(self) -> bool:
         return self.pop_flag

@@ -1,4 +1,5 @@
 from enum import Enum
+from turtle import Turtle
 from typing import List, Dict, Any, Optional, Tuple
 from typedef.ibc_data_types import (
     IbcTokenType, Token, AstNode, AstNodeType, 
@@ -44,6 +45,10 @@ class IbcParser:
         self.last_ast_node: Optional[AstNode] = self.ast_nodes[0]
         self.last_ast_node_uid = 0
 
+        # 状态变量，指示当前token应该被如何处理
+        self.is_pass_token_to_state = False
+        self.is_new_line_start = False
+
     def _peek_token(self) -> Token:
         """查看当前token"""
         if self.pos < len(self.tokens):
@@ -66,43 +71,70 @@ class IbcParser:
             while not self._is_at_end():
                 token = self._consume_token()
                 self.line_num = token.line_num
-                # 处理缩进变化（目前逻辑有缺陷，应该统一给状态机逻辑处理，以提高统一性并且增强灵活性。现在的实现纯为了偷懒）
-                if token.type == IbcTokenType.INDENT:
-                    self._handle_indent()
-                    continue
-                elif token.type == IbcTokenType.DEDENT:
-                    self._handle_dedent()
-                    continue
 
-                # 处理关键字。注意所有行包括行为步骤行都有起始的关键字，步骤行的关键字由Lexer自动添加
-                if token.type == IbcTokenType.KEYWORDS:
+                # 将包括缩进的所有token都交给状态机，给状态机提供多行处理的能力
+                if self.is_pass_token_to_state:
+                    self._process_token_in_current_state(token)
+
+                # 处理缩进和状态栈
+                elif token.type == IbcTokenType.INDENT:
+                    self._handle_indent(token)
+                elif token.type == IbcTokenType.DEDENT:
+                    self._handle_dedent(token)
+
+                # 处理关键字(目前关键字只会在行首出现)
+                elif token.type == IbcTokenType.KEYWORDS:
                     self._handle_keyword(token)
-                    continue
+                
+                # token处在行首，且不是关键字，且并非透传token的状态，则认为是行为描述行的开始
+                elif self.is_new_line_start and token.type is not IbcTokenType.KEYWORDS:
+                    self.is_new_line_start = False
+                    current_state_obj, parent_uid = self.state_stack[-1]
+                    state_obj = BehaviorStepState(parent_uid, self.uid_generator)
+                    self.state_stack.append((state_obj, parent_uid))
+                    self._process_token_in_current_state(token)
                 
                 # 将token传递给当前状态机处理
-                self._process_token_in_current_state(token)
+                else:
+                    self._process_token_in_current_state(token)
+
+                # 获取顶部状态机实例，开始状态机的后处理
+                current_state_obj, _ = self.state_stack[-1]
+
+                # 状态变量的更新
+                # 栈顶状态机是否请求了token透传
+                if current_state_obj.is_need_pass_in_token():
+                    self.is_pass_token_to_state = True
+                else:
+                    self.is_pass_token_to_state = False
+                
+                # 当出现了 新行/缩进/退缩进 以外的任何token, 则意味着随后的token不处于行首
+                if token.type in (IbcTokenType.NEWLINE, IbcTokenType.INDENT, IbcTokenType.DEDENT):
+                    self.is_new_line_start = True
+                else:
+                    self.is_new_line_start = False
                 
                 # 检查是否需要弹出状态
-                current_state_obj, _ = self.state_stack[-1]
                 if not current_state_obj.is_need_pop():
                     continue
-                self.state_stack.pop()
-                
-                # 如果是描述暂存内容
-                if isinstance(current_state_obj, DescriptionState):
-                    self.pending_description = current_state_obj.get_content()
-                if isinstance(current_state_obj, IntentCommentState):
-                    self.pending_intent_comment = current_state_obj.get_content()
+                else:
+                    # 状态机弹出
+                    current_state_obj, _ = self.state_stack.pop()
+                    
+                    # 进行内容暂存处理
+                    if isinstance(current_state_obj, DescriptionState):
+                        self.pending_description = current_state_obj.get_content()
+                    if isinstance(current_state_obj, IntentCommentState):
+                        self.pending_intent_comment = current_state_obj.get_content()
                 
             return self.ast_nodes
         
         except ParserError:
             raise ParserError(f"Line {self.line_num}: Parse error")
     
-    def _handle_indent(self) -> None:
+    def _handle_indent(self, token: Token) -> None:
         """处理缩进"""
         # 根据最新的AST节点判断应该压入的状态
-        token = self._peek_token()
         if isinstance(self.last_ast_node, ClassNode):
             state_obj = ClassContentState(self.last_ast_node.uid, self.uid_generator)
             self.state_stack.append((state_obj, self.last_ast_node.uid))
@@ -121,9 +153,8 @@ class IbcParser:
             else:
                 raise ParserError(f"Line {token.line_num}: Invalid indent, missing colon after behavior step to start a new block")
 
-    def _handle_dedent(self) -> None:
+    def _handle_dedent(self, token: Token) -> None:
         """处理退格"""
-        token = self._peek_token()
         if len(self.state_stack) > 1:  # 不能弹出顶层状态
             self.state_stack.pop()
         else:
@@ -150,8 +181,6 @@ class IbcParser:
             state_obj = ClassDeclState(parent_uid, self.uid_generator)
         elif token.type == IbcTokenType.KEYWORDS and token.value == "func":
             state_obj = FuncDeclState(parent_uid, self.uid_generator)
-        elif token.type == IbcTokenType.KEYWORDS and token.value == "behavior":
-            state_obj = BehaviorStepState(parent_uid, self.uid_generator)
         elif token.type == IbcTokenType.KEYWORDS and token.value == "@":
             state_obj = IntentCommentState(parent_uid, self.uid_generator)
         else:

@@ -181,10 +181,6 @@ class IbcLexer:
                 # 识别并处理行开头可能存在的关键字
                 content_line: str = self._process_keyword(striped_line)
 
-                # 没有识别到关键字，人为插入 BEHAVIOR 关键字token，便于后续parser的逻辑编写
-                if not self.is_keyword_line:
-                    self.tokens.append(Token(IbcTokenType.KEYWORDS, 'behavior', self.line_num))
-
                 # 处理行
                 self._tokenize_line(content_line)
                 
