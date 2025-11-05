@@ -415,6 +415,186 @@ def test_nested_blocks():
         return False
 
 
+def test_multiline_description():
+    """测试多行description"""
+    print("\n测试 multiline_description 函数...")
+    
+    code = """description:
+    这是一个复杂的配置管理系统，具备的功能有
+    从多个数据源读取配置信息，合并冲突设置，还提供热重载功能
+class ConfigManager():
+    var config
+
+description: 单行描述测试
+func 简单函数():
+    执行操作"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        
+        # 验证第一个类节点
+        class_node = ast_nodes[root_node.children_uids[0]]
+        assert isinstance(class_node, ClassNode), "预期为ClassNode"
+        
+        # 验证多行description被正确解析
+        expected_desc = "这是一个复杂的配置管理系统，具备的功能有从多个数据源读取配置信息，合并冲突设置，还提供热重载功能"
+        # 去除空格进行比较,因为多行可能有格式差异
+        assert class_node.external_desc.replace("\n", "") == expected_desc, \
+            f"多行description解析不正确: '{class_node.external_desc}'"
+        
+        # 验证第二个函数节点的单行description
+        func_node = ast_nodes[root_node.children_uids[1]]
+        assert isinstance(func_node, FunctionNode), "预期为FunctionNode"
+        assert func_node.external_desc == "单行描述测试", \
+            f"单行description解析不正确: '{func_node.external_desc}'"
+        
+        print("  ✓ 成功解析多行和单行description")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_multiline_func_declaration():
+    """测试多行函数声明"""
+    print("\n测试 multiline_func_declaration 函数...")
+    
+    code = """func 计算订单总价(
+    商品列表: 包含价格信息的商品对象数组,
+    折扣率: 0到1之间的小数表示折扣比例,
+    优惠券: 可选的优惠券对象
+):
+    初始化 总价 = 0
+    遍历 商品列表 中的每个 商品:
+        总价 = 总价 + 商品.价格
+    总价 = 总价 × 折扣率
+    返回 总价
+
+func 简单函数(参数1, 参数2):
+    执行操作"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        
+        # 验证第一个多行函数声明
+        func_node1 = ast_nodes[root_node.children_uids[0]]
+        assert isinstance(func_node1, FunctionNode), "预期为FunctionNode"
+        assert func_node1.identifier == "计算订单总价", f"函数名不匹配: {func_node1.identifier}"
+        
+        # 验证参数数量
+        assert len(func_node1.params) == 3, f"预期3个参数，实际{len(func_node1.params)}"
+        
+        # 验证参数名称和描述
+        assert "商品列表" in func_node1.params, "缺少商品列表参数"
+        assert "折扣率" in func_node1.params, "缺少折扣率参数"
+        assert "优惠券" in func_node1.params, "缺少优惠券参数"
+        
+        assert func_node1.params["商品列表"] == "包含价格信息的商品对象数组", \
+            f"商品列表参数描述不匹配: {func_node1.params['商品列表']}"
+        assert func_node1.params["折扣率"] == "0到1之间的小数表示折扣比例", \
+            f"折扣率参数描述不匹配: {func_node1.params['折扣率']}"
+        assert func_node1.params["优惠券"] == "可选的优惠券对象", \
+            f"优惠券参数描述不匹配: {func_node1.params['优惠券']}"
+        
+        # 验证函数有子节点(行为步骤)
+        assert len(func_node1.children_uids) > 0, "函数应该有行为步骤"
+        
+        # 验证第二个单行函数声明
+        func_node2 = ast_nodes[root_node.children_uids[1]]
+        assert isinstance(func_node2, FunctionNode), "预期为FunctionNode"
+        assert func_node2.identifier == "简单函数", f"函数名不匹配: {func_node2.identifier}"
+        assert len(func_node2.params) == 2, f"预期2个参数，实际{len(func_node2.params)}"
+        
+        print("  ✓ 成功解析多行和单行函数声明")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_multiline_func_in_class():
+    """测试类中的多行函数声明"""
+    print("\n测试 multiline_func_in_class 函数...")
+    
+    code = """class ApiClient():
+    var baseUrl: API基础地址
+    
+    description: 发送GET请求到指定接口
+    @ 自动处理网络异常，最多重试3次
+    func 获取数据(
+        接口路径: 相对路径，不需要包含基础URL,
+        查询参数: 字典形式的查询参数
+    ):
+        完整URL = self.baseUrl + 接口路径
+        重试计数 = 0
+        返回 响应数据"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        class_node = ast_nodes[root_node.children_uids[0]]
+        
+        assert isinstance(class_node, ClassNode), "预期为ClassNode"
+        assert class_node.identifier == "ApiClient", f"类名不匹配: {class_node.identifier}"
+        
+        # 找到函数节点(跳过变量节点)
+        func_node = None
+        for uid in class_node.children_uids:
+            node = ast_nodes[uid]
+            if isinstance(node, FunctionNode):
+                func_node = node
+                break
+        
+        assert func_node is not None, "未找到函数节点"
+        assert func_node.identifier == "获取数据", f"函数名不匹配: {func_node.identifier}"
+        
+        # 验证description和intent注释
+        assert func_node.external_desc == "发送GET请求到指定接口", \
+            f"函数描述不匹配: {func_node.external_desc}"
+        assert func_node.intent_comment == "自动处理网络异常，最多重试3次", \
+            f"意图注释不匹配: {func_node.intent_comment}"
+        
+        # 验证多行参数
+        assert len(func_node.params) == 2, f"预期2个参数，实际{len(func_node.params)}"
+        assert "接口路径" in func_node.params, "缺少接口路径参数"
+        assert "查询参数" in func_node.params, "缺少查询参数参数"
+        
+        # 验证函数有行为步骤
+        assert len(func_node.children_uids) > 0, "函数应该有行为步骤"
+        
+        print("  ✓ 成功解析类中的多行函数声明")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def main():
     """主测试函数"""
     print("=" * 60)
@@ -432,6 +612,9 @@ def main():
         test_results.append(("符号引用", test_symbol_reference()))
         test_results.append(("复杂示例", test_complex_example()))
         test_results.append(("嵌套代码块", test_nested_blocks()))
+        test_results.append(("多行description", test_multiline_description()))
+        test_results.append(("多行函数声明", test_multiline_func_declaration()))
+        test_results.append(("类中多行函数", test_multiline_func_in_class()))
         
         print("\n" + "=" * 60)
         print("测试结果汇总")
