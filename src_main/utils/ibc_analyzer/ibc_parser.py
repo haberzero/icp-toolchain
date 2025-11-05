@@ -49,6 +49,9 @@ class IbcParser:
         self.is_pass_token_to_state = False
         self.is_new_line_start = False
 
+        # 函数声明时的多行参数定义可能会因为不同开发者的书写习惯带来额外的缩进问题，需要单独处理
+        self.func_pending_indent_level = 0
+
     def _peek_token(self) -> Token:
         """查看当前token"""
         if self.pos < len(self.tokens):
@@ -98,7 +101,23 @@ class IbcParser:
                 else:
                     self._process_token_in_current_state(token)
 
-                # 获取顶部状态机实例，开始状态机的后处理
+                # --- token已经被使用，开始状态机的后处理 ---
+                # 检查是否存在uid的更新
+                current_uid = self.uid_generator.get_current_uid()
+                if current_uid > self.last_ast_node_uid:
+                    self.last_ast_node_uid = current_uid
+                    self.last_ast_node = self.ast_nodes[current_uid]
+                    # 如果是类声明或函数声明节点，附加对外描述和意图注释
+                    if isinstance(self.last_ast_node, (ClassNode, FunctionNode)):
+                        self.last_ast_node.external_desc = self.pending_description
+                        self.last_ast_node.intent_comment = self.pending_intent_comment
+                        self.pending_description = ""
+                        self.pending_intent_comment = ""
+                    else:
+                        self.pending_description = ""
+                        self.pending_intent_comment = ""
+
+                # 获取顶部状态机实例
                 current_state_obj, _ = self.state_stack[-1]
 
                 # 状态变量的更新
@@ -126,6 +145,19 @@ class IbcParser:
                         self.pending_description = current_state_obj.get_content()
                     if isinstance(current_state_obj, IntentCommentState):
                         self.pending_intent_comment = current_state_obj.get_content()
+                    
+                    # 函数声明时的多行参数定义可能会因为不同开发者的书写习惯带来额外的缩进问题，需要单独处理
+                    if isinstance(current_state_obj, FuncDeclState):
+                        self.func_pending_indent_level = current_state_obj.get_pending_indent_level()
+                
+                # 当 func_pending_indent_level == 1 时, 意味着后续内容开始时不再会有indent token, 这里需要一次手动压栈
+                if self.func_pending_indent_level == 1:
+                    self.func_pending_indent_level = 0
+                    if isinstance(self.last_ast_node, FunctionNode):
+                        state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator)
+                        self.state_stack.append((state_obj, self.last_ast_node.uid))
+                    else:
+                        raise ParserError(f"Line {token.line_num}: Parser TOP --- Should not happen, contact dev please")
                 
             return self.ast_nodes
         
@@ -155,10 +187,15 @@ class IbcParser:
 
     def _handle_dedent(self, token: Token) -> None:
         """处理退格"""
+        if self.func_pending_indent_level > 1:
+            # 此变量大于1意味着状态机刚弹出一个func decl, 在行为行开始前需要额外退缩进
+            self.func_pending_indent_level -= 1
+            return
+
         if len(self.state_stack) > 1:  # 不能弹出顶层状态
             self.state_stack.pop()
         else:
-            raise ParserError(f"Line {token.line_num}: pop state toplevel, check your code please")
+            raise ParserError(f"Line {token.line_num}: pop state toplevel, should not happen, contact dev please")
 
     def _handle_keyword(self, token: Token) -> None:
         """处理关键字"""
@@ -184,7 +221,7 @@ class IbcParser:
         elif token.type == IbcTokenType.KEYWORDS and token.value == "@":
             state_obj = IntentCommentState(parent_uid, self.uid_generator)
         else:
-            raise ParserError(f"Line {token.line_num}: Invalid keyword token'{token.value}', check your code please")
+            raise ParserError(f"Line {token.line_num}: Invalid keyword token'{token.value}', should not happen, contact dev please")
             
         if state_obj:
             self.state_stack.append((state_obj, parent_uid))
@@ -201,17 +238,3 @@ class IbcParser:
         # TODO: 现在的process_token方法 不应该传递进去ast_nodes，这个变量应该在状态机实例创建时就被传递，以后改一下
         current_state_obj.process_token(token, self.ast_nodes)
 
-        # 检查是否存在uid的更新
-        current_uid = self.uid_generator.get_current_uid()
-        if current_uid > self.last_ast_node_uid:
-            self.last_ast_node_uid = current_uid
-            self.last_ast_node = self.ast_nodes[current_uid]
-            # 如果是类声明或函数声明节点，附加对外描述和意图注释
-            if isinstance(self.last_ast_node, (ClassNode, FunctionNode)):
-                self.last_ast_node.external_desc = self.pending_description
-                self.last_ast_node.intent_comment = self.pending_intent_comment
-                self.pending_description = ""
-                self.pending_intent_comment = ""
-            else:
-                self.pending_description = ""
-                self.pending_intent_comment = ""

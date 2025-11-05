@@ -116,7 +116,7 @@ class ModuleDeclState(BaseState):
     def _create_module_node(self, ast_node_dict: Dict[int, AstNode]) -> None:
         """创建模块节点"""
         if not self.current_token:
-            raise IbcParserStateError("ModuleDeclState: current_token is None, check your code")
+            raise IbcParserStateError("ModuleDeclState: Should not happen, contact dev please")
         
         uid = self.uid_generator.gen_uid()
         line_num = self.current_token.line_num 
@@ -252,7 +252,8 @@ class DescriptionSubState(Enum):
     EXPECTING_COLON = "EXPECTING_COLON"
     EXPECTING_CONTENT = "EXPECTING_CONTENT"
     EXPECTING_ONELINE = "EXPECTING_ONELINE"
-    EXPECTING_MULTILINE = "EXPECTING_MULTILINE"
+    EXPECTING_MULTILINE_INDENT = "EXPECTING_MULTILINE_INDENT"
+    EXPECTING_MULTILINE_CONTENT = "EXPECTING_MULTILINE_CONTENT"
 
 
 class DescriptionState(BaseState):
@@ -264,6 +265,7 @@ class DescriptionState(BaseState):
         self.sub_state = DescriptionSubState.EXPECTING_COLON
         self.pop_flag = False
         self.pass_in_token_flag = False
+        self.multiline_indent_level: Optional[int] = None  # 记录多行内容的缩进级别
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         self.current_token = token
@@ -276,11 +278,14 @@ class DescriptionState(BaseState):
         
         elif self.sub_state == DescriptionSubState.EXPECTING_CONTENT:
             if token.type == IbcTokenType.NEWLINE:
+                # 冒号后直接换行,准备进入多行模式
                 self.pass_in_token_flag = True
-                self.sub_state = DescriptionSubState.EXPECTING_MULTILINE
+                self.sub_state = DescriptionSubState.EXPECTING_MULTILINE_INDENT
             elif token.type == IbcTokenType.IDENTIFIER:
+                # 单行模式:冒号后有内容
+                self.pass_in_token_flag = False
                 self.content += token.value
-                self.sub_state = DescriptionSubState.EXPECTING_CONTENT
+                self.sub_state = DescriptionSubState.EXPECTING_ONELINE
             else:
                 raise IbcParserStateError(f"Line {token.line_num} DescriptionState: Expecting newline or identifier but got {token.type}")
 
@@ -293,7 +298,35 @@ class DescriptionState(BaseState):
                 self.pop_flag = True
             else:
                 self.content += token.value
-                self.sub_state = DescriptionSubState.EXPECTING_ONELINE
+                # 保持在EXPECTING_ONELINE状态
+        
+        elif self.sub_state == DescriptionSubState.EXPECTING_MULTILINE_INDENT:
+            if token.type == IbcTokenType.INDENT:
+                self.sub_state = DescriptionSubState.EXPECTING_MULTILINE_CONTENT
+            else:
+                raise IbcParserStateError(f"Line {token.line_num} DescriptionState: Expecting indent in multiline mode but got {token.type}")
+        
+        elif self.sub_state == DescriptionSubState.EXPECTING_MULTILINE_CONTENT:
+            if token.type == IbcTokenType.DEDENT:
+                # 退缩进表示多行描述结束
+                self.content = self.content.strip()
+                if self.content and self.content[-1] == ":":
+                    raise IbcParserStateError(f"Line {token.line_num} DescriptionState: Cannot end with colon")
+                if self.content and self.content[-1] == "\n":
+                    self.content = self.content[:-1]
+                self.pass_in_token_flag = False
+                self.pop_flag = True
+            elif token.type == IbcTokenType.INDENT:
+                # 不允许进一步缩进
+                raise IbcParserStateError(f"Line {token.line_num} DescriptionState: Further indentation is not allowed in multiline description")
+            elif token.type == IbcTokenType.NEWLINE:
+                # 换行,添加到内容中
+                self.content += "\n"
+                # 保持在EXPECTING_MULTILINE_CONTENT状态
+            else:
+                # 收集内容
+                self.content += token.value
+                # 保持在EXPECTING_MULTILINE_CONTENT状态
 
     def is_need_pop(self) -> bool:
         return self.pop_flag
@@ -470,10 +503,8 @@ class FuncDeclSubState(Enum):
     EXPECTING_NEWLIEN = "EXPECTING_NEWLIEN"
 
 
-# TODO: 目前逻辑只支持同一行内的函数参数书写，后续应当支持多行参数书写
-    # 意味着现在的缩进解析需要改，缩进解析需要纳入状态机的体系中
 class FuncDeclState(BaseState):
-    """函数声明状态类"""
+    """函数声明状态类。支持多行函数参数书写"""
     def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator):
         super().__init__(parent_uid, uid_generator)
         self.state_type = ParserState.FUNC_DECL
@@ -483,6 +514,8 @@ class FuncDeclState(BaseState):
         self.current_param_desc = ""
         self.sub_state = FuncDeclSubState.EXPECTING_FUNC_NAME
         self.pop_flag = False
+        self.pass_in_token_flag = False
+        self.pending_indent_level = 0
 
     def process_token(self, token: Token, ast_node_dict: Dict[int, AstNode]) -> None:
         self.current_token = token
@@ -496,6 +529,9 @@ class FuncDeclState(BaseState):
         
         elif self.sub_state == FuncDeclSubState.EXPECTING_LPAREN:
             if token.type == IbcTokenType.LPAREN:
+                # 左括号后需要启用token透传以支持多行参数
+                self.pass_in_token_flag = True
+                self.pending_indent_level = 0
                 self.sub_state = FuncDeclSubState.EXPECTING_PARAM_NAME
             elif token.type == IbcTokenType.COLON:
                 self.sub_state = FuncDeclSubState.EXPECTING_NEWLIEN
@@ -508,6 +544,15 @@ class FuncDeclState(BaseState):
                 self.sub_state = FuncDeclSubState.EXPECTING_PARAM_COLON
             elif token.type == IbcTokenType.RPAREN:
                 self.sub_state = FuncDeclSubState.EXPECTING_COLON
+            elif token.type == IbcTokenType.NEWLINE:
+                # 直接忽略换行token
+                pass
+            elif token.type == IbcTokenType.INDENT:
+                self.pending_indent_level += 1
+            elif token.type == IbcTokenType.DEDENT:
+                self.pending_indent_level -= 1
+                if self.pending_indent_level < 0:
+                    raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Unexpected dedent structure")
             else:
                 raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting param name or right parenthesis but got {token.type}")
         
@@ -555,11 +600,21 @@ class FuncDeclState(BaseState):
                 self.sub_state = FuncDeclSubState.EXPECTING_PARAM_NAME
             elif token.type == IbcTokenType.RPAREN:
                 self.sub_state = FuncDeclSubState.EXPECTING_COLON
+            elif token.type == IbcTokenType.NEWLINE:
+                # 直接忽略换行token
+                pass
+            elif token.type == IbcTokenType.INDENT:
+                self.pending_indent_level += 1
+            elif token.type == IbcTokenType.DEDENT:
+                self.pending_indent_level -= 1
+                if self.pending_indent_level < 0:
+                    raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Unexpected dedent structure")
             else:
                 raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting comma or right parenthesis but got {token.type}")
 
         elif self.sub_state == FuncDeclSubState.EXPECTING_COLON:
             if token.type == IbcTokenType.COLON:
+                self.pass_in_token_flag = False
                 self.sub_state = FuncDeclSubState.EXPECTING_NEWLIEN
             else:
                 raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting colon but got {token.type}")
@@ -590,6 +645,9 @@ class FuncDeclState(BaseState):
 
     def is_need_pop(self) -> bool:
         return self.pop_flag
+    
+    def get_pending_indent_level(self) -> int:
+        return self.pending_indent_level
 
 
 class FuncContentState(BaseState):
