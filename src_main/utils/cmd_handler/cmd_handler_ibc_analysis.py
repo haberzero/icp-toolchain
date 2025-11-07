@@ -151,7 +151,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                     available_file_desc_dict[file_key] = file_description
             
             # 生成新的半自然语言行为描述代码
-            intent_behavior_code = self._ibc_generator_response(
+            intent_behavior_code = self._create_intent_behavior_code(
                 file_path,
                 file_req_content,
                 user_requirements,
@@ -216,7 +216,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         return '\n'.join(section_lines)
 
-    def _ibc_generator_response(
+    def _create_intent_behavior_code(
         self, 
         file_path: str, 
         file_req_content: str,
