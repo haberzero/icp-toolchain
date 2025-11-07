@@ -15,14 +15,14 @@ from utils.ai_handler.chat_handler import ChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
 
 
-class CmdHandlerIcbGen(BaseCmdHandler):
+class CmdHandlerIbcGen(BaseCmdHandler):
     """将单文件需求描述转换为半自然语言行为描述代码"""
     
     def __init__(self):
         super().__init__()
         self.command_info = CommandInfo(
-            name="intent_code_behavior_gen",
-            aliases=["ICB"],
+            name="intent_behavior_code_gen",
+            aliases=["IBC"],
             description="将单文件需求描述转换为半自然语言行为描述代码",
             help_text="根据单文件需求描述生成符合半自然语言行为描述语法的代码结构",
         )
@@ -33,7 +33,7 @@ class CmdHandlerIcbGen(BaseCmdHandler):
         
         self.proj_data_dir = self.icp_proj_data_dir
         self.ai_handler: ChatHandler
-        self.role_name = "8_intent_code_behavior_gen"
+        self.role_name = "8_intent_behavior_code_gen"
         ai_handler = self._init_ai_handlers()
         if ai_handler is not None:
             self.ai_handler = ai_handler
@@ -46,34 +46,34 @@ class CmdHandlerIcbGen(BaseCmdHandler):
             
         print(f"{Colors.OKBLUE}开始生成半自然语言行为描述代码...{Colors.ENDC}")
 
-        # 读取ICB目录结构
-        icb_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
+        # 读取IBC目录结构
+        ibc_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
         try:
-            with open(icb_dir_file, 'r', encoding='utf-8') as f:
-                icb_content = json.load(f)
+            with open(ibc_dir_file, 'r', encoding='utf-8') as f:
+                ibc_content = json.load(f)
         except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取ICB目录结构失败: {e}{Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 读取IBC目录结构失败: {e}{Colors.ENDC}")
             return
         
-        if not icb_content:
-            print(f"  {Colors.FAIL}错误: ICB目录结构内容为空{Colors.ENDC}")
+        if not ibc_content:
+            print(f"  {Colors.FAIL}错误: IBC目录结构内容为空{Colors.ENDC}")
             return
 
         # 检查是否包含必要的节点
-        if "proj_root" not in icb_content or "dependent_relation" not in icb_content:
-            print(f"  {Colors.FAIL}错误: ICB目录结构缺少必要的节点(proj_root或dependent_relation){Colors.ENDC}")
+        if "proj_root" not in ibc_content or "dependent_relation" not in ibc_content:
+            print(f"  {Colors.FAIL}错误: IBC目录结构缺少必要的节点(proj_root或dependent_relation){Colors.ENDC}")
             return
 
         # 从dependent_relation中获取文件创建顺序
-        proj_root = icb_content["proj_root"]
-        dependent_relation = icb_content["dependent_relation"]
+        proj_root = ibc_content["proj_root"]
+        dependent_relation = ibc_content["dependent_relation"]
         file_creation_order_list = DirJsonFuncs.build_file_creation_order(dependent_relation)
         
-        # 获取ICB目录名称
-        icb_dir_name = self._get_icb_directory_name()
+        # 获取IBC目录名称
+        ibc_dir_name = self._get_ibc_directory_name()
         
-        # 构建ICB目录路径
-        icb_root_path = os.path.join(self.work_dir, icb_dir_name)
+        # 构建IBC目录路径
+        ibc_root_path = os.path.join(self.work_dir, ibc_dir_name)
         
         # 构建src_staging目录路径
         staging_dir_path = os.path.join(self.work_dir, 'src_staging')
@@ -84,12 +84,12 @@ class CmdHandlerIcbGen(BaseCmdHandler):
             return
         
         # 为每个单文件生成半自然语言行为描述代码
-        self._generate_intent_code_behavior(icb_root_path, staging_dir_path, proj_root, file_creation_order_list, dependent_relation)
+        self._generate_intent_behavior_code(ibc_root_path, staging_dir_path, proj_root, file_creation_order_list, dependent_relation)
         
         print(f"{Colors.OKGREEN}半自然语言行为描述代码生成命令执行完毕!{Colors.ENDC}")
 
-    def _get_icb_directory_name(self) -> str:
-        """获取ICB目录名称，优先从配置文件读取behavioral_layer_dir，失败则使用默认值"""
+    def _get_ibc_directory_name(self) -> str:
+        """获取IBC目录名称，优先从配置文件读取behavioral_layer_dir，失败则使用默认值"""
         icp_config_file = os.path.join(self.icp_proj_data_dir, 'icp_config.json')
         try:
             with open(icp_config_file, 'r', encoding='utf-8') as f:
@@ -100,17 +100,17 @@ class CmdHandlerIcbGen(BaseCmdHandler):
             if behavioral_layer_dir:
                 return behavioral_layer_dir
             else:
-                return "ICB"
+                return "IBC"
         except FileNotFoundError:
-            return "ICB"
+            return "IBC"
         except json.JSONDecodeError as e:
-            return "ICB"
+            return "IBC"
         except Exception as e:
-            return "ICB"
+            return "IBC"
 
-    def _generate_intent_code_behavior(
+    def _generate_intent_behavior_code(
             self, 
-            icb_root_path: str,
+            ibc_root_path: str,
             staging_dir_path: str,  # 添加src_staging目录路径参数
             proj_root_content: Dict, 
             file_creation_order_list: List[str],
@@ -151,7 +151,7 @@ class CmdHandlerIcbGen(BaseCmdHandler):
                     available_file_desc_dict[file_key] = file_description
             
             # 生成新的半自然语言行为描述代码
-            intent_code_behavior = self._create_intent_code_behavior(
+            intent_behavior_code = self._create_intent_behavior_code(
                 file_path,
                 file_req_content,
                 user_requirements,
@@ -160,7 +160,7 @@ class CmdHandlerIcbGen(BaseCmdHandler):
             )
 
             # 移除可能的代码块标记
-            lines = intent_code_behavior.split('\n')  # 修复错误的变量名
+            lines = intent_behavior_code.split('\n')  # 修复错误的变量名
             if lines and lines[0].strip().startswith('```'):
                 lines = lines[1:]
             if lines and lines[-1].strip().startswith('```'):
@@ -168,8 +168,8 @@ class CmdHandlerIcbGen(BaseCmdHandler):
             cleaned_content = '\n'.join(lines).strip()
             
             if cleaned_content:
-                # 保存半自然语言行为描述代码到ICB目录下的文件
-                self._save_intent_code_behavior(icb_root_path, file_path, cleaned_content)
+                # 保存半自然语言行为描述代码到IBC目录下的文件
+                self._save_intent_behavior_code(ibc_root_path, file_path, cleaned_content)
                 
                 # 将当前文件的描述添加到累积字典中，供后续文件参考
                 accumulated_descriptions_dict[file_path] = f"文件 {file_path} 的接口描述:\n{file_req_content}"
@@ -216,7 +216,7 @@ class CmdHandlerIcbGen(BaseCmdHandler):
         
         return '\n'.join(section_lines)
 
-    def _create_intent_code_behavior(
+    def _create_intent_behavior_code(
         self, 
         file_path: str, 
         file_req_content: str,
@@ -227,7 +227,7 @@ class CmdHandlerIcbGen(BaseCmdHandler):
         """创建新的半自然语言行为描述代码"""
         # 构建用户提示词
         app_data_manager = get_app_data_manager()
-        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'intent_code_behavior_gen_user.md')
+        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'intent_behavior_code_gen_user.md')
         try:
             with open(user_prompt_file, 'r', encoding='utf-8') as f:
                 user_prompt_template = f.read()
@@ -263,9 +263,9 @@ class CmdHandlerIcbGen(BaseCmdHandler):
         response_content = asyncio.run(self._get_ai_response(self.ai_handler, user_prompt))
         return response_content
 
-    def _save_intent_code_behavior(self, icb_root_path: str, file_path: str, content: str):
+    def _save_intent_behavior_code(self, ibc_root_path: str, file_path: str, content: str):
         """保存半自然语言行为描述代码到文件"""
-        behavior_file_path = os.path.join(icb_root_path, f"{file_path}.icb")
+        behavior_file_path = os.path.join(ibc_root_path, f"{file_path}.ibc")
         try:
             # 确保目标目录存在
             os.makedirs(os.path.dirname(behavior_file_path), exist_ok=True)
@@ -277,10 +277,10 @@ class CmdHandlerIcbGen(BaseCmdHandler):
 
     def _check_cmd_requirement(self) -> bool:
         """验证命令的前置条件"""
-        # 检查ICB目录结构文件是否存在
-        icb_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
-        if not os.path.exists(icb_dir_file):
-            print(f"  {Colors.WARNING}警告: ICB目录结构文件不存在，请先执行one_file_req_gen命令{Colors.ENDC}")
+        # 检查IBC目录结构文件是否存在
+        ibc_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
+        if not os.path.exists(ibc_dir_file):
+            print(f"  {Colors.WARNING}警告: IBC目录结构文件不存在，请先执行one_file_req_gen命令{Colors.ENDC}")
             return False
         
         return True
@@ -304,9 +304,9 @@ class CmdHandlerIcbGen(BaseCmdHandler):
             print(f"错误: 读取配置文件失败: {e}")
             return None
         
-        # 优先检查是否有intent_code_behavior_gen_handler配置
-        if 'intent_code_behavior_gen_handler' in config:
-            chat_api_config = config['intent_code_behavior_gen_handler']
+        # 优先检查是否有intent_behavior_code_gen_handler配置
+        if 'intent_behavior_code_gen_handler' in config:
+            chat_api_config = config['intent_behavior_code_gen_handler']
             handler_config = ChatApiConfig(
                 base_url=chat_api_config.get('api-url', ''),
                 api_key=SecretStr(chat_api_config.get('api-key', '')),
@@ -320,7 +320,7 @@ class CmdHandlerIcbGen(BaseCmdHandler):
                 model=chat_api_config.get('model', '')
             )
         else:
-            print("错误: 配置文件缺少intent_code_behavior_gen_handler或coder_handler配置")
+            print("错误: 配置文件缺少intent_behavior_code_gen_handler或coder_handler配置")
             return None
 
         app_data_manager = get_app_data_manager()

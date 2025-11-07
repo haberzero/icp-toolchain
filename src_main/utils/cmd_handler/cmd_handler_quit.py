@@ -14,7 +14,7 @@ class CmdHandlerQuit(BaseCmdHandler):
             name="quit",
             aliases=["exit", "q"],
             description="退出程序 (或ctrl + c 以后按下回车)",
-            help_text="使用此命令退出ICB工具",
+            help_text="使用此命令退出IBC工具",
         )
     
     def execute(self):

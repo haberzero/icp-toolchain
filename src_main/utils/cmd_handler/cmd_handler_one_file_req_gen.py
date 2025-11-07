@@ -16,7 +16,7 @@ from libs.dir_json_funcs import DirJsonFuncs
 
 
 class CmdHandlerOneFileReqGen(BaseCmdHandler):
-    """ICB目录结构下创建单文件需求描述并生成最新依赖关系"""
+    """IBC目录结构下创建单文件需求描述并生成最新依赖关系"""
     
     def __init__(self):
         super().__init__()
@@ -24,7 +24,7 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
             name="one_file_req_gen",
             aliases=["OFR"],
             description="在文件系统中创建src_staging目录结构以及one_file_req.txt文件",
-            help_text="根据已有的dir_content.json文件的内容在src_staging目录结构下创建单文件的编程需求描述, 为ICB的生成做准备",
+            help_text="根据已有的dir_content.json文件的内容在src_staging目录结构下创建单文件的编程需求描述, 为IBC的生成做准备",
         )
         proj_cfg_manager = get_proj_cfg_manager()
         self.work_dir = proj_cfg_manager.get_work_dir()
@@ -45,11 +45,11 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
             self.ai_handler_2.init_chat_chain()
 
     def execute(self):
-        """执行ICB目录结构创建"""
+        """执行IBC目录结构创建"""
         if not self.is_cmd_valid():
             return
             
-        print(f"{Colors.OKBLUE}开始创建ICB目录结构...{Colors.ENDC}")
+        print(f"{Colors.OKBLUE}开始创建IBC目录结构...{Colors.ENDC}")
 
         # 读取经过依赖项修复的目录结构
         final_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_refined.json')
@@ -95,12 +95,12 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         cycle_detected = DirJsonFuncs.detect_circular_dependencies(new_dependent_relation)
         if cycle_detected:
             print(f"  {Colors.FAIL}错误: 检测到循环依赖: {cycle_detected}{Colors.ENDC}")
-            return {}
+            return
 
         # 生成dir_content.json文件，使用新生成的依赖关系
         self._generate_dir_content_json(proj_root, new_dependent_relation)
         
-        print(f"{Colors.OKGREEN}ICB目录结构创建命令执行完毕!{Colors.ENDC}")
+        print(f"{Colors.OKGREEN}IBC目录结构创建命令执行完毕!{Colors.ENDC}")
 
     def _generate_file_requirements_1(
             self, 
@@ -336,7 +336,7 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
 
     def _generate_file_dependencies_2(
         self,
-        icb_root_path: str,
+        ibc_root_path: str,
         file_creation_order_list: List[str],
         file_desc_dict: Dict[str, str],
         proj_root: Dict
@@ -355,7 +355,7 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
                 del available_file_desc_dict[file_path]
             
             # 获取当前文件的需求描述
-            req_file_path = os.path.join(icb_root_path, f"{file_path}_one_file_req.txt")
+            req_file_path = os.path.join(ibc_root_path, f"{file_path}_one_file_req.txt")
             try:
                 with open(req_file_path, 'r', encoding='utf-8') as f:
                     file_requirement_content = f.read()
@@ -583,13 +583,13 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
 
         return ai_handler_1, ai_handler_2
 
-    def _build_file_desc_dict(self, icb_root_path: str, file_creation_order_list: List[str]) -> Dict[str, str]:
+    def _build_file_desc_dict(self, ibc_root_path: str, file_creation_order_list: List[str]) -> Dict[str, str]:
         """构建文件描述字典"""
         file_desc_dict = {}
         
         # 遍历所有文件，提取其描述内容
         for file_path in file_creation_order_list:
-            req_file_path = os.path.join(icb_root_path, f"{file_path}_one_file_req.txt")
+            req_file_path = os.path.join(ibc_root_path, f"{file_path}_one_file_req.txt")
             try:
                 with open(req_file_path, 'r', encoding='utf-8') as f:
                     file_requirement_content = f.read()

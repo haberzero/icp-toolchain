@@ -15,16 +15,16 @@ from utils.ai_handler.chat_handler import ChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
 
 
-class CmdHandlerIcbToTargetCode(BaseCmdHandler):
-    """将ICB半自然语言行为描述代码转换为目标编程语言代码"""
+class CmdHandlerIbcToTargetCode(BaseCmdHandler):
+    """将IBC半自然语言行为描述代码转换为目标编程语言代码"""
     
     def __init__(self):
         super().__init__()
         self.command_info = CommandInfo(
-            name="icb_to_target_code",
+            name="ibc_to_target_code",
             aliases=["GG"],
-            description="将ICB半自然语言行为描述代码转换为目标编程语言代码",
-            help_text="根据ICB行为描述生成符合目标编程语言语法的可执行代码",
+            description="将IBC半自然语言行为描述代码转换为目标编程语言代码",
+            help_text="根据IBC行为描述生成符合目标编程语言语法的可执行代码",
         )
         proj_cfg_manager = get_proj_cfg_manager()
         self.work_dir = proj_cfg_manager.get_work_dir()
@@ -33,63 +33,63 @@ class CmdHandlerIcbToTargetCode(BaseCmdHandler):
         
         self.proj_data_dir = self.icp_proj_data_dir
         self.ai_handler: ChatHandler
-        self.role_name = "9_icb_to_target_code"
+        self.role_name = "9_ibc_to_target_code"
         ai_handler = self._init_ai_handlers()
         if ai_handler is not None:
             self.ai_handler = ai_handler
             self.ai_handler.init_chat_chain()
 
     def execute(self):
-        """执行ICB到目标代码的转换"""
+        """执行IBC到目标代码的转换"""
         if not self.is_cmd_valid():
             return
             
-        print(f"{Colors.OKBLUE}开始将ICB行为描述转换为目标编程语言代码...{Colors.ENDC}")
+        print(f"{Colors.OKBLUE}开始将IBC行为描述转换为目标编程语言代码...{Colors.ENDC}")
 
-        # 读取ICB目录结构
-        icb_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
+        # 读取IBC目录结构
+        ibc_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
         try:
-            with open(icb_dir_file, 'r', encoding='utf-8') as f:
-                icb_content = json.load(f)
+            with open(ibc_dir_file, 'r', encoding='utf-8') as f:
+                ibc_content = json.load(f)
         except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取ICB目录结构失败: {e}{Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 读取IBC目录结构失败: {e}{Colors.ENDC}")
             return
         
-        if not icb_content:
-            print(f"  {Colors.FAIL}错误: ICB目录结构内容为空{Colors.ENDC}")
+        if not ibc_content:
+            print(f"  {Colors.FAIL}错误: IBC目录结构内容为空{Colors.ENDC}")
             return
 
         # 检查是否包含必要的节点
-        if "proj_root" not in icb_content or "dependent_relation" not in icb_content:
-            print(f"  {Colors.FAIL}错误: ICB目录结构缺少必要的节点(proj_root或dependent_relation){Colors.ENDC}")
+        if "proj_root" not in ibc_content or "dependent_relation" not in ibc_content:
+            print(f"  {Colors.FAIL}错误: IBC目录结构缺少必要的节点(proj_root或dependent_relation){Colors.ENDC}")
             return
 
         # 从dependent_relation中获取文件创建顺序
-        proj_root = icb_content["proj_root"]
-        dependent_relation = icb_content["dependent_relation"]
+        proj_root = ibc_content["proj_root"]
+        dependent_relation = ibc_content["dependent_relation"]
         file_creation_order_list = DirJsonFuncs.build_file_creation_order(dependent_relation)
         
         # 获取目标代码目录名称
         target_dir_name = self._get_target_directory_name()
         
-        # 获取ICB目录名称
-        icb_dir_name = self._get_icb_directory_name()
+        # 获取IBC目录名称
+        ibc_dir_name = self._get_ibc_directory_name()
         
-        # 构建ICB目录路径
-        icb_root_path = os.path.join(self.work_dir, icb_dir_name)
+        # 构建IBC目录路径
+        ibc_root_path = os.path.join(self.work_dir, ibc_dir_name)
         
-        # 检查ICB目录是否存在
-        if not os.path.exists(icb_root_path):
-            print(f"  {Colors.FAIL}错误: ICB目录不存在，请先执行one_file_req_gen命令创建目录结构{Colors.ENDC}")
+        # 检查IBC目录是否存在
+        if not os.path.exists(ibc_root_path):
+            print(f"  {Colors.FAIL}错误: IBC目录不存在，请先执行one_file_req_gen命令创建目录结构{Colors.ENDC}")
             return
         
-        # 为每个ICB文件生成目标编程语言代码
-        self._generate_target_code(icb_root_path, proj_root, file_creation_order_list, dependent_relation)
+        # 为每个IBC文件生成目标编程语言代码
+        self._generate_target_code(ibc_root_path, proj_root, file_creation_order_list, dependent_relation)
         
         print(f"{Colors.OKGREEN}目标编程语言代码生成命令执行完毕!{Colors.ENDC}")
 
-    def _get_icb_directory_name(self) -> str:
-        """获取ICB目录名称，优先从配置文件读取behavioral_layer_dir，失败则使用默认值"""
+    def _get_ibc_directory_name(self) -> str:
+        """获取IBC目录名称，优先从配置文件读取behavioral_layer_dir，失败则使用默认值"""
         icp_config_file = os.path.join(self.icp_proj_data_dir, 'icp_config.json')
         try:
             with open(icp_config_file, 'r', encoding='utf-8') as f:
@@ -100,17 +100,17 @@ class CmdHandlerIcbToTargetCode(BaseCmdHandler):
             if behavioral_layer_dir:
                 return behavioral_layer_dir
             else:
-                return "ICB"
+                return "IBC"
         except FileNotFoundError:
-            return "ICB"
+            return "IBC"
         except json.JSONDecodeError as e:
-            return "ICB"
+            return "IBC"
         except Exception as e:
-            return "ICB"
+            return "IBC"
 
     def _generate_target_code(
             self, 
-            icb_root_path: str, 
+            ibc_root_path: str, 
             proj_root_content: Dict, 
             file_creation_order_list: List[str],
             dependent_relation: Dict[str, List[str]]
@@ -136,13 +136,13 @@ class CmdHandlerIcbToTargetCode(BaseCmdHandler):
         
         # 按照依赖顺序为每个文件生成目标编程语言代码
         for file_path in file_creation_order_list:
-            # 读取ICB文件内容
-            icb_file_path = os.path.join(icb_root_path, f"{file_path}.icb")
+            # 读取IBC文件内容
+            ibc_file_path = os.path.join(ibc_root_path, f"{file_path}.ibc")
             try:
-                with open(icb_file_path, 'r', encoding='utf-8') as f:
-                    icb_content = f.read()
+                with open(ibc_file_path, 'r', encoding='utf-8') as f:
+                    ibc_content = f.read()
             except Exception as e:
-                print(f"  {Colors.FAIL}错误: 读取ICB文件失败 {icb_file_path}: {e}{Colors.ENDC}")
+                print(f"  {Colors.FAIL}错误: 读取IBC文件失败 {ibc_file_path}: {e}{Colors.ENDC}")
                 continue
             
             # 为每个文件生成目标编程语言代码
@@ -158,7 +158,7 @@ class CmdHandlerIcbToTargetCode(BaseCmdHandler):
             # 生成目标编程语言代码
             target_code = self._create_target_code(
                 file_path,
-                icb_content,
+                ibc_content,
                 target_language,
                 proj_root_content,  # 传递proj_root_content用于生成项目结构
                 available_file_code_dict  # 传递依赖文件的内容
@@ -228,7 +228,7 @@ class CmdHandlerIcbToTargetCode(BaseCmdHandler):
     def _create_target_code(
         self, 
         file_path: str, 
-        icb_content: str,
+        ibc_content: str,
         target_language: str,
         proj_root_content: Dict,
         dependent_files_content: Dict[str, str]
@@ -236,7 +236,7 @@ class CmdHandlerIcbToTargetCode(BaseCmdHandler):
         """创建目标编程语言代码"""
         # 构建用户提示词
         app_data_manager = get_app_data_manager()
-        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'icb_to_target_code_user.md')
+        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'ibc_to_target_code_user.md')
         try:
             with open(user_prompt_file, 'r', encoding='utf-8') as f:
                 user_prompt_template = f.read()
@@ -257,7 +257,7 @@ class CmdHandlerIcbToTargetCode(BaseCmdHandler):
         user_prompt = user_prompt.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
         user_prompt = user_prompt.replace('PROJECT_STRUCTURE_PLACEHOLDER', project_structure_json)
         user_prompt = user_prompt.replace('CURRENT_FILE_PATH_PLACEHOLDER', file_path)
-        user_prompt = user_prompt.replace('ICB_CONTENT_PLACEHOLDER', icb_content)
+        user_prompt = user_prompt.replace('IBC_CONTENT_PLACEHOLDER', ibc_content)
         user_prompt = user_prompt.replace('DEPENDENT_FILES_CONTENT_PLACEHOLDER', dependent_files_content_str)
 
         # 调用AI生成目标编程语言代码
@@ -298,10 +298,10 @@ class CmdHandlerIcbToTargetCode(BaseCmdHandler):
 
     def _check_cmd_requirement(self) -> bool:
         """验证命令的前置条件"""
-        # 检查ICB目录结构文件是否存在
-        icb_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
-        if not os.path.exists(icb_dir_file):
-            print(f"  {Colors.WARNING}警告: ICB目录结构文件不存在，请先执行one_file_req_gen命令{Colors.ENDC}")
+        # 检查IBC目录结构文件是否存在
+        ibc_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
+        if not os.path.exists(ibc_dir_file):
+            print(f"  {Colors.WARNING}警告: IBC目录结构文件不存在，请先执行one_file_req_gen命令{Colors.ENDC}")
             return False
         
         return True
