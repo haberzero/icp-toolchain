@@ -34,8 +34,8 @@ class IbcParser:
         self.uid_generator = IbcParserUidGenerator()
         self.line_num = 0
         # 修改state_stack为直接存储状态机实例，而不是ParserState枚举
-        self.state_stack: List[Tuple[BaseState, int]] = [(TopLevelState(0, self.uid_generator), 0)]  # 栈内容：(状态机实例, 栈顶节点uid)
         self.ast_nodes: Dict[int, AstNode] = {0: AstNode(uid=0, node_type=AstNodeType.DEFAULT)}  # 根节点
+        self.state_stack: List[Tuple[BaseState, int]] = [(TopLevelState(0, self.uid_generator, self.ast_nodes), 0)]  # 栈内容：(状态机实例, 栈顶节点uid)
         
         # 暂存的特殊行内容
         self.pending_intent_comment = ""
@@ -93,7 +93,7 @@ class IbcParser:
                 elif self.is_new_line_start and token.type is not IbcTokenType.KEYWORDS:
                     self.is_new_line_start = False
                     current_state_obj, parent_uid = self.state_stack[-1]
-                    state_obj = BehaviorStepState(parent_uid, self.uid_generator)
+                    state_obj = BehaviorStepState(parent_uid, self.uid_generator, self.ast_nodes)
                     self.state_stack.append((state_obj, parent_uid))
                     self._process_token_in_current_state(token)
                 
@@ -154,7 +154,7 @@ class IbcParser:
                 if self.func_pending_indent_level == 1:
                     self.func_pending_indent_level = 0
                     if isinstance(self.last_ast_node, FunctionNode):
-                        state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator)
+                        state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
                         self.state_stack.append((state_obj, self.last_ast_node.uid))
                     else:
                         raise ParserError(f"Line {token.line_num}: Parser TOP --- Should not happen, contact dev please")
@@ -168,11 +168,11 @@ class IbcParser:
         """处理缩进"""
         # 根据最新的AST节点判断应该压入的状态
         if isinstance(self.last_ast_node, ClassNode):
-            state_obj = ClassContentState(self.last_ast_node.uid, self.uid_generator)
+            state_obj = ClassContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
             self.state_stack.append((state_obj, self.last_ast_node.uid))
 
         elif isinstance(self.last_ast_node, FunctionNode):
-            state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator)
+            state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
             self.state_stack.append((state_obj, self.last_ast_node.uid))
 
         elif isinstance(self.last_ast_node, BehaviorStepNode):
@@ -180,7 +180,7 @@ class IbcParser:
                 raise ParserError(f"Line {token.line_num}: Behavior step must be inside a function")
 
             if self.last_ast_node.new_block_flag:
-                state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator)
+                state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
                 self.state_stack.append((state_obj, self.last_ast_node.uid))
             else:
                 raise ParserError(f"Line {token.line_num}: Invalid indent, missing colon after behavior step to start a new block")
@@ -209,17 +209,17 @@ class IbcParser:
         # 根据关键字类型压入相应的状态
         state_obj = None
         if token.type == IbcTokenType.KEYWORDS and token.value == "module":
-            state_obj = ModuleDeclState(parent_uid, self.uid_generator)
+            state_obj = ModuleDeclState(parent_uid, self.uid_generator, self.ast_nodes)
         elif token.type == IbcTokenType.KEYWORDS and token.value == "var":
-            state_obj = VarDeclState(parent_uid, self.uid_generator)
+            state_obj = VarDeclState(parent_uid, self.uid_generator, self.ast_nodes)
         elif token.type == IbcTokenType.KEYWORDS and token.value == "description":
-            state_obj = DescriptionState(parent_uid, self.uid_generator)
+            state_obj = DescriptionState(parent_uid, self.uid_generator, self.ast_nodes)
         elif token.type == IbcTokenType.KEYWORDS and token.value == "class":
-            state_obj = ClassDeclState(parent_uid, self.uid_generator)
+            state_obj = ClassDeclState(parent_uid, self.uid_generator, self.ast_nodes)
         elif token.type == IbcTokenType.KEYWORDS and token.value == "func":
-            state_obj = FuncDeclState(parent_uid, self.uid_generator)
+            state_obj = FuncDeclState(parent_uid, self.uid_generator, self.ast_nodes)
         elif token.type == IbcTokenType.KEYWORDS and token.value == "@":
-            state_obj = IntentCommentState(parent_uid, self.uid_generator)
+            state_obj = IntentCommentState(parent_uid, self.uid_generator, self.ast_nodes)
         else:
             raise ParserError(f"Line {token.line_num}: Invalid keyword token'{token.value}', should not happen, contact dev please")
             
@@ -236,5 +236,5 @@ class IbcParser:
         
         # 状态机实例处理token
         # TODO: 现在的process_token方法 不应该传递进去ast_nodes，这个变量应该在状态机实例创建时就被传递，以后改一下
-        current_state_obj.process_token(token, self.ast_nodes)
+        current_state_obj.process_token(token)
 
