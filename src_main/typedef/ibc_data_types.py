@@ -70,6 +70,17 @@ class AstNode:
             "node_type": self.node_type.value if self.node_type else None,
             "line_number": self.line_number
         }
+    
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> 'AstNode':
+        """从字典创建节点"""
+        return AstNode(
+            uid=data.get("uid", 0),
+            parent_uid=data.get("parent_uid", 0),
+            children_uids=data.get("children_uids", []),
+            node_type=AstNodeType(data["node_type"]) if data.get("node_type") else AstNodeType.DEFAULT,
+            line_number=data.get("line_number", 0)
+        )
 
     def __repr__(self):
         return f"AstNode(uid={self.uid}, type={self.node_type})"
@@ -99,6 +110,19 @@ class ModuleNode(AstNode):
             "content": self.content
         })
         return result
+    
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> 'ModuleNode':
+        """从字典创建节点"""
+        return ModuleNode(
+            uid=data.get("uid", 0),
+            parent_uid=data.get("parent_uid", 0),
+            children_uids=data.get("children_uids", []),
+            node_type=AstNodeType(data["node_type"]) if data.get("node_type") else AstNodeType.MODULE,
+            line_number=data.get("line_number", 0),
+            identifier=data.get("identifier", ""),
+            content=data.get("content", "")
+        )
 
     def __repr__(self):
         return f"ModuleNode(uid={self.uid}, identifier={self.identifier})"
@@ -122,6 +146,21 @@ class ClassNode(AstNode):
             "params": self.inh_params
         })
         return result
+    
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> 'ClassNode':
+        """从字典创建节点"""
+        return ClassNode(
+            uid=data.get("uid", 0),
+            parent_uid=data.get("parent_uid", 0),
+            children_uids=data.get("children_uids", []),
+            node_type=AstNodeType(data["node_type"]) if data.get("node_type") else AstNodeType.CLASS,
+            line_number=data.get("line_number", 0),
+            identifier=data.get("identifier", ""),
+            external_desc=data.get("external_desc", ""),
+            intent_comment=data.get("intent_comment", ""),
+            inh_params=data.get("params", {})
+        )
 
     def __repr__(self):
         return f"ClassNode(uid={self.uid}, identifier={self.identifier})"
@@ -145,6 +184,21 @@ class FunctionNode(AstNode):
             "params": self.params
         })
         return result
+    
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> 'FunctionNode':
+        """从字典创建节点"""
+        return FunctionNode(
+            uid=data.get("uid", 0),
+            parent_uid=data.get("parent_uid", 0),
+            children_uids=data.get("children_uids", []),
+            node_type=AstNodeType(data["node_type"]) if data.get("node_type") else AstNodeType.FUNCTION,
+            line_number=data.get("line_number", 0),
+            identifier=data.get("identifier", ""),
+            external_desc=data.get("external_desc", ""),
+            intent_comment=data.get("intent_comment", ""),
+            params=data.get("params", {})
+        )
 
     def __repr__(self):
         return f"FunctionNode(uid={self.uid}, identifier={self.identifier})"
@@ -168,6 +222,21 @@ class VariableNode(AstNode):
             "intent_comment": self.intent_comment
         })
         return result
+    
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> 'VariableNode':
+        """从字典创建节点"""
+        return VariableNode(
+            uid=data.get("uid", 0),
+            parent_uid=data.get("parent_uid", 0),
+            children_uids=data.get("children_uids", []),
+            node_type=AstNodeType(data["node_type"]) if data.get("node_type") else AstNodeType.VARIABLE,
+            line_number=data.get("line_number", 0),
+            identifier=data.get("identifier", ""),
+            content=data.get("content", ""),
+            external_desc=data.get("external_desc", ""),
+            intent_comment=data.get("intent_comment", "")
+        )
 
     def __repr__(self):
         return f"VariableNode(uid={self.uid}, identifier={self.identifier})"
@@ -189,6 +258,20 @@ class BehaviorStepNode(AstNode):
             "new_block_flag": self.new_block_flag
         })
         return result
+    
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> 'BehaviorStepNode':
+        """从字典创建节点"""
+        return BehaviorStepNode(
+            uid=data.get("uid", 0),
+            parent_uid=data.get("parent_uid", 0),
+            children_uids=data.get("children_uids", []),
+            node_type=AstNodeType(data["node_type"]) if data.get("node_type") else AstNodeType.BEHAVIOR_STEP,
+            line_number=data.get("line_number", 0),
+            content=data.get("content", ""),
+            symbol_refs=data.get("symbol_refs", []),
+            new_block_flag=data.get("new_block_flag", False)
+        )
 
     def __repr__(self):
         return f"BehaviorStepNode(uid={self.uid})"

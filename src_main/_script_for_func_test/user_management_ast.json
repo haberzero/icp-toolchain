@@ -1,0 +1,183 @@
+{
+  "0": {
+    "uid": 0,
+    "parent_uid": 0,
+    "children_uids": [
+      1,
+      2,
+      13
+    ],
+    "node_type": "DEFAULT",
+    "line_number": 0,
+    "_class_type": "AstNode"
+  },
+  "1": {
+    "uid": 1,
+    "parent_uid": 0,
+    "children_uids": [],
+    "node_type": "MODULE",
+    "line_number": 2,
+    "identifier": "UserManagement",
+    "content": "用户管理模块",
+    "_class_type": "ModuleNode"
+  },
+  "2": {
+    "uid": 2,
+    "parent_uid": 0,
+    "children_uids": [
+      3,
+      4,
+      5
+    ],
+    "node_type": "CLASS",
+    "line_number": 4,
+    "identifier": "User",
+    "external_desc": "",
+    "intent_comment": "",
+    "params": {
+      "": ""
+    },
+    "_class_type": "ClassNode"
+  },
+  "3": {
+    "uid": 3,
+    "parent_uid": 2,
+    "children_uids": [],
+    "node_type": "VARIABLE",
+    "line_number": 5,
+    "identifier": "username",
+    "content": "用户名",
+    "external_desc": "",
+    "intent_comment": "",
+    "_class_type": "VariableNode"
+  },
+  "4": {
+    "uid": 4,
+    "parent_uid": 2,
+    "children_uids": [],
+    "node_type": "VARIABLE",
+    "line_number": 6,
+    "identifier": "email",
+    "content": "电子邮件地址",
+    "external_desc": "",
+    "intent_comment": "",
+    "_class_type": "VariableNode"
+  },
+  "5": {
+    "uid": 5,
+    "parent_uid": 2,
+    "children_uids": [
+      6,
+      7,
+      8,
+      11
+    ],
+    "node_type": "FUNCTION",
+    "line_number": 10,
+    "identifier": "login",
+    "external_desc": "用户登录功能",
+    "intent_comment": "验证用户名和密码，返回登录结果",
+    "params": {
+      "username": "",
+      "password": ""
+    },
+    "_class_type": "FunctionNode"
+  },
+  "6": {
+    "uid": 6,
+    "parent_uid": 5,
+    "children_uids": [],
+    "node_type": "BEHAVIOR_STEP",
+    "line_number": 11,
+    "content": "检查用户名是否存在 username",
+    "symbol_refs": [
+      "username"
+    ],
+    "new_block_flag": false,
+    "_class_type": "BehaviorStepNode"
+  },
+  "7": {
+    "uid": 7,
+    "parent_uid": 5,
+    "children_uids": [],
+    "node_type": "BEHAVIOR_STEP",
+    "line_number": 12,
+    "content": "验证密码是否正确 password",
+    "symbol_refs": [
+      "password"
+    ],
+    "new_block_flag": false,
+    "_class_type": "BehaviorStepNode"
+  },
+  "8": {
+    "uid": 8,
+    "parent_uid": 5,
+    "children_uids": [
+      9,
+      10
+    ],
+    "node_type": "BEHAVIOR_STEP",
+    "line_number": 13,
+    "content": "如果验证成功:",
+    "symbol_refs": [],
+    "new_block_flag": true,
+    "_class_type": "BehaviorStepNode"
+  },
+  "9": {
+    "uid": 9,
+    "parent_uid": 8,
+    "children_uids": [],
+    "node_type": "BEHAVIOR_STEP",
+    "line_number": 14,
+    "content": "创建会话",
+    "symbol_refs": [],
+    "new_block_flag": false,
+    "_class_type": "BehaviorStepNode"
+  },
+  "10": {
+    "uid": 10,
+    "parent_uid": 8,
+    "children_uids": [],
+    "node_type": "BEHAVIOR_STEP",
+    "line_number": 15,
+    "content": "返回成功",
+    "symbol_refs": [],
+    "new_block_flag": false,
+    "_class_type": "BehaviorStepNode"
+  },
+  "11": {
+    "uid": 11,
+    "parent_uid": 5,
+    "children_uids": [
+      12
+    ],
+    "node_type": "BEHAVIOR_STEP",
+    "line_number": 16,
+    "content": "否则:",
+    "symbol_refs": [],
+    "new_block_flag": true,
+    "_class_type": "BehaviorStepNode"
+  },
+  "12": {
+    "uid": 12,
+    "parent_uid": 11,
+    "children_uids": [],
+    "node_type": "BEHAVIOR_STEP",
+    "line_number": 17,
+    "content": "返回失败",
+    "symbol_refs": [],
+    "new_block_flag": false,
+    "_class_type": "BehaviorStepNode"
+  },
+  "13": {
+    "uid": 13,
+    "parent_uid": 0,
+    "children_uids": [],
+    "node_type": "BEHAVIOR_STEP",
+    "line_number": 18,
+    "content": "",
+    "symbol_refs": [],
+    "new_block_flag": false,
+    "_class_type": "BehaviorStepNode"
+  }
+}

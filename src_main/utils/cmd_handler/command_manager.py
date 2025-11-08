@@ -11,7 +11,7 @@ from utils.cmd_handler.cmd_handler_depend_analysis import CmdHandlerDependAnalys
 from utils.cmd_handler.cmd_handler_depend_refine import CmdHandlerDependRefine
 from utils.cmd_handler.cmd_handler_one_file_req_gen import CmdHandlerOneFileReqGen
 from utils.cmd_handler.cmd_handler_ibc_gen import CmdHandlerIbcGen
-# from utils.cmd_handler.cmd_handler_ibc_to_target_code import CmdHandlerIbcToTargetCode
+
 
 # TODO: 是否有必要进行倒置？
 # 给CommandManager实现一个register_command()方法，让各个CmdHandler注册自己？随后单独做一个工厂类放一个文件？
