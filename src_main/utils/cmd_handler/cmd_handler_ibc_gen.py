@@ -7,7 +7,7 @@ from pydantic import SecretStr
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, ChatApiConfig, Colors
 
 from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
-from cfg.app_data_manager import get_instance as get_app_data_manager
+from data_exchange.app_data_manager import get_instance as get_app_data_manager
 from data_exchange.user_data_manager import get_instance as get_user_data_manager
 
 from utils.cmd_handler.base_cmd_handler import BaseCmdHandler

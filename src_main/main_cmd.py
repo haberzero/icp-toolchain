@@ -6,7 +6,7 @@ import tkinter as tk
 from ui.path_selector import PathSelector
 
 from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
-from cfg.app_data_manager import get_instance as get_app_data_manager
+from data_exchange.app_data_manager import get_instance as get_app_data_manager
 from data_exchange.user_data_manager import get_instance as get_user_data_manager
 from app.cmd_interface import CmdInterface
 
