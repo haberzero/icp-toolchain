@@ -77,33 +77,53 @@
     - constraints: 禁止添加未定义字段
     - error_handling: 缺失要素自动提示
 
-4. 示例说明
-
-完整需求示例
-- 标题: Web应用开发需求
-- 格式类型: JSON
-- 说明: 包含完整技术选型与模块拆解
-- 示例内容: |
+4. 模板示例
 
 ```json
 {
-    "required_libraries": [
-        {
-            "name": "react",
-            "version": "^18.0.0",
-            "license": "MIT",
-            "purpose": "前端UI框架"
-        },
-        {
-            "name": "chart.js",
-            "version": "^4.0.0",
-            "license": "MIT",
-            "purpose": "数据可视化"
-        }
+    "main_goal": "对主要编程需求的描述",
+    "core_functions": [
+        "核心功能简述1",
+        "核心功能简述2",
+        "核心功能简述3"
     ],
-    "module_breakdown": [
-        {
-            "module_name": "AuthModule",
+    "module_breakdown": {
+        "Name_of_Module_1": {
+            "responsibilities": [
+                "对当前模块的功能描述"
+            ],
+            "dependencies": [
+                "当前模块所需的依赖"
+            ]
+        },
+        "Name_of_Module_2": {
+            "responsibilities": [
+                "功能描述"
+            ],
+            "dependencies": [
+                "依赖描述"
+            ]
+        }
+    },
+    "required_libraries": {
+        "Name_of_Library": "第三方库用途描述",
+        "Name_of_Library2": "另一个第三方库用途描述"
+    }
+}
+```
+
+5. 完整需求示例
+
+```json
+{
+    "main_goal": "开发具备用户认证、实时数据更新和可视化展示的Web应用",
+    "core_functions": [
+        "用户身份验证",
+        "实时数据同步",
+        "可视化图表展示"
+    ],
+    "module_breakdown": {
+        "AuthModule": {
             "responsibilities": [
                 "用户登录",
                 "注册验证",
@@ -114,8 +134,7 @@
                 "axios"
             ]
         },
-        {
-            "module_name": "DataModule",
+        "DataModule": {
             "responsibilities": [
                 "数据获取",
                 "状态管理",
@@ -125,47 +144,23 @@
                 "socket.io",
                 "redux"
             ]
+        },
+        "ChartModule":{
+            "responsibilities": [
+                "数据可视化渲染展示"
+            ],
+            "dependencies": [
+                "chart.js"
+            ]
         }
-    ],
-    "technical_stack": {
-        "programming_language": "JavaScript(ES6+)",
-        "frontend_framework": "React 18",
-        "backend_technology": "Node.js",
-        "database": "MongoDB",
-        "additional_tools": [
-            "Webpack",
-            "Babel"
-        ]
     },
-    "requirement_specification": {
-        "core_functions": [
-            "用户身份验证",
-            "实时数据同步",
-            "可视化图表展示"
-        ],
-        "performance_requirements": [
-            "响应时间<200ms",
-            "支持1000+并发用户"
-        ],
-        "compatibility_requirements": [
-            "Chrome 90+",
-            "Firefox 88+",
-            "Safari 14+"
-        ]
-    },
-    "final_functional_goal": "开发具备用户认证、实时数据更新和可视化展示的企业级Web应用"
-}
-```
-
-不完整需求示例
-- 标题: 需求要素缺失提示
-- 格式类型: JSON
-- 说明: 未指定开发语言的处理示例
-- 示例内容: |
-```json
-{
-    "error": "需求要素不完整",
-    "missing_elements": ["开发语言"]
+    "required_libraries": {
+        "react": "前端UI框架",
+        "chart.js": "数据可视化",
+        "MongoDB": "数据库",
+        "React 18": "前端UI框架",
+        "Node.js": "后端运行环境"
+    }
 }
 ```
 
