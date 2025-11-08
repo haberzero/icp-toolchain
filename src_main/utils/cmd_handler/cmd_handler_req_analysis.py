@@ -125,8 +125,8 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
                 api_key=SecretStr(chat_api_config.get('api-key', '')),
                 model=chat_api_config.get('model', '')
             )
-        elif 'chat_handler' in config:
-            chat_api_config = config['chat_handler']
+        elif 'coder_handler' in config:
+            chat_api_config = config['coder_handler']
             handler_config = ChatApiConfig(
                 base_url=chat_api_config.get('api-url', ''),
                 api_key=SecretStr(chat_api_config.get('api-key', '')),
