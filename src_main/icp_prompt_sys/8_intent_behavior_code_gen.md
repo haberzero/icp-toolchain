@@ -335,13 +335,14 @@ module logging: 日志记录库
 description: 
     通用的REST API客户端，封装了重试机制、
     错误处理和请求日志记录功能
+@ 具备异步处理功能
 class ApiClient():
     var baseUrl: API服务基础地址
     var timeout: 请求超时时间
     var session: HTTP会话对象
     
     description: 发送GET请求到指定接口
-    @ 自动处理网络异常，最多重试3次
+    @ 异步函数
     func 获取数据(
         接口路径: 相对路径，不需要包含基础URL, 
         查询参数: 字典形式的查询参数
