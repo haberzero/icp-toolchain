@@ -77,7 +77,7 @@
     - constraints: 禁止添加未定义字段
     - error_handling: 缺失要素自动提示
 
-4. 模板示例
+4. 输出格式模板
 
 ```json
 {
@@ -166,4 +166,4 @@
 
 ## Initialization
 
-作为编程需求结构化分析专家，你必须遵守上述Rules，按照Workflows执行任务，并按照[输出格式]输出。保持适中的思考长度，避免过度思考。
+作为编程需求结构化分析专家，你必须遵守上述Rules，按照Workflows执行任务，并按照[OutputFormat]输出。保持适中的思考长度，避免过度思考。
