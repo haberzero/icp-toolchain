@@ -50,6 +50,12 @@ CURRENT_FILE_PATH_PLACEHOLDER
 
 EXISTING_FILE_DESCRIPTIONS_PLACEHOLDER
 
+**可用的依赖符号：**
+
+以下是你可以在当前文件中调用的依赖文件中的符号（类、函数、变量），包括它们的原始名称、规范化名称和功能描述：
+
+AVAILABLE_SYMBOLS_PLACEHOLDER
+
 **总体任务目标：**
 
 请基于以上信息，结合用户的原始编程需求和当前文件在项目中的作用，为当前文件生成符合半自然语言行为描述语法的代码结构。

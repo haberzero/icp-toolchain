@@ -1,4 +1,5 @@
 from enum import Enum
+import enum
 from typing import List, Dict, Any
 from dataclasses import dataclass, field
 
@@ -275,3 +276,13 @@ class BehaviorStepNode(AstNode):
 
     def __repr__(self):
         return f"BehaviorStepNode(uid={self.uid})"
+
+
+
+class VisibilityTypes(Enum):
+    PUBLIC = "public"
+    PRIVATE = "private"
+    PROTECTED = "protected"
+    FILE_LOCAL = "file_local"
+    MODULE_LOCAL = "module_local"
+    GLOBAL = "global"
