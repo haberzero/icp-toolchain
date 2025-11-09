@@ -36,6 +36,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self.work_dir = proj_cfg_manager.get_work_dir()
         self.icp_proj_data_dir = os.path.join(self.work_dir, '.icp_proj_data')
         self.icp_api_config_file = os.path.join(self.icp_proj_data_dir, 'icp_api_config.json')
+
+        self.checksums_file = os.path.join(self.icp_proj_data_dir, 'file_checksums.json') # 临时，后续应该仔细修改处理
+        self.ibc_build_dir = os.path.join(self.icp_proj_data_dir, 'ibc_build')
         
         self.proj_data_dir = self.icp_proj_data_dir
         self.ai_handler: ChatHandler
@@ -372,70 +375,70 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     
     # ========== 新增方法：文件校验值管理 ==========
     
-    # def _calculate_file_checksum(self, file_path: str) -> str:
-    #     """计算文件的SHA256校验值"""
-    #     try:
-    #         with open(file_path, 'rb') as f:
-    #             file_hash = hashlib.sha256()
-    #             while chunk := f.read(8192):
-    #                 file_hash.update(chunk)
-    #             return file_hash.hexdigest()
-    #     except Exception as e:
-    #         print(f"  {Colors.WARNING}警告: 计算文件校验值失败 {file_path}: {e}{Colors.ENDC}")
-    #         return ""
+    def _calculate_file_checksum(self, file_path: str) -> str:
+        """计算文件的SHA256校验值"""
+        try:
+            with open(file_path, 'rb') as f:
+                file_hash = hashlib.sha256()
+                while chunk := f.read(8192):
+                    file_hash.update(chunk)
+                return file_hash.hexdigest()
+        except Exception as e:
+            print(f"  {Colors.WARNING}警告: 计算文件校验值失败 {file_path}: {e}{Colors.ENDC}")
+            return ""
     
-    # def _load_file_checksums(self) -> Dict[str, Dict[str, str]]:
-    #     """加载文件校验值记录"""
-    #     if not os.path.exists(self.checksums_file):
-    #         return {}
+    def _load_file_checksums(self) -> Dict[str, Dict[str, str]]:
+        """加载文件校验值记录"""
+        if not os.path.exists(self.checksums_file):
+            return {}
         
-    #     try:
-    #         with open(self.checksums_file, 'r', encoding='utf-8') as f:
-    #             return json.load(f)
-    #     except Exception as e:
-    #         print(f"  {Colors.WARNING}警告: 读取校验值文件失败: {e}{Colors.ENDC}")
-    #         return {}
+        try:
+            with open(self.checksums_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"  {Colors.WARNING}警告: 读取校验值文件失败: {e}{Colors.ENDC}")
+            return {}
     
-    # def _save_file_checksums(self, checksums: Dict[str, Dict[str, str]]) -> None:
-    #     """保存文件校验值记录"""
-    #     try:
-    #         os.makedirs(os.path.dirname(self.checksums_file), exist_ok=True)
-    #         with open(self.checksums_file, 'w', encoding='utf-8') as f:
-    #             json.dump(checksums, f, ensure_ascii=False, indent=2)
-    #     except Exception as e:
-    #         print(f"  {Colors.WARNING}警告: 保存校验值文件失败: {e}{Colors.ENDC}")
+    def _save_file_checksums(self, checksums: Dict[str, Dict[str, str]]) -> None:
+        """保存文件校验值记录"""
+        try:
+            os.makedirs(os.path.dirname(self.checksums_file), exist_ok=True)
+            with open(self.checksums_file, 'w', encoding='utf-8') as f:
+                json.dump(checksums, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"  {Colors.WARNING}警告: 保存校验值文件失败: {e}{Colors.ENDC}")
     
     # ========== 新增方法：AST构建与存储 ==========
     
-    # def _build_and_save_ast(self, ibc_file_path: str, file_path: str) -> Optional[Dict[int, AstNode]]:
-    #     """构建并保存AST"""
-    #     try:
-    #         # 读取IBC文件内容
-    #         with open(ibc_file_path, 'r', encoding='utf-8') as f:
-    #             ibc_content = f.read()
+    def _build_and_save_ast(self, ibc_file_path: str, file_path: str) -> Optional[Dict[int, AstNode]]:
+        """构建并保存AST"""
+        try:
+            # 读取IBC文件内容
+            with open(ibc_file_path, 'r', encoding='utf-8') as f:
+                ibc_content = f.read()
             
-    #         # 调用ibc_analyzer进行语法分析
-    #         print(f"  {Colors.OKBLUE}正在构建AST: {file_path}{Colors.ENDC}")
-    #         ast_dict = analyze_ibc_code(ibc_content)
+            # 调用ibc_analyzer进行语法分析
+            print(f"  {Colors.OKBLUE}正在构建AST: {file_path}{Colors.ENDC}")
+            ast_dict = analyze_ibc_code(ibc_content)
             
-    #         # 保存AST到文件
-    #         ast_file_path = os.path.join(self.ibc_build_dir, f"{file_path}.ibc_ast.json")
-    #         os.makedirs(os.path.dirname(ast_file_path), exist_ok=True)
+            # 保存AST到文件
+            ast_file_path = os.path.join(self.ibc_build_dir, f"{file_path}.ibc_ast.json")
+            os.makedirs(os.path.dirname(ast_file_path), exist_ok=True)
             
-    #         ast_data_manager = get_ast_data_manager()
-    #         if ast_data_manager.save_ast_to_file(ast_dict, ast_file_path):
-    #             print(f"  {Colors.OKGREEN}AST已保存: {ast_file_path}{Colors.ENDC}")
-    #         else:
-    #             print(f"  {Colors.WARNING}警告: AST保存失败{Colors.ENDC}")
+            ast_data_manager = get_ast_data_manager()
+            if ast_data_manager.save_ast_to_file(ast_dict, ast_file_path):
+                print(f"  {Colors.OKGREEN}AST已保存: {ast_file_path}{Colors.ENDC}")
+            else:
+                print(f"  {Colors.WARNING}警告: AST保存失败{Colors.ENDC}")
             
-    #         return ast_dict
+            return ast_dict
             
-    #     except IbcAnalyzerError as e:
-    #         print(f"  {Colors.FAIL}错误: IBC语法分析失败 {file_path}: {e}{Colors.ENDC}")
-    #         return None
-    #     except Exception as e:
-    #         print(f"  {Colors.FAIL}错误: AST构建失败 {file_path}: {e}{Colors.ENDC}")
-    #         return None
+        except IbcAnalyzerError as e:
+            print(f"  {Colors.FAIL}错误: IBC语法分析失败 {file_path}: {e}{Colors.ENDC}")
+            return None
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: AST构建失败 {file_path}: {e}{Colors.ENDC}")
+            return None
     
     # ========== 新增方法：符号规范化处理 ==========
     
