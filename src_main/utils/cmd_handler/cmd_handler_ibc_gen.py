@@ -37,7 +37,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self.icp_proj_data_dir = os.path.join(self.work_dir, '.icp_proj_data')
         self.icp_api_config_file = os.path.join(self.icp_proj_data_dir, 'icp_api_config.json')
 
-        self.checksums_file = os.path.join(self.icp_proj_data_dir, 'file_checksums.json') # 临时，后续应该仔细修改处理
+        self.checksums_file = os.path.join(self.icp_proj_data_dir, 'file_checksums.json') # 临时，后续应该仔细修改处理。后面存到symbols.json文件里吧
         self.ibc_build_dir = os.path.join(self.icp_proj_data_dir, 'ibc_build')
         
         self.proj_data_dir = self.icp_proj_data_dir
@@ -83,14 +83,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         dependent_relation = ibc_content["dependent_relation"]
         file_creation_order_list = DirJsonFuncs.build_file_creation_order(dependent_relation)
         
-        # 获取IBC目录名称
-        ibc_dir_name = self._get_ibc_directory_name()
-        
-        # 构建IBC目录路径
-        ibc_root_path = os.path.join(self.work_dir, ibc_dir_name)
-        
-        # 构建src_staging目录路径
+        # 目录预处理
         staging_dir_path = os.path.join(self.work_dir, 'src_staging')
+        ibc_dir_name = self._get_ibc_directory_name()
+        ibc_root_path = os.path.join(self.work_dir, ibc_dir_name)
         
         # 检查src_staging目录是否存在
         if not os.path.exists(staging_dir_path):
@@ -107,12 +103,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         if not user_requirements:
             print(f"  {Colors.FAIL}错误: 未找到用户原始需求，请确认需求已正确加载{Colors.ENDC}")
             return
-
-        # 初始化累积描述字典，用于为后续文件生成提供上下文
-        accumulated_descriptions_dict = {}
-        
-        # 初始化符号累积字典，用于为后续文件提供结构化的符号信息
-        accumulated_symbols_dict = {}
         
         # 加载文件校验值记录
         checksums = self._load_file_checksums()
@@ -134,97 +124,61 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             # 为每个文件生成半自然语言行为描述代码
             print(f"  {Colors.OKBLUE}正在为文件生成半自然语言行为描述代码: {file_path}{Colors.ENDC}")
             
-            # 当前文件所依赖的文件内容，用于提供上下文信息
-            available_file_desc_dict = {}
-            current_file_dependencies = dependent_relation.get(file_path, [])
-            for file_key, file_description in accumulated_descriptions_dict.items():
-                if file_key in current_file_dependencies:
-                    available_file_desc_dict[file_key] = file_description
-            
-        #     # 为当前文件构建可用的依赖符号列表
-        #     available_symbols_text = self._build_available_symbols_text(
-        #         file_path, 
-        #         current_file_dependencies, 
-        #         accumulated_symbols_dict
-        #     )
-            
-        #     # 生成新的半自然语言行为描述代码
-        #     intent_behavior_code = self._ibc_generator_response(
-        #         file_path,
-        #         file_req_content,
-        #         user_requirements,
-        #         list(available_file_desc_dict.values()),
-        #         proj_root_content,
-        #         available_symbols_text
-        #     )
 
-        #     # 移除可能的代码块标记
-        #     lines = intent_behavior_code.split('\n')
-        #     if lines and lines[0].strip().startswith('```'):
-        #         lines = lines[1:]
-        #     if lines and lines[-1].strip().startswith('```'):
-        #         lines = lines[:-1]
-        #     cleaned_content = '\n'.join(lines).strip()
-            
-        #     if not cleaned_content:
-        #         print(f"  {Colors.WARNING}警告: 未能为文件生成半自然语言行为描述代码: {file_path}{Colors.ENDC}")
-        #         continue
-            
-        #     # 保存半自然语言行为描述代码到IBC目录下的文件
-        #     self._save_intent_behavior_code(ibc_root_path, file_path, cleaned_content)
-            
-        #     # 计算文件校验值
-        #     ibc_file_path = os.path.join(ibc_root_path, f"{file_path}.ibc")
-        #     new_checksum = self._calculate_file_checksum(ibc_file_path)
-            
-        #     # 检查是否需要重新处理
-        #     need_reprocess = True
-        #     if file_path in checksums:
-        #         old_checksum = checksums[file_path].get('checksum', '')
-        #         if old_checksum == new_checksum:
-        #             need_reprocess = False
-        #             print(f"  {Colors.WARNING}文件校验值一致，跳过符号规范化处理: {file_path}{Colors.ENDC}")
-            
-        #     # 构建 AST
-        #     ast_dict = self._build_and_save_ast(ibc_file_path, file_path)
-        #     if ast_dict is None:
-        #         # AST构建失败，跳过符号规范化，但继续处理下一个文件
-        #         accumulated_descriptions_dict[file_path] = f"文件 {file_path} 的接口描述:\n{file_req_content}"
-        #         continue
-            
-        #     # 符号规范化处理
-        #     file_symbols = {}
-        #     if need_reprocess:
-        #         file_symbols = self._process_symbol_normalization(
-        #             file_path, 
-        #             ast_dict
-        #         )
+            # 简单整理一下思路：对于任何一个当前正在创建的文件，首先要读取依赖列表，根据依赖列表读取对应的AST以及符号表
+            # MD5 没必要在这里读取，这里的每一个按顺序生成的文件必然是最新的
+            current_file_dependencies = dependent_relation.get(file_path, [])
+            for dependency in current_file_dependencies:
+                print(f"  {Colors.OKBLUE}正在处理文件的依赖: {dependency}{Colors.ENDC}")
+                # self._process_dependency(dependency, file_creation_order_list, ibc_root_path, symbols_table, checksums) # 这个函数不存在，只是占位符
+                if dependency in symbols_table:
+                    # 根据dependency读取symbols_table中的md5记录以及符号表内容
+                    # dependency_md5 = symbols_table[dependency].get('md5', '')
+                    dependency_symbols = symbols_table[dependency].get('symbols', {})
                 
-        #         # 更新符号表
-        #         if file_symbols:
-        #             symbols_table[file_path] = file_symbols
-        #             self._save_symbols_table(ibc_root_path, symbols_table)
-                
-        #         # 更新文件校验值
-        #         checksums[file_path] = {
-        #             'checksum': new_checksum,
-        #             'last_modified': datetime.now().isoformat()
-        #         }
-        #         self._save_file_checksums(checksums)
-        #     else:
-        #         # 使用已有的符号表
-        #         file_symbols = symbols_table.get(file_path, {})
-            
-        #     # 将当前文件的描述添加到累积字典中，供后续文件参考
-        #     accumulated_descriptions_dict[file_path] = f"文件 {file_path} 的接口描述:\n{file_req_content}"
-            
-        #     # 将符号信息添加到累积符号字典
-        #     if file_symbols:
-        #         accumulated_symbols_dict[file_path] = {
-        #             'symbols': self._extract_visible_symbols(file_symbols)
-        #         }
-        
-        # print(f"{Colors.OKGREEN}半自然语言行为描述代码生成命令执行完毕!{Colors.ENDC}")
+                # 获取当前文件最新的md5
+                # file_md5 = checksums.get(file_path, {}).get('md5', '')
+                # if file_md5 != dependency_md5:
+
+                # 根据读取到的symbols以及当前文件的构建需求描述生成新的ibc, 然后用ibc_analyzer处理
+                file = self._ibc_generator_response(dependency, file_creation_order_list, ibc_root_path, symbols_table, checksums) # 之后再细化处理
+
+                #     # 移除可能的代码块标记
+                #     lines = intent_behavior_code.split('\n')
+                #     if lines and lines[0].strip().startswith('```'):
+                #         lines = lines[1:]
+                #     if lines and lines[-1].strip().startswith('```'):
+                #         lines = lines[:-1]
+                #     cleaned_content = '\n'.join(lines).strip()
+
+                #     if not cleaned_content:
+                #         print(f"  {Colors.WARNING}警告: 未能为文件生成半自然语言行为描述代码: {file_path}{Colors.ENDC}")
+                #         continue
+                                    
+                #     # 保存半自然语言行为描述代码到IBC目录下的文件
+                #     self._save_intent_behavior_code(ibc_root_path, file_path, cleaned_content)
+
+
+                # self._build_and_save_ast(ibc_root_path, file_path, file)
+
+                #         # 更新文件校验值
+                #         checksums[file_path] = {
+                #             'checksum': new_checksum,
+                #             'last_modified': datetime.now().isoformat()
+                #         }
+                #         self._save_file_checksums(checksums)
+                    
+
+                ast = analyze_ibc_code(file)
+                print(f"  {Colors.OKBLUE}正在处理文件的AST: {dependency}{Colors.ENDC}")
+
+                # 对AST进行符号标记规范化处理
+                self._process_symbol_normalization(dependency, ast)
+
+                # 符号规范化处理之后生成新的符号表,存储,然后进入下一轮循环
+                symbols_table[dependency] = self._extract_symbols_from_ast(ast)
+                self._save_symbols_table(ibc_root_path, symbols_table)
+
 
     def _get_ibc_directory_name(self) -> str:
         """获取IBC目录名称，优先从配置文件读取behavioral_layer_dir，失败则使用默认值"""
