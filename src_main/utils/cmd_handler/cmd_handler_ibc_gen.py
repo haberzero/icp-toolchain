@@ -100,13 +100,13 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             if behavioral_layer_dir:
                 return behavioral_layer_dir
             else:
-                return "IBC"
+                return "src_ibc"
         except FileNotFoundError:
-            return "IBC"
+            return "src_ibc"
         except json.JSONDecodeError as e:
-            return "IBC"
+            return "src_ibc"
         except Exception as e:
-            return "IBC"
+            return "src_ibc"
 
     def _generate_intent_behavior_code(
             self, 

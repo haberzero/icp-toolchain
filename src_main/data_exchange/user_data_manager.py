@@ -5,6 +5,8 @@ from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
 from typedef.cmd_data_types import Colors
 
 # 本文件涉及对用户工程中的持久性文件的存取
+# 未完成，没考虑好怎么应对不同的用户初期需求输入，现在以根目录下的.md文件为主
+# 之后ui界面出来或者工具链定义规范化之后再补全
 
 class UserDataManager:
     _instance = None
