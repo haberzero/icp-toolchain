@@ -34,11 +34,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         )
         proj_cfg_manager = get_proj_cfg_manager()
         self.proj_work_dir = proj_cfg_manager.get_work_dir()
-        self.icp_proj_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_data')
-        self.icp_api_config_file = os.path.join(self.icp_proj_data_dir, 'icp_api_config.json')
+        self.proj_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_data')
+        self.icp_api_config_file = os.path.join(self.proj_data_dir, 'icp_api_config.json')
         self.ibc_build_dir = os.path.join(self.proj_work_dir, 'ibc_build')
-        
-        self.proj_data_dir = self.icp_proj_data_dir
+
         self.ai_handler_1: ChatHandler
         self.ai_handler_2: ChatHandler
         self.role_name_1 = "8_intent_behavior_code_gen"
@@ -179,7 +178,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
 
     def _get_ibc_directory_name(self) -> str:
         """获取IBC目录名称，优先从配置文件读取behavioral_layer_dir，失败则使用默认值"""
-        icp_config_file = os.path.join(self.icp_proj_data_dir, 'icp_config.json')
+        icp_config_file = os.path.join(self.proj_data_dir, 'icp_config.json')
         try:
             with open(icp_config_file, 'r', encoding='utf-8') as f:
                 icp_config = json.load(f)

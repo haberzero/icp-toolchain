@@ -28,10 +28,9 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         )
         proj_cfg_manager = get_proj_cfg_manager()
         self.proj_work_dir = proj_cfg_manager.get_work_dir()
-        self.icp_proj_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_data')
-        self.icp_api_config_file = os.path.join(self.icp_proj_data_dir, 'icp_api_config.json')
-        
-        self.proj_data_dir = self.icp_proj_data_dir
+        self.proj_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_data')
+        self.icp_api_config_file = os.path.join(self.proj_data_dir, 'icp_api_config.json')
+
         self.ai_handler_1: ChatHandler
         self.ai_handler_2: ChatHandler
         self.role_name_1 = "7_one_file_req_gen"
