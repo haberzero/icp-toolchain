@@ -109,6 +109,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             print(f"  {Colors.OKBLUE}正在处理文件: {file_path}{Colors.ENDC}")
             
             # 检查MD5，如果文件已经生成且MD5匹配，则跳过
+            # TODO：这里存在缺陷，应该是如果某个文件出现了更新，则整个后续链条中的ibc文件都应该被进一步检查是否有必要更新，否则极容易生成出错
+            # 而且还应该有一个机制，利用好已经被生成过的ibc文件。所以可能甚至需要引入新的ai_handler
+            # 大概想通了，后续增加一个指令，这个指令是ibc_update，事实上是“基于ibc更新ibc”？和直接的完整生成流程其实存在差别
+            # 而且这种问题在传统代码中不存在,因为这个中间过程步骤是由开发者自己掌控的,过程中很少出现ai的直接介入
             if self._should_skip_file_generation(file_path, ibc_root_path):
                 print(f"  {Colors.OKGREEN}文件已存在且未更改，跳过生成: {file_path}{Colors.ENDC}")
                 # 从ibc_build加载AST到内存
