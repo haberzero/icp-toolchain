@@ -104,15 +104,12 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: 未找到用户原始需求，请确认需求已正确加载{Colors.ENDC}")
             return
         
-        # 加载已有的符号表
-        symbols_table = self._load_symbols_table(ibc_root_path)
-        
         # 按照依赖顺序为每个文件生成半自然语言行为描述代码
         for file_path in file_creation_order_list:
             print(f"  {Colors.OKBLUE}正在处理文件: {file_path}{Colors.ENDC}")
             
             # 检查MD5，如果文件已经生成且MD5匹配，则跳过
-            if self._should_skip_file_generation(file_path, ibc_root_path, symbols_table):
+            if self._should_skip_file_generation(file_path, ibc_root_path):
                 print(f"  {Colors.OKGREEN}文件已存在且未更改，跳过生成: {file_path}{Colors.ENDC}")
                 # 从ibc_build加载AST到内存
                 self._load_ast_to_memory(file_path, ibc_root_path)
@@ -131,7 +128,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             current_file_dependencies = dependent_relation.get(file_path, [])
             
             # 构建可用符号文本
-            available_symbols_text = self._build_available_symbols_text(file_path, current_file_dependencies, symbols_table)
+            available_symbols_text = self._build_available_symbols_text(file_path, current_file_dependencies, ibc_root_path)
             
             # 生成IBC代码，最多重试3次
             ibc_code = self._generate_ibc_with_retry(
@@ -164,12 +161,12 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             # 符号规范化处理
             normalized_symbols = self._process_symbol_normalization(file_path, ast_dict)
             
-            # 更新符号表：存储md5和符号信息
-            symbols_table[file_path] = {
+            # 更新符号表：存储md5和符号信息到对应文件夹的symbols.json
+            file_symbol_data = {
                 'md5': file_md5,
                 'symbols': normalized_symbols  # normalized_symbols已经是Dict[str, Dict[str, Any]]类型
             }
-            self._save_symbols_table(ibc_root_path, symbols_table)
+            self._save_file_symbols(ibc_root_path, file_path, file_symbol_data)
             
             print(f"  {Colors.OKGREEN}文件IBC代码生成完成: {file_path}{Colors.ENDC}")
         
@@ -362,19 +359,20 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     
     # ========== 新增方法：文件生成跳过检查 ==========
     
-    def _should_skip_file_generation(self, file_path: str, ibc_root_path: str, symbols_table: Dict) -> bool:
+    def _should_skip_file_generation(self, file_path: str, ibc_root_path: str) -> bool:
         """检查是否应跳过文件生成（基于MD5比较）"""
-        # 检查符号表中是否有该文件的记录
-        if file_path not in symbols_table:
-            return False
-        
         # 检查IBC文件是否存在
         ibc_file_path = os.path.join(ibc_root_path, f"{file_path}.ibc")
         if not os.path.exists(ibc_file_path):
             return False
         
+        # 加载该文件的符号表数据
+        file_symbols_data = self._load_file_symbols(ibc_root_path, file_path)
+        if not file_symbols_data:
+            return False
+        
         # 获取符号表中存储的MD5
-        stored_md5 = symbols_table[file_path].get('md5', '')
+        stored_md5 = file_symbols_data.get('md5', '')
         if not stored_md5:
             return False
         
@@ -697,11 +695,21 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         return cleaned if cleaned else 'unnamed_symbol'
     
-    # ========== 新增方法：符号表管理 ==========
+    # ========== 新增方法：符号表管理（分布式存储） ==========
     
-    def _load_symbols_table(self, ibc_root_path: str) -> Dict[str, Any]:
-        """加载符号表"""
-        symbols_file = os.path.join(ibc_root_path, 'symbols.json')
+    def _get_symbols_file_path(self, ibc_root_path: str, file_path: str) -> str:
+        """获取文件对应的symbols.json路径"""
+        # 获取文件所在目录
+        file_dir = os.path.dirname(file_path)
+        if file_dir:
+            symbols_dir = os.path.join(ibc_root_path, file_dir)
+        else:
+            symbols_dir = ibc_root_path
+        
+        return os.path.join(symbols_dir, 'symbols.json')
+    
+    def _load_dir_symbols_table(self, symbols_file: str) -> Dict[str, Any]:
+        """加载目录级别的符号表"""
         if not os.path.exists(symbols_file):
             return {}
         
@@ -709,16 +717,34 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             with open(symbols_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            print(f"  {Colors.WARNING}警告: 读取符号表失败: {e}{Colors.ENDC}")
+            print(f"  {Colors.WARNING}警告: 读取符号表失败 {symbols_file}: {e}{Colors.ENDC}")
             return {}
     
-    def _save_symbols_table(self, ibc_root_path: str, symbols_table: Dict[str, Any]) -> None:
-        """保存符号表"""
-        symbols_file = os.path.join(ibc_root_path, 'symbols.json')
+    def _load_file_symbols(self, ibc_root_path: str, file_path: str) -> Dict[str, Any]:
+        """加载指定文件的符号数据"""
+        symbols_file = self._get_symbols_file_path(ibc_root_path, file_path)
+        dir_symbols_table = self._load_dir_symbols_table(symbols_file)
+        
+        # 从目录符号表中获取当前文件的数据
+        file_name = os.path.basename(file_path)
+        return dir_symbols_table.get(file_name, {})
+    
+    def _save_file_symbols(self, ibc_root_path: str, file_path: str, file_symbol_data: Dict[str, Any]) -> None:
+        """保存文件的符号数据到对应目录的symbols.json"""
+        symbols_file = self._get_symbols_file_path(ibc_root_path, file_path)
+        
+        # 加载目录级别的符号表
+        dir_symbols_table = self._load_dir_symbols_table(symbols_file)
+        
+        # 更新当前文件的数据
+        file_name = os.path.basename(file_path)
+        dir_symbols_table[file_name] = file_symbol_data
+        
+        # 保存更新后的符号表
         try:
             os.makedirs(os.path.dirname(symbols_file), exist_ok=True)
             with open(symbols_file, 'w', encoding='utf-8') as f:
-                json.dump(symbols_table, f, ensure_ascii=False, indent=2)
+                json.dump(dir_symbols_table, f, ensure_ascii=False, indent=2)
             print(f"  {Colors.OKGREEN}符号表已更新: {symbols_file}{Colors.ENDC}")
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 保存符号表失败: {e}{Colors.ENDC}")
@@ -742,7 +768,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         return visible_symbols
     
-    def _build_available_symbols_text(self, current_file: str, dependencies: List[str], symbols_table: Dict[str, Any]) -> str:
+    def _build_available_symbols_text(self, current_file: str, dependencies: List[str], ibc_root_path: str) -> str:
         """构建可用符号的文本描述"""
         if not dependencies:
             return '暂无可用的依赖符号'
@@ -750,14 +776,12 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         lines = ['可用的依赖符号：', '']
         
         for dep_file in dependencies:
-            if dep_file not in symbols_table:
+            # 从对应目录的symbols.json加载符号数据
+            file_symbols_data = self._load_file_symbols(ibc_root_path, dep_file)
+            if not file_symbols_data:
                 continue
             
-            file_data = symbols_table[dep_file]
-            if not isinstance(file_data, dict):
-                continue
-            
-            symbols = file_data.get('symbols', {})
+            symbols = file_symbols_data.get('symbols', {})
             if not symbols:
                 continue
             
