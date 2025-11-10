@@ -15,17 +15,17 @@ class ProjCfgManager:
 
     def __init__(self):
         if not hasattr(self, 'proj_root'):
-            self.work_dir = ""
+            self.proj_work_dir = ""
 
     def set_work_dir(self, new_path):
         if not os.path.exists(new_path):
             print(f"错误: 项目根路径 '{new_path}' 不存在")
             return False
-        self.work_dir = new_path
+        self.proj_work_dir = new_path
         return True
     
     def get_work_dir(self):
-        return self.work_dir
+        return self.proj_work_dir
 
 
 _instance = ProjCfgManager()

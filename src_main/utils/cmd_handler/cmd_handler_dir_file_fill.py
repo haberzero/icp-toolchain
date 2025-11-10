@@ -31,8 +31,8 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             help_text="根据需求分析结果在目录结构中添加功能文件描述",
         )
         proj_cfg_manager = get_proj_cfg_manager()
-        self.work_dir = proj_cfg_manager.get_work_dir()
-        self.icp_proj_data_dir = os.path.join(self.work_dir, '.icp_proj_data')
+        self.proj_work_dir = proj_cfg_manager.get_work_dir()
+        self.icp_proj_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_data')
         self.icp_api_config_file = os.path.join(self.icp_proj_data_dir, 'icp_api_config.json')
         
         self.proj_data_dir = self.icp_proj_data_dir

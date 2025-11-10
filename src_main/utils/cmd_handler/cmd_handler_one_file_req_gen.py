@@ -27,8 +27,8 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
             help_text="根据已有的dir_content.json文件的内容在src_staging目录结构下创建单文件的编程需求描述, 为IBC的生成做准备",
         )
         proj_cfg_manager = get_proj_cfg_manager()
-        self.work_dir = proj_cfg_manager.get_work_dir()
-        self.icp_proj_data_dir = os.path.join(self.work_dir, '.icp_proj_data')
+        self.proj_work_dir = proj_cfg_manager.get_work_dir()
+        self.icp_proj_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_data')
         self.icp_api_config_file = os.path.join(self.icp_proj_data_dir, 'icp_api_config.json')
         
         self.proj_data_dir = self.icp_proj_data_dir
@@ -55,27 +55,27 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         final_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_refined.json')
         try:
             with open(final_dir_file, 'r', encoding='utf-8') as f:
-                final_content = json.load(f)
+                final_dir_content = json.load(f)
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取最终目录结构失败: {e}{Colors.ENDC}")
             return
         
-        if not final_content:
+        if not final_dir_content:
             print(f"  {Colors.FAIL}错误: 最终目录结构内容为空{Colors.ENDC}")
             return
 
         # 检查是否包含必要的节点
-        if "proj_root" not in final_content or "dependent_relation" not in final_content:
+        if "proj_root" not in final_dir_content or "dependent_relation" not in final_dir_content:
             print(f"  {Colors.FAIL}错误: 最终目录结构缺少必要的节点(proj_root或dependent_relation){Colors.ENDC}")
             return
 
         # 从dependent_relation中获取文件创建顺序, 可以认为列表中靠近 index=0 的文件其层级低且被其它文件依赖
-        proj_root = final_content["proj_root"]
-        dependent_relation = final_content["dependent_relation"]
+        proj_root = final_dir_content["proj_root"]
+        dependent_relation = final_dir_content["dependent_relation"]
         file_creation_order_list = DirJsonFuncs.build_file_creation_order(dependent_relation)
 
         # 创建src_staging目录用于存储_one_file_req.txt文件
-        staging_dir_path = os.path.join(self.work_dir, 'src_staging')
+        staging_dir_path = os.path.join(self.proj_work_dir, 'src_staging')
         try:
             os.makedirs(staging_dir_path, exist_ok=True)
             print(f"  {Colors.OKGREEN}src_staging目录创建成功: {staging_dir_path}{Colors.ENDC}")

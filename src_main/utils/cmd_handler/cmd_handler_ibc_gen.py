@@ -33,10 +33,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             help_text="根据单文件需求描述生成符合半自然语言行为描述语法的代码结构",
         )
         proj_cfg_manager = get_proj_cfg_manager()
-        self.work_dir = proj_cfg_manager.get_work_dir()
-        self.icp_proj_data_dir = os.path.join(self.work_dir, '.icp_proj_data')
+        self.proj_work_dir = proj_cfg_manager.get_work_dir()
+        self.icp_proj_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_data')
         self.icp_api_config_file = os.path.join(self.icp_proj_data_dir, 'icp_api_config.json')
-        self.ibc_build_dir = os.path.join(self.icp_proj_data_dir, 'ibc_build')
+        self.ibc_build_dir = os.path.join(self.proj_work_dir, 'ibc_build')
         
         self.proj_data_dir = self.icp_proj_data_dir
         self.ai_handler_1: ChatHandler
@@ -87,9 +87,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         file_creation_order_list = DirJsonFuncs.build_file_creation_order(dependent_relation)
         
         # 目录预处理
-        staging_dir_path = os.path.join(self.work_dir, 'src_staging')
+        staging_dir_path = os.path.join(self.proj_work_dir, 'src_staging')
         ibc_dir_name = self._get_ibc_directory_name()
-        ibc_root_path = os.path.join(self.work_dir, ibc_dir_name)
+        ibc_root_path = os.path.join(self.proj_work_dir, ibc_dir_name)
         
         # 检查src_staging目录是否存在
         if not os.path.exists(staging_dir_path):
