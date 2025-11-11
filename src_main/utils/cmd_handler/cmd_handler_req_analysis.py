@@ -132,7 +132,7 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
                 model=chat_api_config.get('model', '')
             )
         else:
-            print("错误: 配置文件缺少req_analysis_handler或chat_handler配置")
+            print("错误: 配置文件缺少req_analysis_handler或chat_interface配置")
             return None
         
         app_data_manager = get_app_data_manager()

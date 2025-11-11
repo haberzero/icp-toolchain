@@ -10,7 +10,8 @@ import os
 from typing import Dict, Any
 from typedef.ibc_data_types import (
     AstNode, AstNodeType, ModuleNode, ClassNode, 
-    FunctionNode, VariableNode, BehaviorStepNode
+    FunctionNode, VariableNode, BehaviorStepNode,
+    SymbolNode, FileSymbolTable
 )
 from typedef.cmd_data_types import Colors
 
@@ -175,7 +176,7 @@ class IbcDataManager:
             print(f"  {Colors.WARNING}警告: 读取符号表失败 {symbols_file}: {e}{Colors.ENDC}")
             return {}
     
-    def load_file_symbols(self, ibc_root_path: str, file_path: str) -> Dict[str, Any]:
+    def load_file_symbols(self, ibc_root_path: str, file_path: str) -> FileSymbolTable:
         """
         加载指定文件的符号数据
         
@@ -184,31 +185,25 @@ class IbcDataManager:
             file_path: 文件相对路径
             
         Returns:
-            Dict[str, Any]: 文件的符号数据
-                格式: {
-                    "md5": "文件MD5值",
-                    "symbols": {
-                        "符号名": {
-                            "normalized_name": "规范化名称",
-                            "visibility": "可见性",
-                            "description": "描述",
-                            "symbol_type": "类型"
-                        }
-                    }
-                }
+            FileSymbolTable: 文件符号表对象
         """
         symbols_file = self.get_symbols_file_path(ibc_root_path, file_path)
         dir_symbols_table = self.load_dir_symbols_table(symbols_file)
         
         # 从目录符号表中获取当前文件的数据
         file_name = os.path.basename(file_path)
-        return dir_symbols_table.get(file_name, {})
+        file_symbol_data = dir_symbols_table.get(file_name, {})
+        
+        if not file_symbol_data:
+            return FileSymbolTable()
+        
+        return FileSymbolTable.from_dict(file_symbol_data)
     
     def save_file_symbols(
         self, 
         ibc_root_path: str, 
         file_path: str, 
-        file_symbol_data: Dict[str, Any]
+        file_symbol_table: FileSymbolTable
     ) -> bool:
         """
         保存文件的符号数据到对应目录的symbols.json
@@ -216,7 +211,7 @@ class IbcDataManager:
         Args:
             ibc_root_path: IBC根目录路径
             file_path: 文件相对路径
-            file_symbol_data: 文件的符号数据
+            file_symbol_table: 文件符号表对象
             
         Returns:
             bool: 保存是否成功
@@ -228,7 +223,7 @@ class IbcDataManager:
         
         # 更新当前文件的数据
         file_name = os.path.basename(file_path)
-        dir_symbols_table[file_name] = file_symbol_data
+        dir_symbols_table[file_name] = file_symbol_table.to_dict()
         
         # 保存更新后的符号表
         try:
@@ -239,6 +234,41 @@ class IbcDataManager:
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 保存符号表失败: {e}{Colors.ENDC}")
             return False
+    
+    def update_symbol_normalized_info(
+        self,
+        ibc_root_path: str,
+        file_path: str,
+        symbol_name: str,
+        normalized_name: str,
+        visibility: str
+    ) -> bool:
+        """
+        更新符号的规范化信息
+        
+        Args:
+            ibc_root_path: IBC根目录路径
+            file_path: 文件相对路径
+            symbol_name: 符号名称
+            normalized_name: 规范化名称
+            visibility: 可见性
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        # 加载文件符号表
+        file_symbol_table = self.load_file_symbols(ibc_root_path, file_path)
+        
+        # 更新符号信息
+        symbol = file_symbol_table.get_symbol(symbol_name)
+        if not symbol:
+            print(f"  {Colors.WARNING}警告: 找不到符号 {symbol_name}{Colors.ENDC}")
+            return False
+        
+        symbol.update_normalized_info(normalized_name, visibility)
+        
+        # 保存更新后的符号表
+        return self.save_file_symbols(ibc_root_path, file_path, file_symbol_table)
 
 
 # 单例实例
@@ -250,5 +280,5 @@ def get_instance() -> IbcDataManager:
     return _instance
 
 
-# 兼容旧的ast_data_manager接口
+# 兼容旧的ibc_data_manager接口
 AstDataManager = IbcDataManager

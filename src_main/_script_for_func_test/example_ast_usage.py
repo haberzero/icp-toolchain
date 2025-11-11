@@ -11,7 +11,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code
-from data_exchange.ast_data_manager import get_instance as get_ast_data_manager
+from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
 
 
 def example_save_and_load_ast():
@@ -52,7 +52,7 @@ class User():
     
     # 2. 保存AST到文件
     print("\n2. 保存AST到文件...")
-    ast_manager = get_ast_data_manager()
+    ast_manager = get_ibc_data_manager()
     
     # 定义保存路径
     save_path = os.path.join(
