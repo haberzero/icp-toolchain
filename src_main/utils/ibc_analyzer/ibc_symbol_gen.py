@@ -16,7 +16,7 @@ class IbcSymbolGenerator:
     
     注意：
     - normalized_name（规范化名称）和visibility（可见性）由符号提取时不填充，
-      留空字符串，后续由cmd_handler调用ai_interface推断后填充
+    - 留空字符串，后续由cmd_handler调用ai_interface推断后填充
     """
     
     def __init__(self, ast_dict: Dict[int, AstNode]):
