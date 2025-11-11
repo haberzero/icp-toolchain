@@ -3,6 +3,8 @@ from typedef.ibc_data_types import IbcKeywords, IbcTokenType, Token, AstNode, As
 
 from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
+from utils.ibc_analyzer.ibc_symbol_gen import IbcSymbolGenerator
+
 from typedef.ibc_data_types import AstNode
 
 
@@ -16,7 +18,7 @@ class IbcAnalyzerError(Exception):
         return f"ParserError: {self.message}"
 
 
-def analyze_ibc_code(text: str) -> Dict[int, AstNode]:
+def analyze_ibc_code(text: str):
     """分析IBC代码，返回AST字典"""
     try:
         # 词法分析
@@ -26,8 +28,12 @@ def analyze_ibc_code(text: str) -> Dict[int, AstNode]:
         # 语法分析
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
+
+        # 符号提取
+        symbol_gen = IbcSymbolGenerator(ast_dict)
+        symbol_table = symbol_gen.extract_symbols()
         
-        return ast_dict
+        return ast_dict, symbol_table
     except IbcAnalyzerError:
         raise IbcAnalyzerError("IBC代码分析失败")
     

@@ -168,26 +168,21 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             # 解析IBC代码生成AST
             print(f"    正在分析IBC代码生成AST...")
             try:
-                ast_dict = analyze_ibc_code(ibc_code)
+                ast_dict, symbol_table = analyze_ibc_code(ibc_code)
             except IbcAnalyzerError as e:
                 print(f"  {Colors.FAIL}错误: IBC代码分析失败 {file_path}: {e}{Colors.ENDC}")
                 continue
-            
-            # 从AST提取符号
-            print(f"    正在提取符号信息...")
-            symbol_gen = IbcSymbolGenerator(ast_dict)
-            new_file_symbol_table = symbol_gen.extract_symbols()
             
             # 对符号进行规范化处理
             print(f"    正在进行符号规范化...")
             normalized_symbols_dict = self._normalize_symbols(
                 file_path,
-                new_file_symbol_table
+                symbol_table
             )
             
             # 更新符号表中的规范化信息
             for symbol_name, norm_info in normalized_symbols_dict.items():
-                symbol = new_file_symbol_table.get_symbol(symbol_name)
+                symbol = symbol_table.get_symbol(symbol_name)
                 if symbol:
                     symbol.update_normalized_info(
                         norm_info['normalized_name'],
@@ -195,14 +190,14 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                     )
             
             # 设置文件MD5
-            new_file_symbol_table.file_md5 = current_md5
+            symbol_table.file_md5 = current_md5
             
             # 保存符号表
             print(f"    正在保存符号表...")
             success = ibc_data_manager.save_file_symbols(
                 ibc_root_path,
                 file_path,
-                new_file_symbol_table
+                symbol_table
             )
             
             if success:
