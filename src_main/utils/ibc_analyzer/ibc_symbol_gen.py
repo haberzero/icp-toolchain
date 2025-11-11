@@ -12,7 +12,7 @@ from typedef.ibc_data_types import (
     VisibilityTypes
 )
 from typedef.cmd_data_types import Colors
-from utils.ai_handler.chat_handler import ChatHandler
+from libs.ai_handler.chat_handler import ChatHandler
 from data_exchange.app_data_manager import get_instance as get_app_data_manager
 
 

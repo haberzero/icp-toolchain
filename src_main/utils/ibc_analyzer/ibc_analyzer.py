@@ -5,7 +5,7 @@ from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
 from utils.ibc_analyzer.ibc_symbol_gen import IbcSymbolGenerator
 from typedef.ibc_data_types import AstNode
-from utils.ai_handler.chat_handler import ChatHandler
+from libs.ai_handler.chat_handler import ChatHandler
 
 
 class IbcAnalyzerError(Exception):

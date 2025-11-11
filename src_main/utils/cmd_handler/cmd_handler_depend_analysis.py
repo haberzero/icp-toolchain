@@ -12,7 +12,7 @@ from data_exchange.app_data_manager import get_instance as get_app_data_manager
 from data_exchange.user_data_manager import get_instance as get_user_data_manager
 
 from utils.cmd_handler.base_cmd_handler import BaseCmdHandler
-from utils.ai_handler.chat_handler import ChatHandler
+from libs.ai_handler.chat_handler import ChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
 
 

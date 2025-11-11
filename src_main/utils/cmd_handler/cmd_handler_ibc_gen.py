@@ -16,7 +16,7 @@ from data_exchange.user_data_manager import get_instance as get_user_data_manage
 from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
 
 from utils.cmd_handler.base_cmd_handler import BaseCmdHandler
-from utils.ai_handler.chat_handler import ChatHandler
+from libs.ai_handler.chat_handler import ChatHandler
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code, IbcAnalyzerError
 from libs.dir_json_funcs import DirJsonFuncs
 
