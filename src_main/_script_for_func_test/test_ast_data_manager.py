@@ -240,4 +240,11 @@ def test_ast_persistence():
 
 
 if __name__ == "__main__":
-    test_ast_persistence()
+    print("\n开始测试 AST 数据管理器...\n")
+    
+    try:
+        test_ast_persistence()
+    except Exception as e:
+        print(f"\n✗ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()

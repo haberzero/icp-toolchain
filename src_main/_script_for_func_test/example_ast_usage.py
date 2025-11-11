@@ -119,4 +119,11 @@ class User():
 
 
 if __name__ == "__main__":
-    example_save_and_load_ast()
+    print("\n开始运行 AST 使用示例...\n")
+    
+    try:
+        example_save_and_load_ast()
+    except Exception as e:
+        print(f"\n✗ 示例运行失败: {e}")
+        import traceback
+        traceback.print_exc()

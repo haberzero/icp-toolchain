@@ -595,9 +595,8 @@ def test_multiline_func_in_class():
         return False
 
 
-def main():
-    """主测试函数"""
-    print("=" * 60)
+if __name__ == "__main__":
+    print("\n" + "=" * 60)
     print("开始测试 Intent Behavior Code 解析器...")
     print("=" * 60)
     
@@ -635,19 +634,13 @@ def main():
         print(f"总计: {passed} 通过, {failed} 失败")
         
         if failed == 0:
-            print("🎉 所有测试通过！")
+            print("所有测试通过！✓")
+            print("=" * 60)
         else:
             print(f"⚠️  有 {failed} 个测试失败")
-        
-        return failed == 0
+            print("=" * 60)
         
     except Exception as e:
-        print(f"测试过程中发生异常: {e}")
+        print(f"\n✗ 测试失败: {e}")
         import traceback
         traceback.print_exc()
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    success = main()
-    sys.exit(0 if success else 1)

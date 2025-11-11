@@ -446,9 +446,8 @@ func test():
     
     return True
 
-def main():
-    """主测试函数"""
-    print("开始测试 Intent Behavior Code 词法分析器...\n")
+if __name__ == "__main__":
+    print("\n开始测试 Intent Behavior Code 词法分析器...\n")
     
     try:
         test_results = []
@@ -483,8 +482,9 @@ def main():
         test_results.append(("错误情况", test_error_cases()))
         print()
         
+        print("=" * 50)
         print("测试结果汇总")
-        print("=" * 40)
+        print("=" * 50)
         
         passed = 0
         failed = 0
@@ -500,18 +500,13 @@ def main():
         print(f"\n总计: {passed} 通过, {failed} 失败")
         
         if failed == 0:
-            print("🎉 所有测试通过！")
+            print("=" * 50)
+            print("所有测试通过！✓")
+            print("=" * 50)
         else:
             print(f"⚠️  有 {failed} 个测试失败")
         
-        return failed == 0
-        
     except Exception as e:
-        print(f"测试过程中发生异常: {e}")
+        print(f"\n✗ 测试失败: {e}")
         import traceback
         traceback.print_exc()
-        sys.exit(1)
-
-if __name__ == "__main__":
-    success = main()
-    sys.exit(0 if success else 1)

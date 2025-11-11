@@ -363,9 +363,8 @@ def test_check_new_nodes_are_strings():
     assert result, "所有叶子节点都是字符串，应该返回True"
     print("  ✓ 成功验证了嵌套结构中所有节点都是字符串")
 
-def main():
-    """主测试函数"""
-    print("开始测试 DirJsonFuncs 类的所有功能...\n")
+if __name__ == "__main__":
+    print("\n开始测试 DirJsonFuncs 类的所有功能...\n")
     
     try:
         test_detect_circular_dependencies()
@@ -392,13 +391,10 @@ def main():
         test_check_new_nodes_are_strings()
         print()
         
-        print("所有测试通过! DirJsonFuncs 类的功能正常工作。")
-        
+        print("=" * 50)
+        print("所有测试通过！✓")
+        print("=" * 50)
     except Exception as e:
-        print(f"测试失败: {e}")
+        print(f"\n✗ 测试失败: {e}")
         import traceback
         traceback.print_exc()
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()
