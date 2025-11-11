@@ -5,7 +5,7 @@ from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
 from utils.ibc_analyzer.ibc_symbol_gen import IbcSymbolGenerator
 from typedef.ibc_data_types import AstNode
-from libs.ai_handler.chat_handler import ChatHandler
+from libs.ai_interface.chat_interface import ChatInterface
 
 
 class IbcAnalyzerError(Exception):
@@ -21,7 +21,7 @@ class IbcAnalyzerError(Exception):
 def analyze_ibc_code(
     text: str, 
     extract_symbols: bool = False,
-    ai_handler: Optional[ChatHandler] = None,
+    ai_handler: Optional[ChatInterface] = None,
     file_path: str = ""
 ) -> Dict[int, AstNode] | Tuple[Dict[int, AstNode], Dict[str, Dict[str, Any]]]:
     """

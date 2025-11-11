@@ -16,7 +16,7 @@ from data_exchange.user_data_manager import get_instance as get_user_data_manage
 from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
 
 from utils.cmd_handler.base_cmd_handler import BaseCmdHandler
-from libs.ai_handler.chat_handler import ChatHandler
+from libs.ai_interface.chat_interface import ChatInterface
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code, IbcAnalyzerError
 from libs.dir_json_funcs import DirJsonFuncs
 
@@ -38,8 +38,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self.icp_api_config_file = os.path.join(self.proj_data_dir, 'icp_api_config.json')
         self.ibc_build_dir = os.path.join(self.proj_work_dir, 'ibc_build')
 
-        self.ai_handler_1: ChatHandler
-        self.ai_handler_2: ChatHandler
+        self.ai_handler_1: ChatInterface
+        self.ai_handler_2: ChatInterface
         self.role_name_1 = "8_intent_behavior_code_gen"
         self.role_name_2 = "8_symbol_normalizer"
         
@@ -495,7 +495,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     def is_cmd_valid(self):
         return self._check_cmd_requirement() and self._check_ai_handler()
     
-    async def _get_ai_response(self, handler: ChatHandler, requirement_content: str) -> str:
+    async def _get_ai_response(self, handler: ChatInterface, requirement_content: str) -> str:
         """异步获取AI响应"""
         response_content = ""
         def collect_response(content):
@@ -548,7 +548,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         sys_prompt_path_2 = os.path.join(prompt_dir, prompt_file_name_2)
 
         # 创建两个AI处理器实例
-        ai_handler_1 = ChatHandler(handler_config, self.role_name_1, sys_prompt_path_1)
-        ai_handler_2 = ChatHandler(handler_config, self.role_name_2, sys_prompt_path_2)
+        ai_handler_1 = ChatInterface(handler_config, self.role_name_1, sys_prompt_path_1)
+        ai_handler_2 = ChatInterface(handler_config, self.role_name_2, sys_prompt_path_2)
 
         return ai_handler_1, ai_handler_2

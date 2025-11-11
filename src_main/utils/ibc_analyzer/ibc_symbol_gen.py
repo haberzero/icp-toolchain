@@ -12,14 +12,14 @@ from typedef.ibc_data_types import (
     VisibilityTypes
 )
 from typedef.cmd_data_types import Colors
-from libs.ai_handler.chat_handler import ChatHandler
+from libs.ai_interface.chat_interface import ChatInterface
 from data_exchange.app_data_manager import get_instance as get_app_data_manager
 
 
 class IbcSymbolGenerator:
     """IBC符号生成器，负责从AST提取符号并进行规范化"""
     
-    def __init__(self, ai_handler: Optional[ChatHandler] = None):
+    def __init__(self, ai_handler: Optional[ChatInterface] = None):
         """
         初始化符号生成器
         

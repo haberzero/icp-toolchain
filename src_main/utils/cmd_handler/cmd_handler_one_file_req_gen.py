@@ -11,7 +11,7 @@ from data_exchange.app_data_manager import get_instance as get_app_data_manager
 from data_exchange.user_data_manager import get_instance as get_user_data_manager
 
 from utils.cmd_handler.base_cmd_handler import BaseCmdHandler
-from libs.ai_handler.chat_handler import ChatHandler
+from libs.ai_interface.chat_interface import ChatInterface
 from libs.dir_json_funcs import DirJsonFuncs
 
 
@@ -31,8 +31,8 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         self.proj_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_data')
         self.icp_api_config_file = os.path.join(self.proj_data_dir, 'icp_api_config.json')
 
-        self.ai_handler_1: ChatHandler
-        self.ai_handler_2: ChatHandler
+        self.ai_handler_1: ChatInterface
+        self.ai_handler_2: ChatInterface
         self.role_name_1 = "7_one_file_req_gen"
         self.role_name_2 = "7_one_file_req_depend_analyzer"
         ai_handler_1, ai_handler_2 = self._init_ai_handlers()
@@ -577,8 +577,8 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         sys_prompt_path_2 = os.path.join(prompt_dir, prompt_file_name_2)
 
         # 创建两个AI处理器实例
-        ai_handler_1 = ChatHandler(handler_config, self.role_name_1, sys_prompt_path_1)
-        ai_handler_2 = ChatHandler(handler_config, self.role_name_2, sys_prompt_path_2)
+        ai_handler_1 = ChatInterface(handler_config, self.role_name_1, sys_prompt_path_1)
+        ai_handler_2 = ChatInterface(handler_config, self.role_name_2, sys_prompt_path_2)
 
         return ai_handler_1, ai_handler_2
 
@@ -617,7 +617,7 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
                 
         return file_desc_dict
 
-    async def _get_ai_response_1(self, handler: ChatHandler, requirement_content: str) -> str:
+    async def _get_ai_response_1(self, handler: ChatInterface, requirement_content: str) -> str:
         """异步获取AI响应（处理器1）"""
         response_content = ""
         def collect_response(content):
@@ -631,7 +631,7 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         print(f"\n{self.role_name_1}运行完毕。")
         return response_content
 
-    async def _get_ai_response_2(self, handler: ChatHandler, requirement_content: str) -> str:
+    async def _get_ai_response_2(self, handler: ChatInterface, requirement_content: str) -> str:
         """异步获取AI响应（处理器2）"""
         response_content = ""
         def collect_response(content):

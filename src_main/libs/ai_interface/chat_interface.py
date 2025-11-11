@@ -7,10 +7,10 @@ from typedef.cmd_data_types import ChatApiConfig
 from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
-# TODO: 到底应该由ai handler自己来读取系统提示词还是应该由CmdHandler来传入？
+# TODO: 应该由外部传入所有提示词内容，而不是由Interface自身自己加载，这不符合逻辑
 
 
-class ChatHandler:
+class ChatInterface:
     def __init__(self, api_config: ChatApiConfig, role_name: str, role_path: str):
         self.base_url = api_config.base_url
         self.api_key = api_config.api_key

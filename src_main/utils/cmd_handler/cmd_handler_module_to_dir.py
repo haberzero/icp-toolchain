@@ -12,7 +12,7 @@ from data_exchange.app_data_manager import get_instance as get_app_data_manager
 from data_exchange.user_data_manager import get_instance as get_user_data_manager
 
 from utils.cmd_handler.base_cmd_handler import BaseCmdHandler
-from libs.ai_handler.chat_handler import ChatHandler
+from libs.ai_interface.chat_interface import ChatInterface
 
 
 DEBUG_FLAG = False
@@ -34,7 +34,7 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         self.proj_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_data')
         self.icp_api_config_file = os.path.join(self.proj_data_dir, 'icp_api_config.json')
 
-        self.ai_handler: ChatHandler
+        self.ai_handler: ChatInterface
         self.role_name = "3_module_to_dir"
         ai_handler = self._init_ai_handlers()
         if ai_handler is not None:
@@ -160,9 +160,9 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         prompt_file_name = self.role_name + ".md"
         sys_prompt_path = os.path.join(prompt_dir, prompt_file_name)
 
-        return ChatHandler(handler_config, self.role_name, sys_prompt_path)
+        return ChatInterface(handler_config, self.role_name, sys_prompt_path)
     
-    async def _get_ai_response(self, handler: ChatHandler, requirement_content: str) -> str:
+    async def _get_ai_response(self, handler: ChatInterface, requirement_content: str) -> str:
         """异步获取AI响应"""
         response_content = ""
         def collect_response(content):
