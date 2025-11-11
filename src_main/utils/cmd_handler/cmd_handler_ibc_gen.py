@@ -13,7 +13,7 @@ from typedef.ibc_data_types import AstNode, AstNodeType, ClassNode, FunctionNode
 from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
 from data_exchange.app_data_manager import get_instance as get_app_data_manager
 from data_exchange.user_data_manager import get_instance as get_user_data_manager
-from data_exchange.ast_data_manager import get_instance as get_ast_data_manager
+from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
 
 from utils.cmd_handler.base_cmd_handler import BaseCmdHandler
 from utils.ai_handler.chat_handler import ChatHandler
@@ -135,7 +135,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             available_symbols_text = self._build_available_symbols_text(file_path, current_file_dependencies, ibc_root_path)
             
             # 生成IBC代码，最多重试3次
-            ibc_code = self._generate_ibc_with_retry(
+            generation_result = self._generate_ibc_with_retry(
                 file_path, 
                 file_req_content, 
                 user_requirements, 
@@ -145,53 +145,45 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 max_retries=3
             )
             
-            if not ibc_code:
+            if not generation_result:
                 print(f"  {Colors.FAIL}错误: 文件IBC代码生成失败: {file_path}{Colors.ENDC}")
                 continue
             
-            # 保存IBC代码
-            self._save_intent_behavior_code(ibc_root_path, file_path, ibc_code)
+            # 解析返回结果：可能是(ibc_code, symbols_table)或只是ibc_code
+            if isinstance(generation_result, tuple):
+                ibc_code, symbols_table = generation_result
+            else:
+                ibc_code = generation_result
+                symbols_table = {}
             
+
+            behavior_file_path = os.path.join(ibc_root_path, f"{file_path}.ibc")
+            try:
+                # 确保目标目录存在
+                os.makedirs(os.path.dirname(behavior_file_path), exist_ok=True)
+                with open(behavior_file_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                print(f"  {Colors.OKGREEN}半自然语言行为描述代码已保存: {behavior_file_path}{Colors.ENDC}")
+            except Exception as e:
+                print(f"  {Colors.FAIL}错误: 保存半自然语言行为描述代码失败 {behavior_file_path}: {e}{Colors.ENDC}")
+            
+
             # 计算并存储MD5
             ibc_file_path = os.path.join(ibc_root_path, f"{file_path}.ibc")
             file_md5 = self._calculate_file_md5(ibc_file_path)
             
-            # 获取当前AST（在generate_ibc_with_retry中已经解析并存储到内存）
-            ast_dict = self.ast_memory.get(file_path, {})
-            if not ast_dict:
-                print(f"  {Colors.WARNING}警告: 未找到文件的AST: {file_path}{Colors.ENDC}")
-                continue
-            
-            # 符号规范化处理
-            normalized_symbols = self._process_symbol_normalization(file_path, ast_dict)
-            
+            # 符号表已经在analyze_ibc_code中提取并处理
             # 更新符号表：存储md5和符号信息到对应文件夹的symbols.json
             file_symbol_data = {
                 'md5': file_md5,
-                'symbols': normalized_symbols  # normalized_symbols已经是Dict[str, Dict[str, Any]]类型
+                'symbols': symbols_table  # 从ibc_analyzer返回的符号表
             }
-            self._save_file_symbols(ibc_root_path, file_path, file_symbol_data)
+            ibc_data_manager = get_ibc_data_manager()
+            ibc_data_manager.save_file_symbols(ibc_root_path, file_path, file_symbol_data)
             
             print(f"  {Colors.OKGREEN}文件IBC代码生成完成: {file_path}{Colors.ENDC}")
         
         print(f"{Colors.OKGREEN}IBC代码生成命令执行完毕！{Colors.ENDC}")
-
-
-    def _get_ibc_directory_name(self) -> str:
-        """获取IBC目录名称，优先从配置文件读取behavioral_layer_dir，失败则使用默认值"""
-        icp_config_file = os.path.join(self.proj_data_dir, 'icp_config.json')
-        try:
-            with open(icp_config_file, 'r', encoding='utf-8') as f:
-                icp_config = json.load(f)
-            
-            # 尝试获取behavioral_layer_dir
-            behavioral_layer_dir = icp_config["file_system_mapping"].get("behavioral_layer_dir")
-            if behavioral_layer_dir:
-                return behavioral_layer_dir
-            else:
-                return "src_ibc"
-        except:
-            return "src_ibc"
 
     def _extract_section_content(self, content: str, section_name: str) -> str:
         """从文件内容中提取指定部分的内容"""
@@ -282,17 +274,189 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         response_content = asyncio.run(self._get_ai_response(self.ai_handler_1, user_prompt))
         return response_content
 
-    def _save_intent_behavior_code(self, ibc_root_path: str, file_path: str, content: str):
-        """保存半自然语言行为描述代码到文件"""
-        behavior_file_path = os.path.join(ibc_root_path, f"{file_path}.ibc")
+    def _calculate_file_md5(self, file_path: str) -> str:
+        """计算文件的MD5值"""
         try:
-            # 确保目标目录存在
-            os.makedirs(os.path.dirname(behavior_file_path), exist_ok=True)
-            with open(behavior_file_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            print(f"  {Colors.OKGREEN}半自然语言行为描述代码已保存: {behavior_file_path}{Colors.ENDC}")
+            with open(file_path, 'rb') as f:
+                file_hash = hashlib.md5()
+                while chunk := f.read(8192):
+                    file_hash.update(chunk)
+                return file_hash.hexdigest()
         except Exception as e:
-            print(f"  {Colors.FAIL}错误: 保存半自然语言行为描述代码失败 {behavior_file_path}: {e}{Colors.ENDC}")
+            print(f"  {Colors.WARNING}警告: 计算文件MD5失败 {file_path}: {e}{Colors.ENDC}")
+            return ""
+    
+    def _should_skip_file_generation(self, file_path: str, ibc_root_path: str) -> bool:
+        """检查是否应跳过文件生成（基于MD5比较）"""
+        # 检查IBC文件是否存在
+        ibc_file_path = os.path.join(ibc_root_path, f"{file_path}.ibc")
+        if not os.path.exists(ibc_file_path):
+            return False
+        
+        # 加载该文件的符号表数据
+        file_symbols_data = self._load_file_symbols(ibc_root_path, file_path)
+        if not file_symbols_data:
+            return False
+        
+        # 获取符号表中存储的MD5
+        stored_md5 = file_symbols_data.get('md5', '')
+        if not stored_md5:
+            return False
+        
+        # 计算当前IBC文件的MD5
+        current_md5 = self._calculate_file_md5(ibc_file_path)
+        
+        # 比较MD5是否相同
+        return current_md5 == stored_md5
+    
+    def _load_ast_to_memory(self, file_path: str, ibc_root_path: str) -> bool:
+        """从ibc_build加载AST到内存"""
+        ast_file_path = os.path.join(self.ibc_build_dir, f"{file_path}.ibc_ast.json")
+        if not os.path.exists(ast_file_path):
+            print(f"  {Colors.WARNING}警告: AST文件不存在: {ast_file_path}{Colors.ENDC}")
+            return False
+        
+        try:
+            ibc_data_manager = get_ibc_data_manager()
+            ast_dict = ibc_data_manager.load_ast_from_file(ast_file_path)
+            if ast_dict:
+                self.ast_memory[file_path] = ast_dict
+                print(f"  {Colors.OKGREEN}AST已加载到内存: {file_path}{Colors.ENDC}")
+                return True
+            else:
+                print(f"  {Colors.WARNING}警告: AST加载失败: {file_path}{Colors.ENDC}")
+                return False
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 加载AST失败 {ast_file_path}: {e}{Colors.ENDC}")
+            return False
+    
+    # ========== 新增方法：IBC生成重试逻辑 ==========
+    
+    def _generate_ibc_with_retry(
+        self, 
+        file_path: str,
+        file_req_content: str,
+        user_requirements: str,
+        proj_root_content: Dict,
+        available_symbols_text: str,
+        ibc_root_path: str,
+        max_retries: int = 3
+    ) -> tuple[str, Dict[str, Dict[str, Any]]] | tuple[str, str]:
+        """生成IBC代码，带重试机制，返回(ibc_code, symbols_table)或("", "")"""
+        for attempt in range(max_retries):
+            if attempt > 0:
+                print(f"  {Colors.WARNING}重试生成IBC代码，第{attempt + 1}次尝试...{Colors.ENDC}")
+            
+            # 生成IBC代码
+            ibc_code = self._ibc_generator_response(
+                file_path,
+                file_req_content,
+                user_requirements,
+                [],  # available_descriptions，这里不再需要
+                proj_root_content,
+                available_symbols_text
+            )
+            
+            if not ibc_code:
+                print(f"  {Colors.WARNING}警告: AI未返回有效内容{Colors.ENDC}")
+                continue
+            
+            # 移除代码块标记
+            cleaned_code = self._clean_code_blocks(ibc_code)
+            if not cleaned_code:
+                print(f"  {Colors.WARNING}警告: 清理后的代码为空{Colors.ENDC}")
+                continue
+            
+            # 尝试进行语法分析，同时提取符号表
+            try:
+                result = analyze_ibc_code(
+                    cleaned_code,
+                    extract_symbols=True,
+                    ai_handler=self.ai_handler_2,
+                    file_path=file_path
+                )
+                
+                # 解析result
+                if isinstance(result, tuple):
+                    ast_dict, symbols_table = result
+                else:
+                    ast_dict = result
+                    symbols_table = {}
+                
+                # 分析成功，将AST存储到内存和文件
+                self.ast_memory[file_path] = ast_dict
+                
+                # 保存AST到文件
+                ast_file_path = os.path.join(self.ibc_build_dir, f"{file_path}.ibc_ast.json")
+                os.makedirs(os.path.dirname(ast_file_path), exist_ok=True)
+                ibc_data_manager = get_ibc_data_manager()
+                if ibc_data_manager.save_ast_to_file(ast_dict, ast_file_path):
+                    print(f"  {Colors.OKGREEN}AST分析成功并已保存: {file_path}{Colors.ENDC}")
+                
+                # 返回代码和符号表
+                return (cleaned_code, symbols_table)
+                
+            except IbcAnalyzerError as e:
+                print(f"  {Colors.FAIL}错误: IBC语法分析失败: {e}{Colors.ENDC}")
+                if attempt == max_retries - 1:
+                    print(f"  {Colors.FAIL}已达到最大重试次数，放弃生成: {file_path}{Colors.ENDC}")
+                    return ("", "")
+        
+        return ("", "")
+    
+    def _clean_code_blocks(self, code: str) -> str:
+        """移除代码块标记"""
+        lines = code.split('\n')
+        if lines and lines[0].strip().startswith('```'):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith('```'):
+            lines = lines[:-1]
+        return '\n'.join(lines).strip()
+
+    def _call_symbol_normalizer_ai(self, file_path: str, symbols_info: Dict[str, Dict[str, str]]) -> Dict[str, Dict[str, str]]:
+        """调用AI进行符号规范化"""
+        try:
+            # 构建用户提示词
+            app_data_manager = get_app_data_manager()
+            user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'symbol_normalizer_user.md')
+            
+            with open(user_prompt_file, 'r', encoding='utf-8') as f:
+                user_prompt_template = f.read()
+            
+            # 构建符号列表文本
+            symbols_text = self._format_symbols_for_prompt(symbols_info)
+            
+            # 填充占位符
+            user_prompt = user_prompt_template
+            user_prompt = user_prompt.replace('FILE_PATH_PLACEHOLDER', file_path)
+            user_prompt = user_prompt.replace('CONTEXT_INFO_PLACEHOLDER', f"文件路径: {file_path}")
+            user_prompt = user_prompt.replace('AST_SYMBOLS_PLACEHOLDER', symbols_text)
+            
+            # 调用AI
+            response_content = asyncio.run(self._get_ai_response(self.ai_handler_2, user_prompt))
+            
+            # 解析JSON响应
+            return self._parse_symbol_normalizer_response(response_content)
+            
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 调用符号规范化AI失败: {e}{Colors.ENDC}")
+            return {}
+    
+    def _get_ibc_directory_name(self) -> str:
+        """获取IBC目录名称，优先从配置文件读取behavioral_layer_dir，失败则使用默认值"""
+        icp_config_file = os.path.join(self.proj_data_dir, 'icp_config.json')
+        try:
+            with open(icp_config_file, 'r', encoding='utf-8') as f:
+                icp_config = json.load(f)
+            
+            # 尝试获取behavioral_layer_dir
+            behavioral_layer_dir = icp_config["file_system_mapping"].get("behavioral_layer_dir")
+            if behavioral_layer_dir:
+                return behavioral_layer_dir
+            else:
+                return "src_ibc"
+        except:
+            return "src_ibc"
 
     def _check_cmd_requirement(self) -> bool:
         """验证命令的前置条件"""
@@ -346,474 +510,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         await handler.stream_response(requirement_content, collect_response)
         print(f"\n{role_name}运行完毕。")
         return response_content
-    
-    # ========== 新增方法：MD5计算 ==========
-    
-    def _calculate_file_md5(self, file_path: str) -> str:
-        """计算文件的MD5值"""
-        try:
-            with open(file_path, 'rb') as f:
-                file_hash = hashlib.md5()
-                while chunk := f.read(8192):
-                    file_hash.update(chunk)
-                return file_hash.hexdigest()
-        except Exception as e:
-            print(f"  {Colors.WARNING}警告: 计算文件MD5失败 {file_path}: {e}{Colors.ENDC}")
-            return ""
-    
-    # ========== 新增方法：文件生成跳过检查 ==========
-    
-    def _should_skip_file_generation(self, file_path: str, ibc_root_path: str) -> bool:
-        """检查是否应跳过文件生成（基于MD5比较）"""
-        # 检查IBC文件是否存在
-        ibc_file_path = os.path.join(ibc_root_path, f"{file_path}.ibc")
-        if not os.path.exists(ibc_file_path):
-            return False
-        
-        # 加载该文件的符号表数据
-        file_symbols_data = self._load_file_symbols(ibc_root_path, file_path)
-        if not file_symbols_data:
-            return False
-        
-        # 获取符号表中存储的MD5
-        stored_md5 = file_symbols_data.get('md5', '')
-        if not stored_md5:
-            return False
-        
-        # 计算当前IBC文件的MD5
-        current_md5 = self._calculate_file_md5(ibc_file_path)
-        
-        # 比较MD5是否相同
-        return current_md5 == stored_md5
-    
-    # ========== 新增方法：AST内存管理 ==========
-    
-    def _load_ast_to_memory(self, file_path: str, ibc_root_path: str) -> bool:
-        """从ibc_build加载AST到内存"""
-        ast_file_path = os.path.join(self.ibc_build_dir, f"{file_path}.ibc_ast.json")
-        if not os.path.exists(ast_file_path):
-            print(f"  {Colors.WARNING}警告: AST文件不存在: {ast_file_path}{Colors.ENDC}")
-            return False
-        
-        try:
-            ast_data_manager = get_ast_data_manager()
-            ast_dict = ast_data_manager.load_ast_from_file(ast_file_path)
-            if ast_dict:
-                self.ast_memory[file_path] = ast_dict
-                print(f"  {Colors.OKGREEN}AST已加载到内存: {file_path}{Colors.ENDC}")
-                return True
-            else:
-                print(f"  {Colors.WARNING}警告: AST加载失败: {file_path}{Colors.ENDC}")
-                return False
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 加载AST失败 {ast_file_path}: {e}{Colors.ENDC}")
-            return False
-    
-    # ========== 新增方法：IBC生成重试逻辑 ==========
-    
-    def _generate_ibc_with_retry(
-        self, 
-        file_path: str,
-        file_req_content: str,
-        user_requirements: str,
-        proj_root_content: Dict,
-        available_symbols_text: str,
-        ibc_root_path: str,
-        max_retries: int = 3
-    ) -> str:
-        """生成IBC代码，带重试机制"""
-        for attempt in range(max_retries):
-            if attempt > 0:
-                print(f"  {Colors.WARNING}重试生成IBC代码，第{attempt + 1}次尝试...{Colors.ENDC}")
-            
-            # 生成IBC代码
-            ibc_code = self._ibc_generator_response(
-                file_path,
-                file_req_content,
-                user_requirements,
-                [],  # available_descriptions，这里不再需要
-                proj_root_content,
-                available_symbols_text
-            )
-            
-            if not ibc_code:
-                print(f"  {Colors.WARNING}警告: AI未返回有效内容{Colors.ENDC}")
-                continue
-            
-            # 移除代码块标记
-            cleaned_code = self._clean_code_blocks(ibc_code)
-            if not cleaned_code:
-                print(f"  {Colors.WARNING}警告: 清理后的代码为空{Colors.ENDC}")
-                continue
-            
-            # 尝试进行语法分析
-            try:
-                ast_dict = analyze_ibc_code(cleaned_code)
-                # 分析成功，将AST存储到内存和文件
-                self.ast_memory[file_path] = ast_dict
-                
-                # 保存AST到文件
-                ast_file_path = os.path.join(self.ibc_build_dir, f"{file_path}.ibc_ast.json")
-                os.makedirs(os.path.dirname(ast_file_path), exist_ok=True)
-                ast_data_manager = get_ast_data_manager()
-                if ast_data_manager.save_ast_to_file(ast_dict, ast_file_path):
-                    print(f"  {Colors.OKGREEN}AST分析成功并已保存: {file_path}{Colors.ENDC}")
-                
-                return cleaned_code
-                
-            except IbcAnalyzerError as e:
-                print(f"  {Colors.FAIL}错误: IBC语法分析失败: {e}{Colors.ENDC}")
-                if attempt == max_retries - 1:
-                    print(f"  {Colors.FAIL}已达到最大重试次数，放弃生成: {file_path}{Colors.ENDC}")
-                    return ""
-        
-        return ""
-    
-    def _clean_code_blocks(self, code: str) -> str:
-        """移除代码块标记"""
-        lines = code.split('\n')
-        if lines and lines[0].strip().startswith('```'):
-            lines = lines[1:]
-        if lines and lines[-1].strip().startswith('```'):
-            lines = lines[:-1]
-        return '\n'.join(lines).strip()
-    
-    # ========== 新增方法：AST构建与存储 ==========
-    
-    def _build_and_save_ast(self, ibc_file_path: str, file_path: str) -> Optional[Dict[int, AstNode]]:
-        """构建并保存AST"""
-        try:
-            # 读取IBC文件内容
-            with open(ibc_file_path, 'r', encoding='utf-8') as f:
-                ibc_content = f.read()
-            
-            # 调用ibc_analyzer进行语法分析
-            print(f"  {Colors.OKBLUE}正在构建AST: {file_path}{Colors.ENDC}")
-            ast_dict = analyze_ibc_code(ibc_content)
-            
-            # 保存AST到文件
-            ast_file_path = os.path.join(self.ibc_build_dir, f"{file_path}.ibc_ast.json")
-            os.makedirs(os.path.dirname(ast_file_path), exist_ok=True)
-            
-            ast_data_manager = get_ast_data_manager()
-            if ast_data_manager.save_ast_to_file(ast_dict, ast_file_path):
-                print(f"  {Colors.OKGREEN}AST已保存: {ast_file_path}{Colors.ENDC}")
-            else:
-                print(f"  {Colors.WARNING}警告: AST保存失败{Colors.ENDC}")
-            
-            return ast_dict
-            
-        except IbcAnalyzerError as e:
-            print(f"  {Colors.FAIL}错误: IBC语法分析失败 {file_path}: {e}{Colors.ENDC}")
-            return None
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: AST构建失败 {file_path}: {e}{Colors.ENDC}")
-            return None
-    
-    # ========== 新增方法：符号规范化处理 ==========
-    
-    def _process_symbol_normalization(self, file_path: str, ast_dict: Dict[int, AstNode]) -> Dict[str, Dict[str, Any]]:
-        """处理符号规范化"""
-        # 从AST中提取符号
-        symbols_info = self._extract_symbols_from_ast(ast_dict)
-        
-        if not symbols_info:
-            print(f"  {Colors.WARNING}警告: 未从AST中提取到符号: {file_path}{Colors.ENDC}")
-            return {}
-        
-        # 检查AI处理器2是否初始化
-        if self.ai_handler_2 is None:
-            print(f"  {Colors.WARNING}警告: 符号规范化AI处理器未初始化，使用默认命名策略{Colors.ENDC}")
-            return self._default_symbol_normalization(symbols_info)
-        
-        # 调用AI进行符号规范化
-        print(f"  {Colors.OKBLUE}正在进行符号规范化: {file_path}{Colors.ENDC}")
-        normalized_symbols = self._call_symbol_normalizer_ai(file_path, symbols_info)
-        
-        if not normalized_symbols:
-            print(f"  {Colors.WARNING}警告: AI符号规范化失败，使用默认命名策略{Colors.ENDC}")
-            return self._default_symbol_normalization(symbols_info)
-        
-        # 合并符号信息和规范化结果
-        result = {}
-        for symbol_name, symbol_info in symbols_info.items():
-            if symbol_name in normalized_symbols:
-                result[symbol_name] = {
-                    'normalized_name': normalized_symbols[symbol_name]['normalized_name'],
-                    'visibility': normalized_symbols[symbol_name]['visibility'],
-                    'description': symbol_info['description'],
-                    'symbol_type': symbol_info['symbol_type']
-                }
-            else:
-                # 使用默认策略处理缺失的符号
-                default_result = self._default_symbol_normalization({symbol_name: symbol_info})
-                if symbol_name in default_result:
-                    result[symbol_name] = default_result[symbol_name]
-        
-        print(f"  {Colors.OKGREEN}符号规范化完成，共处理 {len(result)} 个符号{Colors.ENDC}")
-        return result
-    
-    def _extract_symbols_from_ast(self, ast_dict: Dict[int, AstNode]) -> Dict[str, Dict[str, str]]:
-        """从AST中提取符号信息"""
-        symbols = {}
-        
-        for uid, node in ast_dict.items():
-            if isinstance(node, ClassNode):
-                symbols[node.identifier] = {
-                    'symbol_type': 'class',
-                    'description': node.external_desc
-                }
-            elif isinstance(node, FunctionNode):
-                symbols[node.identifier] = {
-                    'symbol_type': 'func',
-                    'description': node.external_desc
-                }
-            elif isinstance(node, VariableNode):
-                symbols[node.identifier] = {
-                    'symbol_type': 'var',
-                    'description': node.external_desc
-                }
-        
-        return symbols
-    
-    def _call_symbol_normalizer_ai(self, file_path: str, symbols_info: Dict[str, Dict[str, str]]) -> Dict[str, Dict[str, str]]:
-        """调用AI进行符号规范化"""
-        try:
-            # 构建用户提示词
-            app_data_manager = get_app_data_manager()
-            user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'symbol_normalizer_user.md')
-            
-            with open(user_prompt_file, 'r', encoding='utf-8') as f:
-                user_prompt_template = f.read()
-            
-            # 构建符号列表文本
-            symbols_text = self._format_symbols_for_prompt(symbols_info)
-            
-            # 填充占位符
-            user_prompt = user_prompt_template
-            user_prompt = user_prompt.replace('FILE_PATH_PLACEHOLDER', file_path)
-            user_prompt = user_prompt.replace('CONTEXT_INFO_PLACEHOLDER', f"文件路径: {file_path}")
-            user_prompt = user_prompt.replace('AST_SYMBOLS_PLACEHOLDER', symbols_text)
-            
-            # 调用AI
-            response_content = asyncio.run(self._get_ai_response(self.ai_handler_2, user_prompt))
-            
-            # 解析JSON响应
-            return self._parse_symbol_normalizer_response(response_content)
-            
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 调用符号规范化AI失败: {e}{Colors.ENDC}")
-            return {}
-    
-    def _format_symbols_for_prompt(self, symbols_info: Dict[str, Dict[str, str]]) -> str:
-        """格式化符号列表用于提示词"""
-        lines = []
-        for symbol_name, info in symbols_info.items():
-            symbol_type = info['symbol_type']
-            description = info['description'] if info['description'] else '无描述'
-            lines.append(f"- {symbol_name} ({symbol_type}, 描述: {description})")
-        return '\n'.join(lines)
-    
-    def _parse_symbol_normalizer_response(self, response: str) -> Dict[str, Dict[str, str]]:
-        """解析符号规范化AI的响应"""
-        try:
-            # 移除可能的代码块标记
-            cleaned_response = response.strip()
-            if cleaned_response.startswith('```json'):
-                cleaned_response = cleaned_response[7:]
-            elif cleaned_response.startswith('```'):
-                cleaned_response = cleaned_response[3:]
-            if cleaned_response.endswith('```'):
-                cleaned_response = cleaned_response[:-3]
-            
-            cleaned_response = cleaned_response.strip()
-            
-            # 解析JSON
-            result = json.loads(cleaned_response)
-            
-            # 验证结果格式
-            validated_result = {}
-            for symbol_name, symbol_data in result.items():
-                if 'normalized_name' in symbol_data and 'visibility' in symbol_data:
-                    # 验证normalized_name符合标识符规范
-                    if self._validate_identifier(symbol_data['normalized_name']):
-                        # 验证visibility是预定义值
-                        if symbol_data['visibility'] in VisibilityTypes:
-                            validated_result[symbol_name] = symbol_data
-                        else:
-                            print(f"  {Colors.WARNING}警告: 符号 {symbol_name} 的可见性值无效: {symbol_data['visibility']}{Colors.ENDC}")
-                    else:
-                        print(f"  {Colors.WARNING}警告: 符号 {symbol_name} 的规范化名称无效: {symbol_data['normalized_name']}{Colors.ENDC}")
-            
-            return validated_result
-            
-        except json.JSONDecodeError as e:
-            print(f"  {Colors.FAIL}错误: 解析AI响应JSON失败: {e}{Colors.ENDC}")
-            return {}
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 处理AI响应失败: {e}{Colors.ENDC}")
-            return {}
-    
-    def _validate_identifier(self, identifier: str) -> bool:
-        """验证标识符是否符合规范"""
-        if not identifier:
-            return False
-        # 标识符必须以字母或下划线开头，仅包含字母、数字、下划线
-        pattern = r'^[a-zA-Z_][a-zA-Z0-9_]*$'
-        return re.match(pattern, identifier) is not None
-    
-    def _default_symbol_normalization(self, symbols_info: Dict[str, Dict[str, str]]) -> Dict[str, Dict[str, Any]]:
-        """默认的符号规范化策略"""
-        result = {}
-        for symbol_name, info in symbols_info.items():
-            # 简单的默认策略：将中文转换为拼音或使用占位符
-            # 这里使用简单的策略，实际可以集成拼音库
-            normalized_name = self._simple_normalize(symbol_name, info['symbol_type'])
-            
-            # 根据类型推断默认可见性
-            default_visibility = 'file_local'
-            if info['symbol_type'] == 'class':
-                default_visibility = 'public'
-            
-            result[symbol_name] = {
-                'normalized_name': normalized_name,
-                'visibility': default_visibility,
-                'description': info['description'],
-                'symbol_type': info['symbol_type']
-            }
-        
-        return result
-    
-    def _simple_normalize(self, symbol_name: str, symbol_type: str) -> str:
-        """简单的符号名称规范化"""
-        # 移除空格和特殊字符，保留字母数字
-        cleaned = ''.join(c for c in symbol_name if c.isalnum() or c == '_')
-        
-        if not cleaned:
-            # 如果清理后为空，使用类型作为前缀
-            cleaned = f"{symbol_type}_symbol"
-        
-        # 确保以字母开头
-        if cleaned and not cleaned[0].isalpha():
-            cleaned = f"{symbol_type}_{cleaned}"
-        
-        return cleaned if cleaned else 'unnamed_symbol'
-    
-    # ========== 新增方法：符号表管理（分布式存储） ==========
-    
-    def _get_symbols_file_path(self, ibc_root_path: str, file_path: str) -> str:
-        """获取文件对应的symbols.json路径"""
-        # 获取文件所在目录
-        file_dir = os.path.dirname(file_path)
-        if file_dir:
-            symbols_dir = os.path.join(ibc_root_path, file_dir)
-        else:
-            symbols_dir = ibc_root_path
-        
-        return os.path.join(symbols_dir, 'symbols.json')
-    
-    def _load_dir_symbols_table(self, symbols_file: str) -> Dict[str, Any]:
-        """加载目录级别的符号表"""
-        if not os.path.exists(symbols_file):
-            return {}
-        
-        try:
-            with open(symbols_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"  {Colors.WARNING}警告: 读取符号表失败 {symbols_file}: {e}{Colors.ENDC}")
-            return {}
-    
-    def _load_file_symbols(self, ibc_root_path: str, file_path: str) -> Dict[str, Any]:
-        """加载指定文件的符号数据"""
-        symbols_file = self._get_symbols_file_path(ibc_root_path, file_path)
-        dir_symbols_table = self._load_dir_symbols_table(symbols_file)
-        
-        # 从目录符号表中获取当前文件的数据
-        file_name = os.path.basename(file_path)
-        return dir_symbols_table.get(file_name, {})
-    
-    def _save_file_symbols(self, ibc_root_path: str, file_path: str, file_symbol_data: Dict[str, Any]) -> None:
-        """保存文件的符号数据到对应目录的symbols.json"""
-        symbols_file = self._get_symbols_file_path(ibc_root_path, file_path)
-        
-        # 加载目录级别的符号表
-        dir_symbols_table = self._load_dir_symbols_table(symbols_file)
-        
-        # 更新当前文件的数据
-        file_name = os.path.basename(file_path)
-        dir_symbols_table[file_name] = file_symbol_data
-        
-        # 保存更新后的符号表
-        try:
-            os.makedirs(os.path.dirname(symbols_file), exist_ok=True)
-            with open(symbols_file, 'w', encoding='utf-8') as f:
-                json.dump(dir_symbols_table, f, ensure_ascii=False, indent=2)
-            print(f"  {Colors.OKGREEN}符号表已更新: {symbols_file}{Colors.ENDC}")
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 保存符号表失败: {e}{Colors.ENDC}")
-    
-    # ========== 新增方法：符号上下文构建 ==========
-    
-    def _extract_visible_symbols(self, file_symbols: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """提取对外可见的符号"""
-        visible_symbols = []
-        visible_types = ['public', 'global', 'module_local', 'protected']
-        
-        for symbol_name, symbol_data in file_symbols.items():
-            if symbol_data.get('visibility') in visible_types:
-                visible_symbols.append({
-                    'original_name': symbol_name,
-                    'normalized_name': symbol_data.get('normalized_name', ''),
-                    'description': symbol_data.get('description', ''),
-                    'visibility': symbol_data.get('visibility', ''),
-                    'symbol_type': symbol_data.get('symbol_type', '')
-                })
-        
-        return visible_symbols
-    
-    def _build_available_symbols_text(self, current_file: str, dependencies: List[str], ibc_root_path: str) -> str:
-        """构建可用符号的文本描述"""
-        if not dependencies:
-            return '暂无可用的依赖符号'
-        
-        lines = ['可用的依赖符号：', '']
-        
-        for dep_file in dependencies:
-            # 从对应目录的symbols.json加载符号数据
-            file_symbols_data = self._load_file_symbols(ibc_root_path, dep_file)
-            if not file_symbols_data:
-                continue
-            
-            symbols = file_symbols_data.get('symbols', {})
-            if not symbols:
-                continue
-            
-            lines.append(f"来自文件：{dep_file}")
-            
-            # symbols是一个Dict[str, Dict[str, Any]]，需要遍历
-            for original_name, symbol_data in symbols.items():
-                if not isinstance(symbol_data, dict):
-                    continue
-                    
-                symbol_type = symbol_data.get('symbol_type', '')
-                description = symbol_data.get('description', '无描述')
-                visibility = symbol_data.get('visibility', '')
-                
-                # 只包含对外可见的符号
-                visible_types = ['public', 'global', 'module_local', 'protected']
-                if visibility not in visible_types:
-                    continue
-                
-                type_label = {'class': '类', 'func': '函数', 'var': '变量'}.get(symbol_type, symbol_type)
-                lines.append(f"- {type_label} {original_name}")
-                lines.append(f"  描述：{description}")
-                lines.append('')
-        
-        return '\n'.join(lines) if len(lines) > 2 else '暂无可用的依赖符号'
-    
-    # ========== 修改的方法：AI处理器初始化 ==========
-    
+
     def _init_ai_handlers(self):
         """初始化两个AI处理器"""
         # 检查配置文件是否存在
