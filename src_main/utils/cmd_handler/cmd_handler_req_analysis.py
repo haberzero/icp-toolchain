@@ -63,9 +63,9 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
             print(f"{Colors.HEADER}{Colors.BOLD}需求分析结果:{Colors.ENDC}")
             print(cleaned_content)
         
-        # 保存结果到refined_requirements.md
+        # 保存结果到refined_requirements.json
         os.makedirs(self.proj_data_dir, exist_ok=True)
-        output_file = os.path.join(self.proj_data_dir, 'refined_requirements.md')
+        output_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write(cleaned_content)

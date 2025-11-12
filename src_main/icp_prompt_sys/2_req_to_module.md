@@ -105,7 +105,7 @@
             ]
         }
     },
-    "required_libraries": {
+    "ExternalLibraryDependencies": {
         "Name_of_Library": "第三方库用途描述",
         "Name_of_Library2": "另一个第三方库用途描述"
     }
@@ -154,7 +154,7 @@
             ]
         }
     },
-    "required_libraries": {
+    "ExternalLibraryDependencies": {
         "react": "前端UI框架",
         "chart.js": "数据可视化",
         "MongoDB": "数据库",

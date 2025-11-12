@@ -50,7 +50,7 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         print(f"{Colors.OKBLUE}开始进行依赖分析...{Colors.ENDC}")
         
         # 读取精炼需求
-        refined_requirement_file = os.path.join(self.proj_data_dir, 'refined_requirements.md')
+        refined_requirement_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
         try:
             with open(refined_requirement_file, 'r', encoding='utf-8') as f:
                 refined_requirement_content = f.read()
@@ -181,7 +181,7 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
     def _check_cmd_requirement(self) -> bool:
         """验证依赖分析命令的前置条件"""
         # 检查精炼需求文件是否存在
-        refined_requirement_file = os.path.join(self.proj_data_dir, 'refined_requirements.md')
+        refined_requirement_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
         if not os.path.exists(refined_requirement_file):
             print(f"  {Colors.WARNING}警告: 精炼需求文件不存在，请先执行需求分析命令{Colors.ENDC}")
             return False

@@ -50,7 +50,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         print(f"{Colors.OKBLUE}开始进行目录文件填充...{Colors.ENDC}")
         
         # 读取需求分析结果
-        requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.md')
+        requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
         try:
             with open(requirement_analysis_file, 'r', encoding='utf-8') as f:
                 requirement_content = f.read()
@@ -145,7 +145,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
     def _check_cmd_requirement(self) -> bool:
         """验证目录文件填充命令的前置条件"""
         # 检查需求分析结果文件是否存在
-        requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.md')
+        requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
         if not os.path.exists(requirement_analysis_file):
             print(f"  {Colors.WARNING}警告: 需求分析结果文件不存在，请先执行需求分析命令{Colors.ENDC}")
             return False
