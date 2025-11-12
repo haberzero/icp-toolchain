@@ -60,8 +60,20 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         if not requirement_content:
             print(f"  {Colors.FAIL}错误: 需求分析结果为空{Colors.ENDC}")
             return
+        
+        # 过滤掉ExternalLibraryDependencies字段
+        try:
+            requirement_json = json.loads(requirement_content)
+            # 移除ExternalLibraryDependencies字段，因为module_to_dir只关注模块结构，不关注外部库
+            if 'ExternalLibraryDependencies' in requirement_json:
+                del requirement_json['ExternalLibraryDependencies']
+            # 将过滤后的内容转换回JSON字符串
+            filtered_requirement_content = json.dumps(requirement_json, indent=2, ensure_ascii=False)
+        except json.JSONDecodeError as e:
+            print(f"  {Colors.FAIL}错误: 需求分析结果不是有效的JSON格式: {e}{Colors.ENDC}")
+            return
 
-        response_content = asyncio.run(self._get_ai_response(self.ai_handler, requirement_content))
+        response_content = asyncio.run(self._get_ai_response(self.ai_handler, filtered_requirement_content))
         cleaned_content = response_content.strip()
 
         # 移除可能的代码块标记
