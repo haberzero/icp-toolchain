@@ -10,7 +10,7 @@ from pydantic import SecretStr
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, ChatApiConfig, Colors
 from typedef.ibc_data_types import (
     AstNode, AstNodeType, ClassNode, FunctionNode, VariableNode, 
-    VisibilityTypes, FileSymbolTable, SymbolNode
+    VisibilityTypes, SymbolType, FileSymbolTable, SymbolNode
 )
 
 from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
@@ -146,7 +146,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             # 构建可用符号文本（从依赖的文件中提取）
             available_symbols_text = self._build_available_symbols_text(
-                file_path, 
                 current_file_dependencies, 
                 ibc_root_path
             )
@@ -179,10 +178,15 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             # 对符号进行规范化处理
             print(f"    正在进行符号规范化...")
-            normalized_symbols_dict = self._normalize_symbols(
-                file_path,
-                symbol_table
-            )
+            try:
+                normalized_symbols_dict = self._normalize_symbols(
+                    file_path,
+                    symbol_table
+                )
+            except RuntimeError as e:
+                print(f"  {Colors.FAIL}错误: 符号规范化失败 {file_path}: {e}{Colors.ENDC}")
+                print(f"  {Colors.WARNING}请检查AI连接配置并重新运行命令{Colors.ENDC}")
+                continue
             
             # 更新符号表中的规范化信息
             for symbol_name, norm_info in normalized_symbols_dict.items():
@@ -441,7 +445,19 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         file_path: str, 
         file_symbol_table: FileSymbolTable
     ) -> Dict[str, Dict[str, str]]:
-        """对符号进行规范化处理"""
+        """
+        对符号进行规范化处理
+        
+        Args:
+            file_path: 文件路径
+            file_symbol_table: 文件符号表
+            
+        Returns:
+            Dict[str, Dict[str, str]]: 规范化后的符号信息字典
+            
+        Raises:
+            RuntimeError: 当AI处理器未初始化或调用失败时抛出异常
+        """
         symbols = file_symbol_table.get_all_symbols()
         
         if not symbols:
@@ -450,8 +466,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         # 检查AI处理器2是否初始化
         if not hasattr(self, 'ai_handler_2') or self.ai_handler_2 is None:
-            print(f"    {Colors.WARNING}警告: 符号规范化AI处理器未初始化，使用默认命名策略{Colors.ENDC}")
-            return self._default_symbol_normalization(symbols)
+            error_msg = f"符号规范化AI处理器未初始化，请检查配置文件并重新初始化AI处理器"
+            print(f"    {Colors.FAIL}错误: {error_msg}{Colors.ENDC}")
+            raise RuntimeError(error_msg)
         
         # 构建符号列表文本
         symbols_text = self._format_symbols_for_prompt(symbols)
@@ -464,8 +481,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             with open(user_prompt_file, 'r', encoding='utf-8') as f:
                 user_prompt_template = f.read()
         except Exception as e:
-            print(f"    {Colors.FAIL}错误: 读取符号规范化提示词失败: {e}{Colors.ENDC}")
-            return self._default_symbol_normalization(symbols)
+            error_msg = f"读取符号规范化提示词失败: {e}"
+            print(f"    {Colors.FAIL}错误: {error_msg}{Colors.ENDC}")
+            raise RuntimeError(error_msg)
         
         # 填充占位符
         user_prompt = user_prompt_template
@@ -473,23 +491,41 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt = user_prompt.replace('CONTEXT_INFO_PLACEHOLDER', f"文件路径: {file_path}")
         user_prompt = user_prompt.replace('AST_SYMBOLS_PLACEHOLDER', symbols_text)
         
-        # 调用AI
-        response_content = asyncio.run(self._get_ai_response(self.ai_handler_2, user_prompt))
+        # 调用AI，支持重试机制
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                print(f"    正在调用AI进行符号规范化（尝试 {attempt + 1}/{max_retries}）...")
+                response_content = asyncio.run(self._get_ai_response(self.ai_handler_2, user_prompt))
+                
+                # 解析JSON响应
+                normalized_symbols = self._parse_symbol_normalizer_response(response_content)
+                
+                if normalized_symbols:
+                    return normalized_symbols
+                else:
+                    print(f"    {Colors.WARNING}警告: AI返回的符号规范化结果为空{Colors.ENDC}")
+                    if attempt < max_retries - 1:
+                        print(f"    {Colors.OKBLUE}准备重试...{Colors.ENDC}")
+                        continue
+            except Exception as e:
+                print(f"    {Colors.FAIL}错误: AI调用失败: {e}{Colors.ENDC}")
+                if attempt < max_retries - 1:
+                    print(f"    {Colors.OKBLUE}准备重试...{Colors.ENDC}")
+                    continue
+                else:
+                    raise RuntimeError(f"符号规范化AI调用失败（已重试{max_retries}次）: {e}")
         
-        # 解析JSON响应
-        normalized_symbols = self._parse_symbol_normalizer_response(response_content)
-        
-        if not normalized_symbols:
-            print(f"    {Colors.WARNING}警告: AI符号规范化失败，使用默认命名策略{Colors.ENDC}")
-            return self._default_symbol_normalization(symbols)
-        
-        return normalized_symbols
+        # 所有重试都失败
+        error_msg = f"符号规范化失败：AI未能返回有效结果（已重试{max_retries}次），请检查AI连接或提示词配置"
+        print(f"    {Colors.FAIL}错误: {error_msg}{Colors.ENDC}")
+        raise RuntimeError(error_msg)
     
     def _format_symbols_for_prompt(self, symbols: Dict[str, SymbolNode]) -> str:
         """格式化符号列表用于提示词"""
         lines = []
         for symbol_name, symbol in symbols.items():
-            symbol_type = symbol.symbol_type.value
+            symbol_type = symbol.symbol_type.value if symbol.symbol_type else '未知'
             description = symbol.description if symbol.description else '无描述'
             lines.append(f"- {symbol_name} ({symbol_type}, 描述: {description})")
         return '\n'.join(lines)
@@ -548,54 +584,43 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         pattern = r'^[a-zA-Z_][a-zA-Z0-9_]*$'
         return re.match(pattern, identifier) is not None
     
-    def _default_symbol_normalization(self, symbols: Dict[str, SymbolNode]) -> Dict[str, Dict[str, str]]:
-        """默认的符号规范化策略"""
-        result = {}
-        for symbol_name, symbol in symbols.items():
-            # 简单的默认策略：将中文转换为拼音或使用占位符
-            normalized_name = self._simple_normalize(symbol_name, symbol.symbol_type.value)
-            
-            # 根据类型推断默认可见性
-            default_visibility = 'file_local'
-            if symbol.symbol_type.value == 'class':
-                default_visibility = 'public'
-            
-            result[symbol_name] = {
-                'normalized_name': normalized_name,
-                'visibility': default_visibility
-            }
-        
-        return result
-    
-    def _simple_normalize(self, symbol_name: str, symbol_type: str) -> str:
-        """简单的符号名称规范化"""
-        # 移除空格和特殊字符，保留字母数字
-        cleaned = ''.join(c for c in symbol_name if c.isalnum() or c == '_')
-        
-        if not cleaned:
-            # 如果清理后为空，使用类型作为前缀
-            cleaned = f"{symbol_type}_symbol"
-        
-        # 确保以字母开头
-        if cleaned and not cleaned[0].isalpha():
-            cleaned = f"{symbol_type}_{cleaned}"
-        
-        return cleaned if cleaned else 'unnamed_symbol'
-    
     # ========== 符号信息构建 ==========
     
     def _build_available_symbols_text(
         self, 
-        current_file: str, 
         dependencies: List[str], 
         ibc_root_path: str
     ) -> str:
-        """构建可用符号的文本描述"""
+        """
+        构建可用符号的文本描述
+        
+        根据符号的可见性过滤：
+        - PUBLIC: 对所有文件可见
+        - GLOBAL: 对所有文件可见
+        - PROTECTED: 仅对子类/友元可见（需要AI自行判断）
+        - MODULE_LOCAL: 仅在定义文件内可见，不对外暴露
+        - PRIVATE: 私有，不对外暴露
+        
+        Args:
+            dependencies: 依赖文件列表
+            ibc_root_path: IBC根目录路径
+            
+        Returns:
+            str: 可用符号的文本描述
+        """
         if not dependencies:
             return '暂无可用的依赖符号'
         
         ibc_data_manager = get_ibc_data_manager()
-        lines = ['可用的依赖符号：', '']
+        lines = ['可用的已生成符号：', '']
+        
+        # 定义可对外可见的符号类型（使用枚举）
+        # MODULE_LOCAL 和 PRIVATE 不对外暴露
+        externally_visible_types = [
+            VisibilityTypes.PUBLIC,
+            VisibilityTypes.GLOBAL,
+            VisibilityTypes.PROTECTED
+        ]
         
         for dep_file in dependencies:
             # 加载依赖文件的符号表
@@ -606,30 +631,65 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             lines.append(f"来自文件：{dep_file}")
             
-            # 只列出对外可见的符号（如果未规范化，也列出来，因为生成时可能需要知道依赖的符号）
-            visible_types = ['public', 'global', 'module_local', 'protected']
-            
             has_visible_symbols = False
             for symbol_name, symbol in dep_symbol_table.symbols.items():
-                # 未规范化或可见性为对外可见的符号
-                if not symbol.visibility or symbol.visibility in visible_types:
-                    symbol_type_label = {
-                        'class': '类',
-                        'func': '函数',
-                        'var': '变量'
-                    }.get(symbol.symbol_type.value, symbol.symbol_type.value)
+                # 检查符号可见性
+                # 1. 如果未规范化，也列出来（供生成时参考）
+                # 2. 如果已规范化，仅列出对外可见的符号
+                is_visible = False
+                
+                if not symbol.visibility:
+                    # 未规范化的符号，也列出
+                    is_visible = True
+                elif symbol.visibility in externally_visible_types:
+                    # 已规范化且可见性符合要求
+                    is_visible = True
+                
+                if is_visible:
+                    # 处理symbol_type，避免None情况
+                    if symbol.symbol_type:
+                        symbol_type_label = {
+                            SymbolType.CLASS: '类',
+                            SymbolType.FUNCTION: '函数',
+                            SymbolType.VARIABLE: '变量',
+                            SymbolType.MODULE: '模块'
+                        }.get(symbol.symbol_type, symbol.symbol_type.value)
+                    else:
+                        symbol_type_label = '未知'
                     
                     description = symbol.description if symbol.description else '无描述'
                     lines.append(f"- {symbol_type_label} {symbol_name}")
                     lines.append(f"  描述：{description}")
+                    
                     if symbol.normalized_name:
                         lines.append(f"  规范化名称：{symbol.normalized_name}")
+                    
+                    # 显示可见性信息
+                    if symbol.visibility:
+                        visibility_label = {
+                            VisibilityTypes.PUBLIC: '公开（所有文件可用）',
+                            VisibilityTypes.GLOBAL: '全局（所有文件可用）',
+                            VisibilityTypes.PROTECTED: '受保护（仅子类/友元可用）'
+                        }.get(symbol.visibility, symbol.visibility.value)
+                        lines.append(f"  可见性：{visibility_label}")
+                    
                     lines.append('')
                     has_visible_symbols = True
             
             # 如果该依赖文件没有可见符号，移除文件标题
             if not has_visible_symbols:
-                lines.pop()  # 移除 "来自文件：" 那一行
+                lines.pop()  # 移除添加的第一行 "来自文件："
+        
+        # 添加可见性规则说明
+        if len(lines) > 2:
+            lines.append('')
+            lines.append('**符号可见性规则说明：**')
+            lines.append('- 公开(public)/全局(global): 可以直接使用')
+            lines.append('- 受保护(protected): 仅当当前文件是符号所在类的子类或友元时才能使用，否则不能使用')
+            lines.append('- 模块局部(module_local): 仅在符号定义文件内可用，不对外暴露')
+            lines.append('- 私有(private): 不对外暴露，不能使用')
+            lines.append('')
+            lines.append('请你在生成代码时严格遵守以上可见性规则，不要使用不符合可见性要求的符号。')
         
         return '\n'.join(lines) if len(lines) > 2 else '暂无可用的依赖符号'
     

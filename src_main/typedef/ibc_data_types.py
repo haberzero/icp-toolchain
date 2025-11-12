@@ -283,7 +283,6 @@ class VisibilityTypes(Enum):
     PUBLIC = "public"
     PRIVATE = "private"
     PROTECTED = "protected"
-    FILE_LOCAL = "file_local"
     MODULE_LOCAL = "module_local"
     GLOBAL = "global"
 
@@ -302,9 +301,9 @@ class SymbolNode:
     uid: int = 0
     symbol_name: str = ""
     normalized_name: str = ""  # 规范化名称，由AI推断后填充
-    visibility: str = ""  # 可见性，由AI推断后填充
+    visibility: Optional[VisibilityTypes] = None  # 可见性，由AI推断后填充
     description: str = ""
-    symbol_type: SymbolType = SymbolType.VARIABLE
+    symbol_type: Optional[SymbolType] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """将符号节点转换为字典表示"""
@@ -312,7 +311,7 @@ class SymbolNode:
             "uid": self.uid,
             "symbol_name": self.symbol_name,
             "normalized_name": self.normalized_name,
-            "visibility": self.visibility,
+            "visibility": self.visibility.value if self.visibility else None,
             "description": self.description,
             "symbol_type": self.symbol_type.value if self.symbol_type else None
         }
@@ -320,13 +319,22 @@ class SymbolNode:
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> 'SymbolNode':
         """从字典创建符号节点"""
+        visibility_str = data.get("visibility")
+        visibility = None
+        if visibility_str:
+            try:
+                visibility = VisibilityTypes(visibility_str)
+            except ValueError:
+                # 如果枚举值无效，保持为None
+                pass
+        
         return SymbolNode(
             uid=data.get("uid", 0),
             symbol_name=data.get("symbol_name", ""),
             normalized_name=data.get("normalized_name", ""),
-            visibility=data.get("visibility", ""),
+            visibility=visibility,
             description=data.get("description", ""),
-            symbol_type=SymbolType(data["symbol_type"]) if data.get("symbol_type") else SymbolType.VARIABLE
+            symbol_type=SymbolType(data["symbol_type"]) if data.get("symbol_type") else None
         )
     
     def __repr__(self):
@@ -337,9 +345,18 @@ class SymbolNode:
         return bool(self.normalized_name and self.visibility)
     
     def update_normalized_info(self, normalized_name: str, visibility: str) -> None:
-        """更新规范化信息"""
+        """更新规范化信息
+        
+        Args:
+            normalized_name: 规范化名称
+            visibility: 可见性字符串，将被转换为VisibilityTypes枚举
+        """
         self.normalized_name = normalized_name
-        self.visibility = visibility
+        try:
+            self.visibility = VisibilityTypes(visibility)
+        except ValueError:
+            # 如果枚举值无效，保持原值
+            self.visibility = None
 
 
 @dataclass
