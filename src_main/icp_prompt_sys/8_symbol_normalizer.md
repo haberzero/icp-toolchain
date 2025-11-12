@@ -63,8 +63,7 @@
 | `private` | 仅在定义所在类内部使用的私有成员 |
 | `protected` | 在类及其子类中使用的保护成员 |
 | `public` | 类的公共接口，供外部调用 |
-| `file_local` | 仅在当前文件内部使用的辅助函数或变量 |
-| `module_local` | 在当前模块目录内共享使用 |
+| `module_local` | 仅在当前文件内部使用的辅助函数或变量 |
 | `global` | 整个工程范围内全局可见和使用 |
 
 ### 判断原则
@@ -72,16 +71,15 @@
 1. **最小可见性原则**：默认倾向于选择最小的可见性范围
 2. **根据描述判断**：
    - 如果符号描述中明确说明"对外提供"、"公共接口"等，选择 `public` 或 `global`
-   - 如果描述中包含"内部使用"、"辅助功能"等，选择 `private` 或 `file_local`
-   - 如果描述中提到"模块内共享"、"跨文件调用"，选择 `module_local`
+   - 如果描述中包含"内部使用"、"辅助功能"等，选择 `private` 或 `module_local`
 
 3. **根据类型判断**：
-   - 类（class）通常至少是 `public`（如果是对外API）或 `file_local`（如果是内部实现）
-   - 顶层函数（func）通常是 `public` 或 `file_local`
+   - 类（class）通常至少是 `public`（如果是对外API）或 `module_local`（如果是内部实现）
+   - 顶层函数（func）通常是 `public` 或 `module_local`
    - 类的方法需要结合其用途判断：
      - 以"初始化"、"构造"等开头的通常是 `public`
      - 以"内部"、"辅助"、"私有"等描述的是 `private`
-   - 顶层变量通常是 `file_local` 或 `module_local`
+   - 顶层变量通常是 `module_local`
    - 类的成员变量通常是 `private`
 
 4. **上下文考虑**：
