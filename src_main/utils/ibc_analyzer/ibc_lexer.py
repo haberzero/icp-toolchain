@@ -46,7 +46,11 @@ class IbcLexer:
 
         left_spaces_num: int = len(current_line) - len(lstriped_line)
         if left_spaces_num % 4 != 0:
-            raise LexerError(message=f"Line {self.line_num}: Indentation must be a multiple of 4 spaces")
+            # 打印警告并截断到最近的4倍数
+            truncated_spaces = (left_spaces_num // 4) * 4
+            print(f"Warning: Line {self.line_num}: Indentation is {left_spaces_num} spaces (not a multiple of 4), "
+                  f"truncating to {truncated_spaces} spaces")
+            left_spaces_num = truncated_spaces
             
         return left_spaces_num // 4
     
