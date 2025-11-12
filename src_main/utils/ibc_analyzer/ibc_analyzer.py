@@ -19,7 +19,7 @@ class IbcAnalyzerError(Exception):
 
 
 def analyze_ibc_code(text: str):
-    """分析IBC代码，返回AST字典"""
+    """分析IBC代码，返回AST字典以及原始符号表"""
     try:
         # 词法分析
         lexer = IbcLexer(text)
