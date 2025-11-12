@@ -282,7 +282,19 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         project_structure_json: str,
         available_symbols_text: str
     ) -> str:
-        """生成IBC代码"""
+        """
+        生成IBC代码
+        
+        Args:
+            file_path: 文件路径
+            file_req_content: 文件需求内容
+            user_requirements: 用户原始需求
+            project_structure_json: 项目结构JSON
+            available_symbols_text: 可用符号文本
+            
+        Returns:
+            str: 生成的IBC代码
+        """
         # 提取各个部分的内容
         class_content = self._extract_section_content(file_req_content, 'class')
         func_content = self._extract_section_content(file_req_content, 'func')
@@ -312,6 +324,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt = user_prompt.replace('BEHAVIOR_CONTENT_PLACEHOLDER', behavior_content if behavior_content else '无')
         user_prompt = user_prompt.replace('IMPORT_CONTENT_PLACEHOLDER', import_content if import_content else '无')
         user_prompt = user_prompt.replace('AVAILABLE_SYMBOLS_PLACEHOLDER', available_symbols_text)
+
+        # 保存用户提示词到ibc_gen_temp目录
+        self._save_user_prompt_to_temp(file_path, user_prompt, 'ibc_gen_prompt.txt')
 
         # 调用AI生成半自然语言行为描述代码
         response_content = asyncio.run(self._get_ai_response(self.ai_handler_1, user_prompt))
@@ -491,6 +506,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt = user_prompt.replace('CONTEXT_INFO_PLACEHOLDER', f"文件路径: {file_path}")
         user_prompt = user_prompt.replace('AST_SYMBOLS_PLACEHOLDER', symbols_text)
         
+        # 保存用户提示词到ibc_gen_temp目录
+        self._save_user_prompt_to_temp(file_path, user_prompt, 'symbol_normalizer_prompt.txt')
+        
         # 调用AI，支持重试机制
         max_retries = 3
         for attempt in range(max_retries):
@@ -583,6 +601,45 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 标识符必须以字母或下划线开头，仅包含字母、数字、下划线
         pattern = r'^[a-zA-Z_][a-zA-Z0-9_]*$'
         return re.match(pattern, identifier) is not None
+    
+    def _save_user_prompt_to_temp(
+        self,
+        file_path: str,
+        user_prompt: str,
+        prompt_filename: str
+    ) -> None:
+        """
+        保存用户提示词到ibc_gen_temp目录
+        
+        Args:
+            file_path: 文件相对路径（如 "src/main.py"）
+            user_prompt: 用户提示词内容
+            prompt_filename: 提示词文件名（如 "ibc_gen_prompt.txt"）
+        """
+        try:
+            # 构建 ibc_gen_temp 目录路径
+            temp_dir = os.path.join(self.work_dir, 'ibc_gen_temp')
+            
+            # 获取文件所在目录
+            file_dir = os.path.dirname(file_path)
+            if file_dir:
+                prompt_dir = os.path.join(temp_dir, file_dir)
+            else:
+                prompt_dir = temp_dir
+            
+            # 确保目录存在
+            os.makedirs(prompt_dir, exist_ok=True)
+            
+            # 构建完整的提示词文件路径
+            prompt_file_path = os.path.join(prompt_dir, f"{os.path.basename(file_path)}_{prompt_filename}")
+            
+            # 写入文件
+            with open(prompt_file_path, 'w', encoding='utf-8') as f:
+                f.write(user_prompt)
+            
+            print(f"    {Colors.OKGREEN}用户提示词已保存: {prompt_file_path}{Colors.ENDC}")
+        except Exception as e:
+            print(f"    {Colors.WARNING}警告: 保存用户提示词失败: {e}{Colors.ENDC}")
     
     # ========== 符号信息构建 ==========
     
