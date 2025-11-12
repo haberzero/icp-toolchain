@@ -106,39 +106,43 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         if not user_requirements:
             print(f"  {Colors.FAIL}错误: 未找到用户原始需求，请确认需求已正确加载{Colors.ENDC}")
             return
-        
-        # 初始化数据管理器
-        ibc_data_manager = get_ibc_data_manager()
+
         
         # 将proj_root_content转换为JSON格式的项目结构字符串
         project_structure_json = json.dumps(proj_root, indent=2, ensure_ascii=False)
+        
+        # 初始化更新状态跟踪字典：记录每个文件是否需要更新
+        update_status = self._initialize_update_status(
+            file_creation_order_list,
+            staging_dir_path,
+            ibc_root_path
+        )
         
         # 按照依赖顺序为每个文件生成半自然语言行为描述代码
         for file_path in file_creation_order_list:
             print(f"  {Colors.OKBLUE}正在处理文件: {file_path}{Colors.ENDC}")
             
-            # 检查是否已经有该文件的符号表，且MD5匹配
-            file_symbol_table = ibc_data_manager.load_file_symbols(ibc_root_path, file_path)
-            req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
+            # 获取当前文件的依赖文件列表
+            current_file_dependencies = dependent_relation.get(file_path, [])
             
-            # 计算当前需求文件的MD5
-            current_md5 = self._calculate_file_md5(req_file_path)
+            # 检查依赖文件是否有更新，如果有则当前文件也需要更新
+            if self._check_dependency_updated(current_file_dependencies, update_status):
+                update_status[file_path] = True
+                print(f"    {Colors.OKBLUE}检测到依赖文件已更新，当前文件需要重新生成{Colors.ENDC}")
             
-            # 如果符号表存在且MD5匹配，跳过该文件
-            if file_symbol_table.file_md5 == current_md5 and current_md5:
-                print(f"    {Colors.WARNING}文件未变化，跳过生成: {file_path}{Colors.ENDC}")
+            # 如果文件不需要更新，跳过该文件
+            if not update_status.get(file_path, True):
+                print(f"    {Colors.WARNING}文件及其依赖均未变化，跳过生成: {file_path}{Colors.ENDC}")
                 continue
             
             # 从src_staging目录读取文件需求描述
+            req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
             try:
                 with open(req_file_path, 'r', encoding='utf-8') as f:
                     file_req_content = f.read()
             except Exception as e:
                 print(f"  {Colors.FAIL}错误: 读取文件需求描述失败 {req_file_path}: {e}{Colors.ENDC}")
                 continue
-            
-            # 获取当前文件的依赖文件列表
-            current_file_dependencies = dependent_relation.get(file_path, [])
             
             # 构建可用符号文本（从依赖的文件中提取）
             available_symbols_text = self._build_available_symbols_text(
@@ -188,12 +192,14 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                         norm_info['normalized_name'],
                         norm_info['visibility']
                     )
-            
-            # 设置文件MD5
+
+            # 保存当前需求文件的MD5
+            current_md5 = self._calculate_file_md5(req_file_path)
             symbol_table.file_md5 = current_md5
             
             # 保存符号表
             print(f"    正在保存符号表...")
+            ibc_data_manager = get_ibc_data_manager()
             success = ibc_data_manager.save_file_symbols(
                 ibc_root_path,
                 file_path,
@@ -358,6 +364,62 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         return response_content
     
     # ========== 辅助方法 ==========
+    
+    def _initialize_update_status(
+        self,
+        file_creation_order_list: List[str],
+        staging_dir_path: str,
+        ibc_root_path: str,
+    ) -> Dict[str, bool]:
+        """
+        初始化更新状态字典
+        
+        遍历所有文件，检查每个文件的MD5是否与已保存的符号表中的MD5匹配。
+        如果不匹配，则标记为需要更新。
+        
+        Args:
+            file_creation_order_list: 文件创建顺序列表
+            staging_dir_path: staging目录路径
+            ibc_root_path: IBC根目录路径
+            
+        Returns:
+            Dict[str, bool]: 更新状态字典，key为文件路径，value为是否需要更新
+        """
+        update_status = {}
+        ibc_data_manager = get_ibc_data_manager()
+        for file_path in file_creation_order_list:
+            # 加载已保存的符号表
+            file_symbol_table = ibc_data_manager.load_file_symbols(ibc_root_path, file_path)
+            
+            # 计算当前需求文件的MD5
+            req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
+            current_md5 = self._calculate_file_md5(req_file_path)
+            
+            # 判断是否需要更新：MD5不匹配或文件不存在
+            needs_update = (file_symbol_table.file_md5 != current_md5) or not current_md5
+            update_status[file_path] = needs_update
+        
+        return update_status
+    
+    def _check_dependency_updated(
+        self,
+        dependencies: List[str],
+        update_status: Dict[str, bool]
+    ) -> bool:
+        """
+        检查当前文件的依赖文件是否有更新
+        
+        Args:
+            dependencies: 依赖文件列表
+            update_status: 更新状态字典
+            
+        Returns:
+            bool: 如果任一依赖文件需要更新，返回True
+        """
+        for dep_file in dependencies:
+            if update_status.get(dep_file, False):
+                return True
+        return False
     
     def _calculate_file_md5(self, file_path: str) -> str:
         """计算文件的MD5校验值"""
