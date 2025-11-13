@@ -9,10 +9,15 @@ class IbcTokenType(Enum):
     """Token类型枚举"""
     KEYWORDS = "KEYWORDS"  # 关键字
     IDENTIFIER = "IDENTIFIER"  # 一般文本
-    LPAREN = "LPAREN"  # 左括号
-    RPAREN = "RPAREN"  # 右括号
-    COMMA = "COMMA"  # 逗号
-    COLON = "COLON"  # 冒号
+    LPAREN = "LPAREN"  # 左小括号 (
+    RPAREN = "RPAREN"  # 右小括号 )
+    LBRACE = "LBRACE"  # 左花括号 {
+    RBRACE = "RBRACE"  # 右花括号 }
+    LBRACKET = "LBRACKET"  # 左方括号 [
+    RBRACKET = "RBRACKET"  # 右方括号 ]
+    COMMA = "COMMA"  # 逗号 ,
+    COLON = "COLON"  # 冒号 :
+    BACKSLASH = "BACKSLASH"  # 反斜杠 \
     REF_IDENTIFIER = "REF_IDENTIFIER"  # 符号引用
     INDENT = "INDENT"  # 缩进
     DEDENT = "DEDENT"  # 退格

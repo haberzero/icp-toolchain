@@ -801,6 +801,239 @@ def test_continuation_line_error_misalignment():
             return False
 
 
+def test_paren_continuation():
+    """测试小括号延续行"""
+    print("\n测试 paren_continuation 函数...")
+    
+    code = """func 调用API():
+    请求结果 = $httpClient.post$(
+        url,
+        data,
+        headers
+    )
+    处理 $请求结果$"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 验证函数有两个行为步骤
+        assert len(func_node.children_uids) == 2, f"预期2个行为步骤，实际{len(func_node.children_uids)}"
+        
+        # 验证第一个行为步骤包含括号内的内容
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        assert isinstance(behavior1, BehaviorStepNode), "预期为BehaviorStepNode"
+        assert "httpClient.post" in behavior1.symbol_refs, f"缺少符号引用'httpClient.post': {behavior1.symbol_refs}"
+        
+        # 验证内容包含所有参数
+        assert "url" in behavior1.content, f"缺少'url': {behavior1.content}"
+        assert "data" in behavior1.content, f"缺少'data': {behavior1.content}"
+        assert "headers" in behavior1.content, f"缺少'headers': {behavior1.content}"
+        
+        # 验证第二个行为步骤
+        behavior2 = ast_nodes[func_node.children_uids[1]]
+        assert isinstance(behavior2, BehaviorStepNode), "预期为BehaviorStepNode"
+        assert "请求结果" in behavior2.symbol_refs, f"缺少符号引用'请求结果': {behavior2.symbol_refs}"
+        
+        print("  ✓ 成功解析小括号延续行")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_brace_continuation():
+    """测试花括号延续行"""
+    print("\n测试 brace_continuation 函数...")
+    
+    code = """func 初始化配置():
+    配置字典 = {
+        key1: value1,
+        key2: value2,
+        key3: value3
+    }
+    返回 配置字典"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 验证函数有两个行为步骤
+        assert len(func_node.children_uids) == 2, f"预期2个行为步骤，实际{len(func_node.children_uids)}"
+        
+        # 验证第一个行为步骤包含花括号内的内容
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        assert isinstance(behavior1, BehaviorStepNode), "预期为BehaviorStepNode"
+        
+        # 验证内容包含所有键值对
+        assert "key1" in behavior1.content, f"缺少'key1': {behavior1.content}"
+        assert "key2" in behavior1.content, f"缺少'key2': {behavior1.content}"
+        assert "key3" in behavior1.content, f"缺少'key3': {behavior1.content}"
+        assert "value1" in behavior1.content, f"缺少'value1': {behavior1.content}"
+        
+        print("  ✓ 成功解析花括号延续行")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_bracket_continuation():
+    """测试方括号延续行"""
+    print("\n测试 bracket_continuation 函数...")
+    
+    code = """func 处理数组():
+    数组列表 = [
+        元素1,
+        元素2,
+        元素3
+    ]
+    遍历 数组列表"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 验证函数有两个行为步骤
+        assert len(func_node.children_uids) == 2, f"预期2个行为步骤，实际{len(func_node.children_uids)}"
+        
+        # 验证第一个行为步骤包含方括号内的内容
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        assert isinstance(behavior1, BehaviorStepNode), "预期为BehaviorStepNode"
+        
+        # 验证内容包含所有元素
+        assert "元素1" in behavior1.content, f"缺少'元素1': {behavior1.content}"
+        assert "元素2" in behavior1.content, f"缺少'元素2': {behavior1.content}"
+        assert "元素3" in behavior1.content, f"缺少'元素3': {behavior1.content}"
+        
+        print("  ✓ 成功解析方括号延续行")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_nested_brackets():
+    """测试嵌套括号"""
+    print("\n测试 nested_brackets 函数...")
+    
+    code = """func 处理复杂数据():
+    结果 = 调用函数(
+        参数1,
+        嵌套调用(
+            内层参数1,
+            内层参数2
+        ),
+        参数3
+    )
+    返回 结果"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 验证函数有两个行为步骤
+        assert len(func_node.children_uids) == 2, f"预期2个行为步骤，实际{len(func_node.children_uids)}"
+        
+        # 验证第一个行为步骤包含嵌套括号内的所有内容
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        assert isinstance(behavior1, BehaviorStepNode), "预期为BehaviorStepNode"
+        
+        # 验证内容包含所有参数
+        assert "参数1" in behavior1.content, f"缺少'参数1': {behavior1.content}"
+        assert "嵌套调用" in behavior1.content, f"缺少'嵌套调用': {behavior1.content}"
+        assert "内层参数1" in behavior1.content, f"缺少'内层参数1': {behavior1.content}"
+        assert "内层参数2" in behavior1.content, f"缺少'内层参数2': {behavior1.content}"
+        assert "参数3" in behavior1.content, f"缺岑'参数3': {behavior1.content}"
+        
+        print("  ✓ 成功解析嵌套括号")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_backslash_continuation():
+    """测试反斜杠延续行"""
+    print("\n测试 backslash_continuation 函数...")
+    
+    # 反斜杠延续行需要与起始行对齐，不能有额外缩进
+    code = """\
+func 长语句():
+    这是一个非常非常长的语句 \\
+    需要分成多行来书写 \\
+    以便提高可读性
+    
+    执行操作"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 验证函数有两个行为步骤
+        assert len(func_node.children_uids) == 2, f"预期2个行为步骤，实际{len(func_node.children_uids)}"
+        
+        # 验证第一个行为步骤包含所有延续行的内容
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        assert isinstance(behavior1, BehaviorStepNode), "预期为BehaviorStepNode"
+        
+        # 验证内容包含所有部分
+        assert "非常非常长" in behavior1.content, f"缺少'非常非常长': {behavior1.content}"
+        assert "分成多行" in behavior1.content, f"缺少'分成多行': {behavior1.content}"
+        assert "提高可读性" in behavior1.content, f"缺少'提高可读性': {behavior1.content}"
+        
+        print("  ✓ 成功解析反斜杠延续行")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("开始测试 Intent Behavior Code 解析器...")
@@ -825,6 +1058,11 @@ if __name__ == "__main__":
         test_results.append(("延续行符号引用", test_continuation_line_with_symbol_refs()))
         test_results.append(("延续行错误-冒号", test_continuation_line_error_colon()))
         test_results.append(("延续行错误-对齐", test_continuation_line_error_misalignment()))
+        test_results.append(("小括号延续行", test_paren_continuation()))
+        test_results.append(("花括号延续行", test_brace_continuation()))
+        test_results.append(("方括号延续行", test_bracket_continuation()))
+        test_results.append(("嵌套括号", test_nested_brackets()))
+        test_results.append(("反斜杠延续行", test_backslash_continuation()))
         
         print("\n" + "=" * 60)
         print("测试结果汇总")

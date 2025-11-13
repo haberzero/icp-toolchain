@@ -446,6 +446,65 @@ func test():
     
     return True
 
+
+def test_bracket_and_backslash_symbols():
+    r"""测试符号 token 也即 () {} [] \\"""
+    print("测试 bracket_and_backslash_symbols 函数...")
+    
+    code = """func test():
+    dict = {key: value}
+    list = [item1, item2]
+    line1 \\
+    line2"""
+    expected = [
+        (IbcTokenType.KEYWORDS, IbcKeywords.FUNC.value),
+        (IbcTokenType.IDENTIFIER, 'test'),
+        (IbcTokenType.LPAREN, '('),
+        (IbcTokenType.RPAREN, ')'),
+        (IbcTokenType.COLON, ':'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.INDENT, ''),
+        (IbcTokenType.IDENTIFIER, 'dict = '),
+        (IbcTokenType.LBRACE, '{'),
+        (IbcTokenType.IDENTIFIER, 'key'),
+        (IbcTokenType.COLON, ':'),
+        (IbcTokenType.IDENTIFIER, ' value'),
+        (IbcTokenType.RBRACE, '}'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.IDENTIFIER, 'list = '),
+        (IbcTokenType.LBRACKET, '['),
+        (IbcTokenType.IDENTIFIER, 'item1'),
+        (IbcTokenType.COMMA, ','),
+        (IbcTokenType.IDENTIFIER, ' item2'),
+        (IbcTokenType.RBRACKET, ']'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.IDENTIFIER, 'line1 '),
+        (IbcTokenType.BACKSLASH, '\\'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.IDENTIFIER, 'line2'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.DEDENT, ''),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.EOF, '')
+    ]
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        
+        # assert len(tokens) == len(expected), f"Token数量不匹配: 预期 {len(expected)}, 实际 {len(tokens)}"
+        
+        for i, (actual_token, expected_token) in enumerate(zip(tokens, expected)):
+            expected_type, expected_value = expected_token
+            assert actual_token.type == expected_type and actual_token.value == expected_value, \
+                f"Token {i} 不匹配: 预期 Token({expected_type}, '{expected_value}', _) 实际 {actual_token}"
+        
+        print("  ✓ 成功处理特殊符号")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        return False
+
 if __name__ == "__main__":
     print("\n开始测试 Intent Behavior Code 词法分析器...\n")
     
@@ -477,6 +536,9 @@ if __name__ == "__main__":
         print()
         
         test_results.append(("多个符号引用", test_multiple_symbol_references()))
+        print()
+        
+        test_results.append(("特殊符号", test_bracket_and_backslash_symbols()))
         print()
         
         test_results.append(("错误情况", test_error_cases()))

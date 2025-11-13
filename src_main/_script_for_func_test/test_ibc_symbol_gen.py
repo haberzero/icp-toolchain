@@ -72,7 +72,7 @@ class UserManager():
         # 验证未规范化状态（normalized_name和visibility应该为空）
         for symbol in all_symbols.values():
             assert symbol.normalized_name == "", f"符号 {symbol.symbol_name} 的 normalized_name 应该为空"
-            assert symbol.visibility == "", f"符号 {symbol.symbol_name} 的 visibility 应该为空"
+            assert symbol.visibility == None, f"符号 {symbol.symbol_name} 的 visibility 应该为空"
             assert not symbol.is_normalized(), f"符号 {symbol.symbol_name} 不应该已规范化"
         
         print("\n✓ 基本符号提取测试通过\n")

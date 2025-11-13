@@ -669,8 +669,12 @@ class FuncContentState(BaseState):
 # 行为步骤的子状态枚举
 class BehaviorStepSubState(Enum):
     EXPECTING_CONTENT = "EXPECTING_CONTENT"  # 等待内容
-    EXPECTING_CONTINUATION = "EXPECTING_CONTINUATION"  # 延续行模式（收集内容）
-    EXPECTING_CONTINUATION_END = "EXPECTING_CONTINUATION_END"  # 延续行结束检查（等待dedent对齐）
+    EXPECTING_COMMA_CONTINUATION = "EXPECTING_COMMA_CONTINUATION"  # 逗号延续行模式（收集内容，允许缩进）
+    EXPECTING_COMMA_CONTINUATION_END = "EXPECTING_COMMA_CONTINUATION_END"  # 逗号延续行结束检查（等待dedent对齐）
+    EXPECTING_BACKSLASH_CONTINUATION = "EXPECTING_BACKSLASH_CONTINUATION"  # 反斜杠延续行模式（收集内容，保持同级缩进）
+    EXPECTING_PAREN_CONTINUATION = "EXPECTING_PAREN_CONTINUATION"  # 小括号延续行模式
+    EXPECTING_BRACE_CONTINUATION = "EXPECTING_BRACE_CONTINUATION"  # 花括号延续行模式
+    EXPECTING_BRACKET_CONTINUATION = "EXPECTING_BRACKET_CONTINUATION"  # 方括号延续行模式
 
 
 class BehaviorStepState(BaseState):
@@ -684,7 +688,13 @@ class BehaviorStepState(BaseState):
         self.pop_flag = False
         self.pass_in_token_flag = False
         self.sub_state = BehaviorStepSubState.EXPECTING_CONTENT
-        self.continuation_indent_level = 0  # 跟踪延续行的缩进等级
+        self.comma_continuation_indent_level = 0  # 跟踪逗号延续行的缩进等级
+        self.backslash_continuation_started = False  # 标记是否已经开始反斜杠延续
+        
+        # 括号封闭计数器
+        self.paren_count = 0  # ()
+        self.brace_count = 0  # {}
+        self.bracket_count = 0  # []
 
     def process_token(self, token: Token) -> None:
         self.current_token = token
@@ -698,14 +708,38 @@ class BehaviorStepState(BaseState):
         # 根据子状态处理token
         if self.sub_state == BehaviorStepSubState.EXPECTING_CONTENT:
             self._process_content_state(token)
-        elif self.sub_state == BehaviorStepSubState.EXPECTING_CONTINUATION:
-            self._process_continuation_state(token)
-        elif self.sub_state == BehaviorStepSubState.EXPECTING_CONTINUATION_END:
-            self._process_continuation_end_state(token)
+        elif self.sub_state == BehaviorStepSubState.EXPECTING_COMMA_CONTINUATION:
+            self._process_comma_continuation_state(token)
+        elif self.sub_state == BehaviorStepSubState.EXPECTING_COMMA_CONTINUATION_END:
+            self._process_comma_continuation_end_state(token)
+        elif self.sub_state == BehaviorStepSubState.EXPECTING_BACKSLASH_CONTINUATION:
+            self._process_backslash_continuation_state(token)
+        elif self.sub_state == BehaviorStepSubState.EXPECTING_PAREN_CONTINUATION:
+            self._process_paren_continuation_state(token)
+        elif self.sub_state == BehaviorStepSubState.EXPECTING_BRACE_CONTINUATION:
+            self._process_brace_continuation_state(token)
+        elif self.sub_state == BehaviorStepSubState.EXPECTING_BRACKET_CONTINUATION:
+            self._process_bracket_continuation_state(token)
     
     def _process_content_state(self, token: Token) -> None:
         """处理普通内容状态"""
-        if token.type == IbcTokenType.NEWLINE:
+        # 处理左括号，进入对应的括号延续行模式
+        if token.type == IbcTokenType.LPAREN:
+            self.content += token.value
+            self.paren_count = 1  # 初始化计数器
+            self.sub_state = BehaviorStepSubState.EXPECTING_PAREN_CONTINUATION
+            self.pass_in_token_flag = True
+        elif token.type == IbcTokenType.LBRACE:
+            self.content += token.value
+            self.brace_count = 1  # 初始化计数器
+            self.sub_state = BehaviorStepSubState.EXPECTING_BRACE_CONTINUATION
+            self.pass_in_token_flag = True
+        elif token.type == IbcTokenType.LBRACKET:
+            self.content += token.value
+            self.bracket_count = 1  # 初始化计数器
+            self.sub_state = BehaviorStepSubState.EXPECTING_BRACKET_CONTINUATION
+            self.pass_in_token_flag = True
+        elif token.type == IbcTokenType.NEWLINE:
             content_stripped = self.content.strip()
             
             # 检查行末字符
@@ -716,29 +750,35 @@ class BehaviorStepState(BaseState):
                 self._create_behavior_node()
                 self.pop_flag = True
             elif content_stripped and content_stripped[-1] == ",":
-                # 行末是逗号，进入延续行模式
-                self.sub_state = BehaviorStepSubState.EXPECTING_CONTINUATION
+                # 行末是逗号，进入逗号延续行模式
+                self.sub_state = BehaviorStepSubState.EXPECTING_COMMA_CONTINUATION
                 self.pass_in_token_flag = True
-                self.continuation_indent_level = 0
+                self.comma_continuation_indent_level = 0
                 self.content += " "  # 添加空格以便后续内容连接
+            elif content_stripped and content_stripped[-1] == "\\":
+                # 行末是反斜杠，进入反斜杠延续行模式
+                self.content = content_stripped[:-1]  # 移除反斜杠
+                self.sub_state = BehaviorStepSubState.EXPECTING_BACKSLASH_CONTINUATION
+                self.pass_in_token_flag = True
+                self.backslash_continuation_started = True
             else:
                 # 普通行结束
                 self.content = content_stripped
                 self._create_behavior_node()
                 self.pop_flag = True
         else:
-            # 收集内容
+            # 收集其他内容
             self.content += token.value
     
-    def _process_continuation_state(self, token: Token) -> None:
-        """处理延续行状态"""
+    def _process_comma_continuation_state(self, token: Token) -> None:
+        """处理逗号延续行状态"""
         if token.type == IbcTokenType.INDENT:
             # 延续行中的缩进
-            self.continuation_indent_level += 1
+            self.comma_continuation_indent_level += 1
         elif token.type == IbcTokenType.DEDENT:
             # 延续行中的退缩进
-            self.continuation_indent_level -= 1
-            if self.continuation_indent_level < 0:
+            self.comma_continuation_indent_level -= 1
+            if self.comma_continuation_indent_level < 0:
                 raise IbcParserStateError(f"Line {token.line_num} BehaviorStepState: Unexpected dedent structure")
         elif token.type == IbcTokenType.NEWLINE:
             content_stripped = self.content.strip()
@@ -753,22 +793,21 @@ class BehaviorStepState(BaseState):
                 self.content += " "  # 添加空格以便后续内容连接
             else:
                 # 行末不是逗号，进入延续行结束检查状态
-                # 保持 pass_in_token_flag 为 True，等待后续的 dedent token
-                self.sub_state = BehaviorStepSubState.EXPECTING_CONTINUATION_END
+                self.sub_state = BehaviorStepSubState.EXPECTING_COMMA_CONTINUATION_END
         else:
             # 收集内容
             self.content += token.value
     
-    def _process_continuation_end_state(self, token: Token) -> None:
-        """处理延续行结束检查状态（等待dedent对齐）"""
+    def _process_comma_continuation_end_state(self, token: Token) -> None:
+        """处理逗号延续行结束检查状态（等待dedent对齐）"""
         if token.type == IbcTokenType.DEDENT:
             # 收到退缩进，减少缩进等级
-            self.continuation_indent_level -= 1
-            if self.continuation_indent_level < 0:
+            self.comma_continuation_indent_level -= 1
+            if self.comma_continuation_indent_level < 0:
                 raise IbcParserStateError(f"Line {token.line_num} BehaviorStepState: Unexpected dedent structure")
             
             # 检查是否已经对齐到延续行的起始缩进等级
-            if self.continuation_indent_level == 0:
+            if self.comma_continuation_indent_level == 0:
                 # 缩进等级为0，延续行结束，可以弹出状态机
                 self.content = self.content.strip()
                 self._create_behavior_node()
@@ -777,8 +816,113 @@ class BehaviorStepState(BaseState):
             # 否则继续等待更多的 dedent token
         else:
             # 在等待 dedent 对齐的过程中遇到了其他 token，说明缩进没有对齐
-            raise IbcParserStateError(f"Line {token.line_num} BehaviorStepState: Continuation line must align with the starting line when not ending with comma")
-
+            raise IbcParserStateError(f"Line {token.line_num} BehaviorStepState: Comma continuation line must align with the starting line when not ending with comma")
+    
+    def _process_backslash_continuation_state(self, token: Token) -> None:
+        """处理反斜杠延续行状态
+        
+        反斜杠延续行的特点：
+        1. 延续行内容应该与起始行保持相同的缩进级别
+        2. 不需要额外的dedent来结束，直接收集内容
+        3. 遇到NEWLINE时检查是否还有反斜杠继续
+        """
+        # 忽略缩进和退缩进 token（因为反斜杠延续行不改变缩进级别）
+        if token.type in (IbcTokenType.INDENT, IbcTokenType.DEDENT):
+            return
+        
+        if token.type == IbcTokenType.NEWLINE:
+            content_stripped = self.content.strip()
+            
+            # 延续行的行末不允许出现冒号
+            if content_stripped and content_stripped[-1] == ":":
+                raise IbcParserStateError(f"Line {token.line_num} BehaviorStepState: Backslash continuation line cannot end with colon")
+            
+            # 检查行末是否以反斜杠结束
+            if content_stripped and content_stripped[-1] == "\\":
+                # 行末是反斜杠，继续延续行模式，移除反斜杠
+                self.content = content_stripped[:-1] + " "  # 移除反斜杠并添加空格
+            else:
+                # 行末不是反斜杠，反斜杠延续行结束
+                self.content = content_stripped
+                self._create_behavior_node()
+                self.pass_in_token_flag = False
+                self.pop_flag = True
+        else:
+            # 收集内容
+            self.content += token.value
+    
+    def _process_paren_continuation_state(self, token: Token) -> None:
+        """处理小括号延续行状态"""
+        # 忽略缩进 token
+        if token.type in (IbcTokenType.INDENT, IbcTokenType.DEDENT):
+            return
+        
+        if token.type == IbcTokenType.LPAREN:
+            self.paren_count += 1
+            self.content += token.value
+        elif token.type == IbcTokenType.RPAREN:
+            self.paren_count -= 1
+            self.content += token.value
+            # 检查括号是否封闭
+            if self.paren_count == 0:
+                # 括号封闭，退出括号延续行模式
+                self.sub_state = BehaviorStepSubState.EXPECTING_CONTENT
+                self.pass_in_token_flag = False
+        elif token.type == IbcTokenType.NEWLINE:
+            # 新行，添加空格
+            self.content += " "
+        else:
+            # 收集其他内容
+            self.content += token.value
+    
+    def _process_brace_continuation_state(self, token: Token) -> None:
+        """处理花括号延续行状态"""
+        # 忽略缩进 token
+        if token.type in (IbcTokenType.INDENT, IbcTokenType.DEDENT):
+            return
+        
+        if token.type == IbcTokenType.LBRACE:
+            self.brace_count += 1
+            self.content += token.value
+        elif token.type == IbcTokenType.RBRACE:
+            self.brace_count -= 1
+            self.content += token.value
+            # 检查括号是否封闭
+            if self.brace_count == 0:
+                # 括号封闭，退出括号延续行模式
+                self.sub_state = BehaviorStepSubState.EXPECTING_CONTENT
+                self.pass_in_token_flag = False
+        elif token.type == IbcTokenType.NEWLINE:
+            # 新行，添加空格
+            self.content += " "
+        else:
+            # 收集其他内容
+            self.content += token.value
+    
+    def _process_bracket_continuation_state(self, token: Token) -> None:
+        """处理方括号延续行状态"""
+        # 忽略缩进 token
+        if token.type in (IbcTokenType.INDENT, IbcTokenType.DEDENT):
+            return
+        
+        if token.type == IbcTokenType.LBRACKET:
+            self.bracket_count += 1
+            self.content += token.value
+        elif token.type == IbcTokenType.RBRACKET:
+            self.bracket_count -= 1
+            self.content += token.value
+            # 检查括号是否封闭
+            if self.bracket_count == 0:
+                # 括号封闭，退出括号延续行模式
+                self.sub_state = BehaviorStepSubState.EXPECTING_CONTENT
+                self.pass_in_token_flag = False
+        elif token.type == IbcTokenType.NEWLINE:
+            # 新行，添加空格
+            self.content += " "
+        else:
+            # 收集其他内容
+            self.content += token.value
+    
     def _create_behavior_node(self) -> None:
         """创建行为步骤节点"""
         uid = self.uid_generator.gen_uid()

@@ -116,11 +116,13 @@ class IbcLexer:
                     self._tokenize_text_part(part)
     
     def _tokenize_text_part(self, text: str):
-        """对文本部分进行分词：仅识别 ( ) , : 四个特殊符号
+        r"""对文本部分进行分词：识别 ( ) { } [ ] , : \ 等特殊符号
         其余所有连续非特殊字符（包括数字、字母、符号、空格等）视为 IDENTIFIER 即普通文本
         """
         i = 0
         n = len(text)
+        special_chars = '(){}[],:\\' # 特殊字符集合
+        
         while i < n:
             char = text[i]
             if char == '(':
@@ -129,16 +131,31 @@ class IbcLexer:
             elif char == ')':
                 self.tokens.append(Token(IbcTokenType.RPAREN, ')', self.line_num))
                 i += 1
+            elif char == '{':
+                self.tokens.append(Token(IbcTokenType.LBRACE, '{', self.line_num))
+                i += 1
+            elif char == '}':
+                self.tokens.append(Token(IbcTokenType.RBRACE, '}', self.line_num))
+                i += 1
+            elif char == '[':
+                self.tokens.append(Token(IbcTokenType.LBRACKET, '[', self.line_num))
+                i += 1
+            elif char == ']':
+                self.tokens.append(Token(IbcTokenType.RBRACKET, ']', self.line_num))
+                i += 1
             elif char == ',':
                 self.tokens.append(Token(IbcTokenType.COMMA, ',', self.line_num))
                 i += 1
             elif char == ':':
                 self.tokens.append(Token(IbcTokenType.COLON, ':', self.line_num))
                 i += 1
+            elif char == '\\':
+                self.tokens.append(Token(IbcTokenType.BACKSLASH, '\\', self.line_num))
+                i += 1
             else:
                 # 收集非保留符号的常规字符，包括空格也被直接作为常规字符收集
                 start = i
-                while i < n and text[i] not in '(),:':
+                while i < n and text[i] not in special_chars:
                     i += 1
                 identifier = text[start:i]
                 self.tokens.append(Token(IbcTokenType.IDENTIFIER, identifier, self.line_num))
