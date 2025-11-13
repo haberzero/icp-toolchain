@@ -777,7 +777,7 @@ class BehaviorStepState(BaseState):
             # 否则继续等待更多的 dedent token
         else:
             # 在等待 dedent 对齐的过程中遇到了其他 token，说明缩进没有对齐
-            raise IbcParserStateError(f"Line {token.line_num} BehaviorStepState: Behavior line must align with the starting line again when not ending with comma")
+            raise IbcParserStateError(f"Line {token.line_num} BehaviorStepState: Continuation line must align with the starting line when not ending with comma")
 
     def _create_behavior_node(self) -> None:
         """创建行为步骤节点"""

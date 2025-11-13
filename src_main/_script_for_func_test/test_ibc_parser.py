@@ -595,6 +595,212 @@ def test_multiline_func_in_class():
         return False
 
 
+def test_continuation_line_basic():
+    """测试基本的延续行功能"""
+    print("\n测试 continuation_line_basic 函数...")
+    
+    code = """func 处理数据(数据列表):
+    初始化 总数 = 0,
+        有效数 = 0,
+        无效数 = 0
+    遍历 数据列表 中的每个 元素"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        assert isinstance(func_node, FunctionNode), "预期为FunctionNode"
+        assert func_node.identifier == "处理数据", f"函数名不匹配: {func_node.identifier}"
+        
+        # 验证函数有两个行为步骤
+        assert len(func_node.children_uids) == 2, f"预期2个行为步骤，实际{len(func_node.children_uids)}"
+        
+        # 验证第一个行为步骤包含延续行内容
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        assert isinstance(behavior1, BehaviorStepNode), "预期为BehaviorStepNode"
+        
+        # 验证内容包含所有三行的内容
+        assert "初始化" in behavior1.content, f"缺少'初始化': {behavior1.content}"
+        assert "总数" in behavior1.content, f"缺少'总数': {behavior1.content}"
+        assert "有效数" in behavior1.content, f"缺少'有效数': {behavior1.content}"
+        assert "无效数" in behavior1.content, f"缺少'无效数': {behavior1.content}"
+        
+        # 验证第二个行为步骤是普通行
+        behavior2 = ast_nodes[func_node.children_uids[1]]
+        assert isinstance(behavior2, BehaviorStepNode), "预期为BehaviorStepNode"
+        assert "遍历" in behavior2.content, f"缺少'遍历': {behavior2.content}"
+        
+        print("  ✓ 成功解析基本延续行")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_continuation_line_with_indent():
+    """测试带缩进的延续行"""
+    print("\n测试 continuation_line_with_indent 函数...")
+    
+    code = """func 构建查询语句():
+    设置 SQL 语句 = SELECT 字段1,
+            字段2,
+            字段3,
+            字段4 FROM 表名
+    返回 SQL 语句"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        assert isinstance(func_node, FunctionNode), "预期为FunctionNode"
+        
+        # 验证函数有两个行为步骤
+        assert len(func_node.children_uids) == 2, f"预期2个行为步骤，实际{len(func_node.children_uids)}"
+        
+        # 验证第一个行为步骤包含延续行内容
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        assert isinstance(behavior1, BehaviorStepNode), "预期为BehaviorStepNode"
+        
+        # 验证内容包含所有字段
+        assert "SELECT" in behavior1.content, f"缺少'SELECT': {behavior1.content}"
+        assert "字段1" in behavior1.content, f"缺少'字段1': {behavior1.content}"
+        assert "字段2" in behavior1.content, f"缺少'字段2': {behavior1.content}"
+        assert "字段3" in behavior1.content, f"缺少'字段3': {behavior1.content}"
+        assert "字段4" in behavior1.content, f"缺少'字段4': {behavior1.content}"
+        assert "FROM" in behavior1.content, f"缺少'FROM': {behavior1.content}"
+        
+        print("  ✓ 成功解析带缩进的延续行")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_continuation_line_with_symbol_refs():
+    """测试延续行中的符号引用"""
+    print("\n测试 continuation_line_with_symbol_refs 函数...")
+    
+    code = """func 调用API():
+    请求结果 = 调用 $httpClient.post$ 使用参数,
+        url,
+        data,
+        headers
+    处理 $请求结果$"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 验证函数有两个行为步骤
+        assert len(func_node.children_uids) == 2, f"预期2个行为步骤，实际{len(func_node.children_uids)}"
+        
+        # 验证第一个行为步骤包含符号引用
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        assert isinstance(behavior1, BehaviorStepNode), "预期为BehaviorStepNode"
+        assert "httpClient.post" in behavior1.symbol_refs, f"缺少符号引用'httpClient.post': {behavior1.symbol_refs}"
+        
+        # 验证内容包含参数
+        assert "url" in behavior1.content, f"缺少'url': {behavior1.content}"
+        assert "data" in behavior1.content, f"缺少'data': {behavior1.content}"
+        assert "headers" in behavior1.content, f"缺少'headers': {behavior1.content}"
+        
+        # 验证第二个行为步骤
+        behavior2 = ast_nodes[func_node.children_uids[1]]
+        assert isinstance(behavior2, BehaviorStepNode), "预期为BehaviorStepNode"
+        assert "请求结果" in behavior2.symbol_refs, f"缺少符号引用'请求结果': {behavior2.symbol_refs}"
+        
+        print("  ✓ 成功解析延续行中的符号引用")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_continuation_line_error_colon():
+    """测试延续行错误：行末冒号"""
+    print("\n测试 continuation_line_error_colon 函数...")
+    
+    code = """func 测试():
+    执行操作1,
+        执行操作2:
+        执行操作3"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        # 应该抛出异常
+        print("  ❌ 测试失败: 应该抛出异常但没有")
+        return False
+    except Exception as e:
+        # 验证是否包含正确的错误信息
+        error_msg = str(e)
+        if "colon" in error_msg.lower() or "冒号" in error_msg:
+            print(f"  ✓ 成功检测到延续行行末冒号错误: {e}")
+            return True
+        else:
+            print(f"  ❌ 测试失败: 错误信息不正确: {e}")
+            return False
+
+
+def test_continuation_line_error_misalignment():
+    """测试延续行错误：缩进不对齐"""
+    print("\n测试 continuation_line_error_misalignment 函数...")
+    
+    code = """func 测试():
+    执行操作1,
+        执行操作2
+        执行操作3"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        # 应该抛出异常
+        print("  ❌ 测试失败: 应该抛出异常但没有")
+        return False
+    except Exception as e:
+        # 验证是否包含正确的错误信息
+        error_msg = str(e)
+        if "align" in error_msg.lower() or "对齐" in error_msg:
+            print(f"  ✓ 成功检测到延续行缩进不对齐错误: {e}")
+            return True
+        else:
+            print(f"  ❌ 测试失败: 错误信息不正确: {e}")
+            return False
+
+
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("开始测试 Intent Behavior Code 解析器...")
@@ -614,6 +820,11 @@ if __name__ == "__main__":
         test_results.append(("多行description", test_multiline_description()))
         test_results.append(("多行函数声明", test_multiline_func_declaration()))
         test_results.append(("类中多行函数", test_multiline_func_in_class()))
+        test_results.append(("基本延续行", test_continuation_line_basic()))
+        test_results.append(("带缩进延续行", test_continuation_line_with_indent()))
+        test_results.append(("延续行符号引用", test_continuation_line_with_symbol_refs()))
+        test_results.append(("延续行错误-冒号", test_continuation_line_error_colon()))
+        test_results.append(("延续行错误-对齐", test_continuation_line_error_misalignment()))
         
         print("\n" + "=" * 60)
         print("测试结果汇总")

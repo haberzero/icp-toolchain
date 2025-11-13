@@ -163,15 +163,12 @@ class IbcLexer:
                 indent_level = self._calc_indent_level(self.current_line)
                 current_indent = self.indent_stack[-1]
                 if indent_level > current_indent:
-                    # 检查缩进是否跳变（一次增加超过1级）
-                    if indent_level - current_indent > 1:
-                        raise LexerError(
-                            f"Line {self.line_num}: Indentation jump is not allowed, "
-                            f"expected {current_indent + 1}, but got {indent_level}")
-                    
-                    # 增加缩进
-                    self.tokens.append(Token(IbcTokenType.INDENT, "", self.line_num))
-                    self.indent_stack.append(indent_level)
+                    # 根据缩进差值添加相应数量的 INDENT token
+                    indent_diff = indent_level - current_indent
+                    for _ in range(indent_diff):
+                        self.tokens.append(Token(IbcTokenType.INDENT, "", self.line_num))
+                        current_indent += 1
+                        self.indent_stack.append(current_indent)
                 elif indent_level < current_indent:
                     # 减少缩进
                     while self.indent_stack and self.indent_stack[-1] > indent_level:

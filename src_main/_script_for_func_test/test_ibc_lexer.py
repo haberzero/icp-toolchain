@@ -414,21 +414,21 @@ func test():
         print(f"    ❌ 测试失败: {e}")
         return False
     
-    # 测试3: 缩进不是4的倍数
-    print("  3. 测试缩进不是4的倍数:")
-    code3 = """func test():
- var invalid_indent"""
-    try:
-        lexer = IbcLexer(code3)
-        tokens = lexer.tokenize()
-        # 应该抛出LexerError异常
-        print("    ❌ 测试失败: 应该抛出异常但没有")
-        return False
-    except LexerError as e:
-        print("    ✓ 成功检测到缩进不是4的倍数")
-    except Exception as e:
-        print(f"    ❌ 测试失败: {e}")
-        return False
+    # 测试3: 缩进不是4的倍数（测试3已失效，最新的逻辑是只会打印警告并且trunc至4的倍数，而不会直接干涉报错）
+#     print("  3. 测试缩进不是4的倍数:")
+#     code3 = """func test():
+#  var invalid_indent"""
+#     try:
+#         lexer = IbcLexer(code3)
+#         tokens = lexer.tokenize()
+#         # 应该抛出LexerError异常
+#         print("    ❌ 测试失败: 应该抛出异常但没有")
+#         return False
+#     except LexerError as e:
+#         print("    ✓ 成功检测到缩进不是4的倍数")
+#     except Exception as e:
+#         print(f"    ❌ 测试失败: {e}")
+#         return False
     
     # 测试4: 空的符号引用
     print("  4. 测试空的符号引用:")
