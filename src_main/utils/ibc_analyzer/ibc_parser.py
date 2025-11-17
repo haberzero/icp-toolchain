@@ -52,11 +52,9 @@ class IbcParser:
         # 函数声明时的多行参数定义可能会因为不同开发者的书写习惯带来额外的缩进问题，需要单独处理
         self.func_pending_indent_level = 0
         
-        # 全局缩进等级跟踪，用于记录当前文件的实际缩进值
-        self.global_indent_level = 0
-        
-        # 延续行弹出后需要吸收的DEDENT数量
-        self.pending_dedent_absorption = 0
+        # 延续行状态：需要吸收的DEDENT数量和是否需要创建新代码块
+        self.continuation_dedent_to_absorb = 0  # 需要吸收的DEDENT数量
+        self.continuation_needs_new_block = False  # 是否需要在吸收完DEDENT后创建新代码块
 
     def _peek_token(self) -> Token:
         """查看当前token"""
@@ -80,12 +78,6 @@ class IbcParser:
             while not self._is_at_end():
                 token = self._consume_token()
                 self.line_num = token.line_num
-
-                # 在最开始的token处理时就单独为indent dedent进行一次判断，维护全局缩进等级
-                if token.type == IbcTokenType.INDENT:
-                    self.global_indent_level += 1
-                elif token.type == IbcTokenType.DEDENT:
-                    self.global_indent_level -= 1
 
                 # 将包括缩进的所有token都交给状态机，给状态机提供多行处理的能力
                 if self.is_pass_token_to_state:
@@ -168,20 +160,23 @@ class IbcParser:
                             # 获取局部缩进等级
                             local_indent = current_state_obj.get_local_indent_level()
                             
-                            # 如果局部缩进等级>0，说明延续行内有额外的缩进未退回
-                            # 如果延续行以冒号结尾，下一步的INDENT是真实的子代码块，不应该被影响
-                            # 我们需要吸收后续的DEDENT，但不是INDENT
-                            if local_indent > 0:
-                                # 如果是冒号结尾，下一个INDENT是真实的，但DEDENT需要吸收 local_indent-1 个
-                                # 因为冒号后的INDENT已经平衡了一个局部缩进
-                                if isinstance(self.last_ast_node, BehaviorStepNode) and self.last_ast_node.new_block_flag:
-                                    # 延续行以冒号结尾
-                                    # 后续的第一个INDENT是真实的子代码块缩进，不应被吸收
-                                    # 但子代码块结束后，需要吸收 local_indent 个 DEDENT
-                                    self.pending_dedent_absorption = local_indent
-                                else:
-                                    # 延续行没有以冒号结尾，直接吸收所有局部缩进的DEDENT
-                                    self.pending_dedent_absorption = local_indent
+                            # 检查是否需要创建新代码块
+                            if isinstance(self.last_ast_node, BehaviorStepNode) and self.last_ast_node.new_block_flag:
+                                # 需要创建新代码块
+                                if local_indent == 0:
+                                    # 局部缩进为0，后续正常INDENT压栈即可
+                                    pass
+                                elif local_indent == 1:
+                                    # 局部缩进为1，需要标记手工压栈
+                                    self.continuation_needs_new_block = True
+                                elif local_indent > 1:
+                                    # 局部缩进>1，需要吸收(local_indent-1)次DEDENT后手工压栈
+                                    self.continuation_dedent_to_absorb = local_indent - 1
+                                    self.continuation_needs_new_block = True
+                            else:
+                                # 不需要创建新代码块，吸收所有局部缩进的DEDENT
+                                if local_indent > 0:
+                                    self.continuation_dedent_to_absorb = local_indent
                 
                 # 当 func_pending_indent_level == 1 时, 意味着后续内容开始时不再会有indent token, 这里需要一次手动压栈
                 if self.func_pending_indent_level == 1:
@@ -191,6 +186,15 @@ class IbcParser:
                         self.state_stack.append((state_obj, self.last_ast_node.uid))
                     else:
                         raise ParserError(f"Line {token.line_num}: Parser TOP --- Should not happen, contact dev please")
+                
+                # 处理延续行后需要手工压栈的情况
+                if self.continuation_needs_new_block:
+                    self.continuation_needs_new_block = False
+                    if isinstance(self.last_ast_node, BehaviorStepNode):
+                        state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
+                        self.state_stack.append((state_obj, self.last_ast_node.uid))
+                    else:
+                        raise ParserError(f"Line {token.line_num}: Parser TOP --- continuation_needs_new_block should only be set for BehaviorStepNode")
                 
             return self.ast_nodes
         
@@ -226,10 +230,8 @@ class IbcParser:
             return
         
         # 如果需要吸收DEDENT（延续行弹出后的局部缩进处理）
-        # 但是，如果下一个token是INDENT，说明这是延续行冒号后的子代码块
-        # 这种情况下，先减少一个吸收计数，让INDENT和DEDENT配对
-        if self.pending_dedent_absorption > 0:
-            self.pending_dedent_absorption -= 1
+        if self.continuation_dedent_to_absorb > 0:
+            self.continuation_dedent_to_absorb -= 1
             return
 
         if len(self.state_stack) > 1:  # 不能弹出顶层状态

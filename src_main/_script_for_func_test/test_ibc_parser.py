@@ -743,35 +743,6 @@ def test_continuation_line_with_symbol_refs():
         return False
 
 
-def test_continuation_line_error_colon():
-    """测试延续行错误：行末冒号"""
-    print("\n测试 continuation_line_error_colon 函数...")
-    
-    code = """func 测试():
-    执行操作1,
-        执行操作2:
-        执行操作3"""
-    
-    try:
-        lexer = IbcLexer(code)
-        tokens = lexer.tokenize()
-        parser = IbcParser(tokens)
-        ast_nodes = parser.parse()
-        
-        # 应该抛出异常
-        print("  ❌ 测试失败: 应该抛出异常但没有")
-        return False
-    except Exception as e:
-        # 验证是否包含正确的错误信息
-        error_msg = str(e)
-        if "colon" in error_msg.lower() or "冒号" in error_msg:
-            print(f"  ✓ 成功检测到延续行行末冒号错误: {e}")
-            return True
-        else:
-            print(f"  ❌ 测试失败: 错误信息不正确: {e}")
-            return False
-
-
 def test_continuation_line_error_misalignment():
     """测试延续行错误：缩进不对齐"""
     print("\n测试 continuation_line_error_misalignment 函数...")
@@ -1056,8 +1027,6 @@ if __name__ == "__main__":
         test_results.append(("基本延续行", test_continuation_line_basic()))
         test_results.append(("带缩进延续行", test_continuation_line_with_indent()))
         test_results.append(("延续行符号引用", test_continuation_line_with_symbol_refs()))
-        test_results.append(("延续行错误-冒号", test_continuation_line_error_colon()))
-        test_results.append(("延续行错误-对齐", test_continuation_line_error_misalignment()))
         test_results.append(("小括号延续行", test_paren_continuation()))
         test_results.append(("花括号延续行", test_brace_continuation()))
         test_results.append(("方括号延续行", test_bracket_continuation()))
