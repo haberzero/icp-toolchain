@@ -1,6 +1,5 @@
 from enum import Enum
-from turtle import Turtle
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Callable
 from typedef.ibc_data_types import (
     IbcTokenType, Token, IbcParserBaseState, AstNodeType, 
     ModuleNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode
@@ -23,6 +22,17 @@ class ParserError(Exception):
     
     def __str__(self):
         return f"ParserError: {self.message}"
+
+
+# TODO: 目前设计模式不完善，后处理也许应该整合到整个状态处理逻辑里，不应该零散分布。
+class ParserMainState(Enum):
+    """Parser主循环状态枚举"""
+    PASS_THROUGH_MODE = "PASS_THROUGH_MODE"  # token透传模式
+    INDENT_PROCESSING = "INDENT_PROCESSING"  # 缩进处理
+    DEDENT_PROCESSING = "DEDENT_PROCESSING"  # 退缩进处理
+    KEYWORD_PROCESSING = "KEYWORD_PROCESSING"  # 关键字处理
+    BEHAVIOR_START = "BEHAVIOR_START"  # 行为步骤开始
+    NORMAL_PROCESSING = "NORMAL_PROCESSING"  # 常规处理
 
 
 class IbcParser:
@@ -55,7 +65,7 @@ class IbcParser:
         # 延续行状态：需要吸收的DEDENT数量和是否需要创建新代码块
         self.continuation_dedent_to_absorb = 0  # 需要吸收的DEDENT数量
         self.continuation_needs_new_block = False  # 是否需要在吸收完DEDENT后创建新代码块
-
+        
     def _peek_token(self) -> Token:
         """查看当前token"""
         if self.pos < len(self.tokens):
@@ -71,135 +81,191 @@ class IbcParser:
     def _is_at_end(self) -> bool:
         """检查是否到达文件末尾"""
         return self._peek_token().type == IbcTokenType.EOF
+
+    def _determine_main_state(self, token: Token) -> ParserMainState:
+        """根据token和当前状态，决定处理模式"""
+        # 优先级最高：token透传模式
+        if self.is_pass_token_to_state:
+            return ParserMainState.PASS_THROUGH_MODE
+        
+        # 处理缩进
+        if token.type == IbcTokenType.INDENT:
+            return ParserMainState.INDENT_PROCESSING
+        
+        # 处理退缩进
+        if token.type == IbcTokenType.DEDENT:
+            return ParserMainState.DEDENT_PROCESSING
+        
+        # 处理关键字
+        if token.type == IbcTokenType.KEYWORDS:
+            return ParserMainState.KEYWORD_PROCESSING
+        
+        # token处在行首，且不是关键字，则认为是行为描述行的开始
+        if self.is_new_line_start and token.type is not IbcTokenType.KEYWORDS:
+            return ParserMainState.BEHAVIOR_START
+        
+        # 其他情况，常规处理
+        return ParserMainState.NORMAL_PROCESSING
+    
+    def _execute_token_processing(self, token: Token, main_state: ParserMainState) -> None:
+        """执行token处理逻辑"""
+        if main_state == ParserMainState.PASS_THROUGH_MODE:
+            self._process_token_in_current_state(token)
+        
+        elif main_state == ParserMainState.INDENT_PROCESSING:
+            self._handle_indent(token)
+        
+        elif main_state == ParserMainState.DEDENT_PROCESSING:
+            self._handle_dedent(token)
+        
+        elif main_state == ParserMainState.KEYWORD_PROCESSING:
+            self._handle_keyword(token)
+        
+        elif main_state == ParserMainState.BEHAVIOR_START:
+            self._handle_behavior_start(token)
+        
+        elif main_state == ParserMainState.NORMAL_PROCESSING:
+            self._process_token_in_current_state(token)
+    
+    def _post_process_token(self, token: Token) -> None:
+        """处理token后的后处理逻辑"""
+        # 检查是否存在uid的更新
+        current_uid = self.uid_generator.get_current_uid()
+        if current_uid > self.last_ast_node_uid:
+            self._update_last_ast_node(current_uid)
+        
+        # 获取顶部状态机实例
+        current_state_obj, _ = self.state_stack[-1]
+        
+        # 更新token透传标志
+        self._update_pass_token_flag(current_state_obj)
+        
+        # 更新行首标志
+        self._update_new_line_flag(token)
+        
+        # 检查是否需要弹出状态
+        if current_state_obj.is_need_pop():
+            self._handle_state_pop(current_state_obj, token)
+    
+    def _update_last_ast_node(self, current_uid: int) -> None:
+        """更新最后AST节点并附加描述信息"""
+        self.last_ast_node_uid = current_uid
+        self.last_ast_node = self.ast_nodes[current_uid]
+        
+        # 如果是类声明或函数声明节点，附加对外描述和意图注释
+        if isinstance(self.last_ast_node, (ClassNode, FunctionNode)):
+            self.last_ast_node.external_desc = self.pending_description
+            self.last_ast_node.intent_comment = self.pending_intent_comment
+            self.pending_description = ""
+            self.pending_intent_comment = ""
+        else:
+            self.pending_description = ""
+            self.pending_intent_comment = ""
+    
+    def _update_pass_token_flag(self, current_state_obj: BaseState) -> None:
+        """更新token透传标志"""
+        self.is_pass_token_to_state = current_state_obj.is_need_pass_in_token()
+    
+    def _update_new_line_flag(self, token: Token) -> None:
+        """更新行首标志"""
+        if token.type in (IbcTokenType.NEWLINE, IbcTokenType.INDENT, IbcTokenType.DEDENT):
+            self.is_new_line_start = True
+        else:
+            self.is_new_line_start = False
+    
+    def _handle_state_pop(self, current_state_obj: BaseState, token: Token) -> None:
+        """处理状态机弹出逻辑"""
+        # 弹出状态机
+        self.state_stack.pop()
+        
+        # 进行内容暂存处理
+        if isinstance(current_state_obj, DescriptionState):
+            self.pending_description = current_state_obj.get_content()
+        
+        if isinstance(current_state_obj, IntentCommentState):
+            self.pending_intent_comment = current_state_obj.get_content()
+        
+        # 函数声明时的多行参数定义可能会因为不同开发者的书写习惯带来额外的缩进问题，需要单独处理
+        if isinstance(current_state_obj, FuncDeclState):
+            self.func_pending_indent_level = current_state_obj.get_pending_indent_level()
+        
+        # 处理从延续行模式弹出的BehaviorStepState
+        if isinstance(current_state_obj, BehaviorStepState):
+            self._handle_behavior_continuation_pop(current_state_obj)
+    
+    def _handle_behavior_continuation_pop(self, behavior_state: BehaviorStepState) -> None:
+        """处理行为步骤延续行弹出逻辑"""
+        if not behavior_state.has_entered_continuation_mode():
+            return
+        
+        # 获取局部缩进等级
+        local_indent = behavior_state.get_local_indent_level()
+        
+        # 检查是否需要创建新代码块
+        if isinstance(self.last_ast_node, BehaviorStepNode) and self.last_ast_node.new_block_flag:
+            # 需要创建新代码块
+            if local_indent == 0:
+                # 局部缩进为0，后续正常INDENT压栈即可
+                pass
+            elif local_indent == 1:
+                # 局部缩进为1，需要标记手工压栈
+                self.continuation_needs_new_block = True
+            elif local_indent > 1:
+                # 局部缩进>1，需要吸收(local_indent-1)次DEDENT后手工压栈
+                self.continuation_dedent_to_absorb = local_indent - 1
+                self.continuation_needs_new_block = True
+        else:
+            # 不需要创建新代码块，吸收所有局部缩进的DEDENT
+            if local_indent > 0:
+                self.continuation_dedent_to_absorb = local_indent
+    
+    def _handle_post_pop_actions(self, token: Token) -> None:
+        """处理状态机弹出后的额外动作"""
+        # 当 func_pending_indent_level == 1 时, 意味着后续内容开始时不再会有indent token, 这里需要一次手动压栈
+        if self.func_pending_indent_level == 1:
+            self.func_pending_indent_level = 0
+            if isinstance(self.last_ast_node, FunctionNode):
+                state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
+                self.state_stack.append((state_obj, self.last_ast_node.uid))
+            else:
+                raise ParserError(f"Line {token.line_num}: Parser TOP --- Should not happen, contact dev please")
+        
+        # 处理延续行后需要手工压栈的情况
+        if self.continuation_needs_new_block:
+            self.continuation_needs_new_block = False
+            if isinstance(self.last_ast_node, BehaviorStepNode):
+                state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
+                self.state_stack.append((state_obj, self.last_ast_node.uid))
+            else:
+                raise ParserError(f"Line {token.line_num}: Parser TOP --- continuation_needs_new_block should only be set for BehaviorStepNode")
+    
+    def _handle_behavior_start(self, token: Token) -> None:
+        """处理行为步骤开始"""
+        self.is_new_line_start = False
+        current_state_obj, parent_uid = self.state_stack[-1]
+        state_obj = BehaviorStepState(parent_uid, self.uid_generator, self.ast_nodes)
+        self.state_stack.append((state_obj, parent_uid))
+        self._process_token_in_current_state(token)
     
     def parse(self) -> Dict[int, IbcParserBaseState]:
         """执行解析"""
-        try:
-            while not self._is_at_end():
-                token = self._consume_token()
-                self.line_num = token.line_num
+        while not self._is_at_end():
+            token = self._consume_token()
+            self.line_num = token.line_num
 
-                # 将包括缩进的所有token都交给状态机，给状态机提供多行处理的能力
-                if self.is_pass_token_to_state:
-                    self._process_token_in_current_state(token)
-
-                # 处理缩进和状态栈
-                elif token.type == IbcTokenType.INDENT:
-                    self._handle_indent(token)
-                elif token.type == IbcTokenType.DEDENT:
-                    self._handle_dedent(token)
-
-                # 处理关键字(目前关键字只会在行首出现)
-                elif token.type == IbcTokenType.KEYWORDS:
-                    self._handle_keyword(token)
-                
-                # token处在行首，且不是关键字，且并非透传token的状态，则认为是行为描述行的开始
-                elif self.is_new_line_start and token.type is not IbcTokenType.KEYWORDS:
-                    self.is_new_line_start = False
-                    current_state_obj, parent_uid = self.state_stack[-1]
-                    state_obj = BehaviorStepState(parent_uid, self.uid_generator, self.ast_nodes)
-                    self.state_stack.append((state_obj, parent_uid))
-                    self._process_token_in_current_state(token)
-                
-                # 将token传递给当前状态机处理
-                else:
-                    self._process_token_in_current_state(token)
-
-                # --- token已经被使用，开始状态机的后处理 ---
-                # 检查是否存在uid的更新
-                current_uid = self.uid_generator.get_current_uid()
-                if current_uid > self.last_ast_node_uid:
-                    self.last_ast_node_uid = current_uid
-                    self.last_ast_node = self.ast_nodes[current_uid]
-                    # 如果是类声明或函数声明节点，附加对外描述和意图注释
-                    if isinstance(self.last_ast_node, (ClassNode, FunctionNode)):
-                        self.last_ast_node.external_desc = self.pending_description
-                        self.last_ast_node.intent_comment = self.pending_intent_comment
-                        self.pending_description = ""
-                        self.pending_intent_comment = ""
-                    else:
-                        self.pending_description = ""
-                        self.pending_intent_comment = ""
-
-                # 获取顶部状态机实例
-                current_state_obj, _ = self.state_stack[-1]
-
-                # 状态变量的更新
-                # 栈顶状态机是否请求了token透传
-                if current_state_obj.is_need_pass_in_token():
-                    self.is_pass_token_to_state = True
-                else:
-                    self.is_pass_token_to_state = False
-                
-                # 当出现了 新行/缩进/退缩进 以外的任何token, 则意味着随后的token不处于行首
-                if token.type in (IbcTokenType.NEWLINE, IbcTokenType.INDENT, IbcTokenType.DEDENT):
-                    self.is_new_line_start = True
-                else:
-                    self.is_new_line_start = False
-                
-                # 检查是否需要弹出状态
-                if not current_state_obj.is_need_pop():
-                    continue
-                else:
-                    # 状态机弹出
-                    current_state_obj, _ = self.state_stack.pop()
-                    
-                    # 进行内容暂存处理
-                    if isinstance(current_state_obj, DescriptionState):
-                        self.pending_description = current_state_obj.get_content()
-                    if isinstance(current_state_obj, IntentCommentState):
-                        self.pending_intent_comment = current_state_obj.get_content()
-                    
-                    # 函数声明时的多行参数定义可能会因为不同开发者的书写习惯带来额外的缩进问题，需要单独处理
-                    if isinstance(current_state_obj, FuncDeclState):
-                        self.func_pending_indent_level = current_state_obj.get_pending_indent_level()
-                    
-                    # 处理从延续行模式弹出的BehaviorStepState
-                    if isinstance(current_state_obj, BehaviorStepState):
-                        if current_state_obj.has_entered_continuation_mode():
-                            # 获取局部缩进等级
-                            local_indent = current_state_obj.get_local_indent_level()
-                            
-                            # 检查是否需要创建新代码块
-                            if isinstance(self.last_ast_node, BehaviorStepNode) and self.last_ast_node.new_block_flag:
-                                # 需要创建新代码块
-                                if local_indent == 0:
-                                    # 局部缩进为0，后续正常INDENT压栈即可
-                                    pass
-                                elif local_indent == 1:
-                                    # 局部缩进为1，需要标记手工压栈
-                                    self.continuation_needs_new_block = True
-                                elif local_indent > 1:
-                                    # 局部缩进>1，需要吸收(local_indent-1)次DEDENT后手工压栈
-                                    self.continuation_dedent_to_absorb = local_indent - 1
-                                    self.continuation_needs_new_block = True
-                            else:
-                                # 不需要创建新代码块，吸收所有局部缩进的DEDENT
-                                if local_indent > 0:
-                                    self.continuation_dedent_to_absorb = local_indent
-                
-                # 当 func_pending_indent_level == 1 时, 意味着后续内容开始时不再会有indent token, 这里需要一次手动压栈
-                if self.func_pending_indent_level == 1:
-                    self.func_pending_indent_level = 0
-                    if isinstance(self.last_ast_node, FunctionNode):
-                        state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
-                        self.state_stack.append((state_obj, self.last_ast_node.uid))
-                    else:
-                        raise ParserError(f"Line {token.line_num}: Parser TOP --- Should not happen, contact dev please")
-                
-                # 处理延续行后需要手工压栈的情况
-                if self.continuation_needs_new_block:
-                    self.continuation_needs_new_block = False
-                    if isinstance(self.last_ast_node, BehaviorStepNode):
-                        state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
-                        self.state_stack.append((state_obj, self.last_ast_node.uid))
-                    else:
-                        raise ParserError(f"Line {token.line_num}: Parser TOP --- continuation_needs_new_block should only be set for BehaviorStepNode")
-                
-            return self.ast_nodes
-        
-        except ParserError:
-            raise ParserError(f"Line {self.line_num}: Parse error")
+            # 阶段1：决定当前token应该被如何处理
+            main_state = self._determine_main_state(token)
+            
+            # 阶段2：执行token处理
+            self._execute_token_processing(token, main_state)
+            
+            # 阶段3：token后处理
+            self._post_process_token(token)
+            
+            # 阶段4：处理状态机弹出后的额外动作
+            self._handle_post_pop_actions(token)
+            
+        return self.ast_nodes
     
     def _handle_indent(self, token: Token) -> None:
         """处理缩进"""
