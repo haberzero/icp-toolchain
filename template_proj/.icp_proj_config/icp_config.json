@@ -1,0 +1,16 @@
+{
+    "project_name": "mccp_toolchain",
+    "mccp_version": "0.0.3",
+    "target_language": "Python",
+    "target_suffix": ".py",
+    "build_settings": {
+        "install_command": ""
+    },
+    "file_system_mapping": {
+        "staging_layer_dir": "src_staging",
+        "behavioral_layer_dir": "src_icb",
+        "target_layer_dir": "src_main",
+        "is_extra_suffix": true
+    },
+    "file_specific_settings":{}
+}

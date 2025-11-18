@@ -1,0 +1,20 @@
+{
+    "chat_handler": {
+        "name": "qwen3-30b-a3b-instruct-2507",
+        "api-url": "http://127.0.0.1:11234/v1",
+        "api-key": "LOCAL",
+        "model": "qwen3-30b-a3b-instruct-2507"
+    },
+    "coder_handler": {
+        "name": "qwen3-coder-30b-a3b-instruct",
+        "api-url": "http://127.0.0.1:11234/v1",
+        "api-key": "LOCAL",
+        "model": "qwen3-coder-30b-a3b-instruct"
+    },
+    "embedding_handler": {
+        "name": "text-embedding-qwen3-embedding-0.6b",
+        "api-url": "http://127.0.0.1:11234/v1",
+        "api-key": "LOCAL",
+        "model": "text-embedding-qwen3-embedding-0.6b"
+    }
+}

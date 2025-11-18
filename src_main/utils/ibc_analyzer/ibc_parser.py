@@ -343,6 +343,5 @@ class IbcParser:
         current_state_obj, parent_uid = self.state_stack[-1]
         
         # 状态机实例处理token
-        # TODO: 现在的process_token方法 不应该传递进去ast_nodes，这个变量应该在状态机实例创建时就被传递，以后改一下
         current_state_obj.process_token(token)
 
