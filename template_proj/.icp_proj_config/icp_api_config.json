@@ -1,20 +1,20 @@
 {
     "chat_handler": {
-        "name": "qwen3-30b-a3b-instruct-2507",
+        "name": "name_of_your_chat_model",
         "api-url": "http://127.0.0.1:11234/v1",
         "api-key": "LOCAL",
-        "model": "qwen3-30b-a3b-instruct-2507"
+        "model": "name_of_your_chat_model"
     },
     "coder_handler": {
-        "name": "qwen3-coder-30b-a3b-instruct",
+        "name": "name_of_your_coder_model",
         "api-url": "http://127.0.0.1:11234/v1",
         "api-key": "LOCAL",
-        "model": "qwen3-coder-30b-a3b-instruct"
+        "model": "name_of_your_coder_model"
     },
     "embedding_handler": {
-        "name": "text-embedding-qwen3-embedding-0.6b",
+        "name": "name_of_your_embedding_model",
         "api-url": "http://127.0.0.1:11234/v1",
         "api-key": "LOCAL",
-        "model": "text-embedding-qwen3-embedding-0.6b"
+        "model": "name_of_your_embedding_model"
     }
 }
