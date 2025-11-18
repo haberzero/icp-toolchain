@@ -2,7 +2,7 @@ from enum import Enum
 from turtle import Turtle
 from typing import List, Dict, Any, Optional, Tuple
 from typedef.ibc_data_types import (
-    IbcTokenType, Token, AstNode, AstNodeType, 
+    IbcTokenType, Token, IbcParserBaseState, AstNodeType, 
     ModuleNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode
 )
 
@@ -34,7 +34,7 @@ class IbcParser:
         self.uid_generator = IbcParserUidGenerator()
         self.line_num = 0
         # 修改state_stack为直接存储状态机实例，而不是ParserState枚举
-        self.ast_nodes: Dict[int, AstNode] = {0: AstNode(uid=0, node_type=AstNodeType.DEFAULT)}  # 根节点
+        self.ast_nodes: Dict[int, IbcParserBaseState] = {0: IbcParserBaseState(uid=0, node_type=AstNodeType.DEFAULT)}  # 根节点
         self.state_stack: List[Tuple[BaseState, int]] = [(TopLevelState(0, self.uid_generator, self.ast_nodes), 0)]  # 栈内容：(状态机实例, 栈顶节点uid)
         
         # 暂存的特殊行内容
@@ -42,7 +42,7 @@ class IbcParser:
         self.pending_description = ""
         
         # 跟踪上一个AST节点
-        self.last_ast_node: Optional[AstNode] = self.ast_nodes[0]
+        self.last_ast_node: Optional[IbcParserBaseState] = self.ast_nodes[0]
         self.last_ast_node_uid = 0
 
         # 状态变量，指示当前token应该被如何处理
@@ -72,7 +72,7 @@ class IbcParser:
         """检查是否到达文件末尾"""
         return self._peek_token().type == IbcTokenType.EOF
     
-    def parse(self) -> Dict[int, AstNode]:
+    def parse(self) -> Dict[int, IbcParserBaseState]:
         """执行解析"""
         try:
             while not self._is_at_end():

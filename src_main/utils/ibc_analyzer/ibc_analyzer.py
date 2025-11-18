@@ -1,11 +1,11 @@
 from typing import Dict, List, Optional, Any
-from typedef.ibc_data_types import IbcKeywords, IbcTokenType, Token, AstNode, AstNodeType
+from typedef.ibc_data_types import IbcKeywords, IbcTokenType, Token, IbcParserBaseState, AstNodeType
 
 from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
 from utils.ibc_analyzer.ibc_symbol_gen import IbcSymbolGenerator
 
-from typedef.ibc_data_types import AstNode
+from typedef.ibc_data_types import IbcParserBaseState
 
 
 class IbcAnalyzerError(Exception):

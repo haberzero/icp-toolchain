@@ -5,7 +5,7 @@ IBC符号提取模块
 """
 from typing import Dict, Optional
 from typedef.ibc_data_types import (
-    AstNode, ClassNode, FunctionNode, VariableNode,
+    IbcParserBaseState, ClassNode, FunctionNode, VariableNode,
     SymbolNode, SymbolType, FileSymbolTable
 )
 
@@ -19,7 +19,7 @@ class IbcSymbolGenerator:
     - 留空字符串，后续由cmd_handler调用ai_interface推断后填充
     """
     
-    def __init__(self, ast_dict: Dict[int, AstNode]):
+    def __init__(self, ast_dict: Dict[int, IbcParserBaseState]):
         """初始化符号生成器"""
         self.ast_dict = ast_dict
     
@@ -39,7 +39,7 @@ class IbcSymbolGenerator:
         
         return symbol_table
     
-    def _create_symbol_from_node(self, uid: int, node: AstNode) -> Optional[SymbolNode]:
+    def _create_symbol_from_node(self, uid: int, node: IbcParserBaseState) -> Optional[SymbolNode]:
         """
         从AST节点创建符号节点
         

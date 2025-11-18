@@ -5,7 +5,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typedef.ibc_data_types import (
-    AstNode, AstNodeType, ModuleNode, ClassNode, 
+    IbcParserBaseState, AstNodeType, ModuleNode, ClassNode, 
     FunctionNode, VariableNode, BehaviorStepNode
 )
 from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
@@ -23,7 +23,7 @@ def test_ast_persistence():
     ast_dict = {}
     
     # 根节点
-    ast_dict[0] = AstNode(uid=0, node_type=AstNodeType.DEFAULT)
+    ast_dict[0] = IbcParserBaseState(uid=0, node_type=AstNodeType.DEFAULT)
     
     # Module节点
     module_node = ModuleNode(

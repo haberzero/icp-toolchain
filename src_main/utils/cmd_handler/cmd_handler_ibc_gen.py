@@ -9,7 +9,7 @@ from pydantic import SecretStr
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, ChatApiConfig, Colors
 from typedef.ibc_data_types import (
-    AstNode, AstNodeType, ClassNode, FunctionNode, VariableNode, 
+    IbcParserBaseState, AstNodeType, ClassNode, FunctionNode, VariableNode, 
     VisibilityTypes, SymbolType, FileSymbolTable, SymbolNode
 )
 
