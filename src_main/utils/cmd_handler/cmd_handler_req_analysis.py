@@ -33,7 +33,7 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
         self.proj_work_dir = proj_cfg_manager.get_work_dir()
         self.proj_data_dir = os.path.join(self.proj_work_dir, 'icp_proj_data')
         self.proj_config_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_config')
-        self.icp_api_config_file = os.path.join(self.proj_data_dir, 'icp_api_config.json')
+        self.icp_api_config_file = os.path.join(self.proj_config_data_dir, 'icp_api_config.json')
 
         self.ai_handler: ChatInterface
         self.role_name = "2_req_to_module"
