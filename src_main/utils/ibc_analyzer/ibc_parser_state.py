@@ -154,7 +154,7 @@ class VarDeclState(BaseState):
     """变量声明状态类"""
     def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcParserBaseState]):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
-        self.state_type = ParserState.VARDecl
+        self.state_type = ParserState.VAR_DECL
         # TODO: 暂时删除了单行内多变量声明的支持，但List仍暂时保留，未来可能仍想办法引入单行多变量声明
         self.variables: Dict[str, str] = {}  # {name: description}
         self.current_var_name = ""
