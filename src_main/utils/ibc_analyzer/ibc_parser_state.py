@@ -149,20 +149,18 @@ class VarDeclSubState(Enum):
     EXPECTING_VAR_NAME = "EXPECTING_VAR_NAME"
     EXPECTING_COLON = "EXPECTING_COLON"
     EXPECTING_VAR_DESC = "EXPECTING_VAR_DESC"
-    EXPECTING_COMMA = "EXPECTING_COMMA"
-
 
 class VarDeclState(BaseState):
     """变量声明状态类"""
     def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcParserBaseState]):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
-        self.state_type = ParserState.VAR_DECL
-        self.variables: Dict[str, str] = {}  # {name: description, ... }
+        self.state_type = ParserState.VARDecl
+        # TODO: 暂时删除了单行内多变量声明的支持，但List仍暂时保留，未来可能仍想办法引入单行多变量声明
+        self.variables: Dict[str, str] = {}  # {name: description}
         self.current_var_name = ""
         self.current_var_desc = ""
         self.sub_state = VarDeclSubState.EXPECTING_VAR_NAME
         self.pop_flag = False
-        # self.is_need_pass_token = False  # 未来如果支持换行多行声明变量，就可以启用
 
     def process_token(self, token: Token) -> None:
         self.current_token = token
@@ -177,19 +175,8 @@ class VarDeclState(BaseState):
         elif self.sub_state == VarDeclSubState.EXPECTING_COLON:
             if token.type == IbcTokenType.COLON:
                 self.sub_state = VarDeclSubState.EXPECTING_VAR_DESC
-            elif token.type == IbcTokenType.COMMA:
-                # 没有描述的变量，直接完成当前变量
-                self.current_var_desc = ""
-                if self.current_var_name not in self.variables:
-                    self.variables[self.current_var_name] = self.current_var_desc
-                else:
-                    raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Got an duplicate var definitions")
-                self.current_var_name = ""
-                self.current_var_desc = ""
-                # 获取下一个变量名
-                self.sub_state = VarDeclSubState.EXPECTING_VAR_NAME
             elif token.type == IbcTokenType.NEWLINE:
-                # 没有描述的变量，行结束
+                # 无描述内容直接结束
                 self.current_var_desc = ""
                 if self.current_var_name not in self.variables:
                     self.variables[self.current_var_name] = self.current_var_desc
@@ -200,29 +187,13 @@ class VarDeclState(BaseState):
                 self._create_variable_nodes()
                 self.pop_flag = True
             else:
-                raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Expecting colon, comma or newline but got {token.type}")
+                raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Expecting colon or new line but got {token.type}")
         
         elif self.sub_state == VarDeclSubState.EXPECTING_VAR_DESC:
-            if token.type == IbcTokenType.IDENTIFIER:
-                self.current_var_desc = token.value.strip()
-                self.sub_state = VarDeclSubState.EXPECTING_COMMA
-            else:
-                raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Expecting var description but got {token.type}")
-        
-        elif self.sub_state == VarDeclSubState.EXPECTING_COMMA:
-            if token.type == IbcTokenType.COMMA:
-                # 完成当前变量，开始下一个
+            if token.type == IbcTokenType.NEWLINE:
+                # 结束当前变量，创建节点并弹出
                 if self.current_var_name not in self.variables:
-                    self.variables[self.current_var_name] = self.current_var_desc
-                else:
-                    raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Got an duplicate var definitions")
-                self.current_var_name = ""
-                self.current_var_desc = ""
-                self.sub_state = VarDeclSubState.EXPECTING_VAR_NAME
-            elif token.type == IbcTokenType.NEWLINE:
-                # 完成最后一个变量，行结束
-                if self.current_var_name not in self.variables:
-                    self.variables[self.current_var_name] = self.current_var_desc
+                    self.variables[self.current_var_name] = self.current_var_desc.strip()
                 else:
                     raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Got an duplicate var definitions")
                 self.current_var_name = ""
@@ -230,8 +201,9 @@ class VarDeclState(BaseState):
                 self._create_variable_nodes()
                 self.pop_flag = True
             else:
-                raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Expecting comma or new line but got {token.type}")
-    
+                # 收集其他描述内容
+                self.current_var_desc += token.value
+
     def _create_variable_nodes(self) -> None:
         """为所有变量创建节点"""
         line_num = self.current_token.line_num if self.current_token else 0
@@ -251,6 +223,7 @@ class VarDeclState(BaseState):
 
     def is_need_pop(self) -> bool:
         return self.pop_flag
+    
 
 
 # 对外描述解析的子状态枚举
