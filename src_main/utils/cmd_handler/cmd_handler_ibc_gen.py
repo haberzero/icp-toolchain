@@ -296,6 +296,15 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         Returns:
             str: 生成的IBC代码
         """
+        # 读取文件级实现规划
+        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        implementation_plan_content = ""
+        try:
+            with open(implementation_plan_file, 'r', encoding='utf-8') as f:
+                implementation_plan_content = f.read()
+        except Exception as e:
+            print(f"  {Colors.WARNING}警告: 读取文件级实现规划失败: {e}，将仅使用文件需求描述{Colors.ENDC}")
+        
         # 提取各个部分的内容
         class_content = self._extract_section_content(file_req_content, 'class')
         func_content = self._extract_section_content(file_req_content, 'func')
@@ -316,6 +325,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
         user_prompt = user_prompt_template
         user_prompt = user_prompt.replace('USER_REQUIREMENTS_PLACEHOLDER', user_requirements)
+        user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_content)
         user_prompt = user_prompt.replace('PROJECT_STRUCTURE_PLACEHOLDER', project_structure_json)
         user_prompt = user_prompt.replace('CURRENT_FILE_PATH_PLACEHOLDER', file_path)
         user_prompt = user_prompt.replace('CLASS_CONTENT_PLACEHOLDER', class_content if class_content else '无')
@@ -359,6 +369,12 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         ibc_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
         if not os.path.exists(ibc_dir_file):
             print(f"  {Colors.WARNING}警告: IBC目录结构文件不存在，请先执行one_file_req_gen命令{Colors.ENDC}")
+            return False
+        
+        # 检查文件级实现规划文件是否存在
+        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        if not os.path.exists(implementation_plan_file):
+            print(f"  {Colors.WARNING}警告: 文件级实现规划文件不存在，请先执行目录文件填充命令{Colors.ENDC}")
             return False
         
         return True
