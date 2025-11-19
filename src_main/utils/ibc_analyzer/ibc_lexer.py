@@ -65,7 +65,7 @@ class IbcLexer:
             parts[0] = '@'
         else:
             # 使用空格和冒号作为分隔符分割字符串。整个Lexer仅在识别关键字时会出现空格 split
-            parts = striped_line.replace(':', ' ', count=1).split()
+            parts = striped_line.replace(':', ' ', 1).split()
 
         first_part: str = parts[0]
         if first_part not in [kw.value for kw in IbcKeywords]:
