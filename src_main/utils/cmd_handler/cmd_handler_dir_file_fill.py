@@ -130,11 +130,15 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
                 print(f"{Colors.WARNING}警告: 第 {attempt + 1} 次尝试生成的JSON包含非字符串类型的叶子节点，正在重新生成...{Colors.ENDC}")
                 continue
             
+            # 检查并确保proj_root下有主入口文件
+            self._ensure_main_entry_file(new_json_content)
+            
             # 保存结果到icp_dir_content_with_files.json
             output_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_files.json')
             try:
                 with open(output_file, 'w', encoding='utf-8') as f:
-                    f.write(cleaned_content)
+                    # 保存修改后的JSON内容，而不是原始的cleaned_content
+                    json.dump(new_json_content, f, indent=2, ensure_ascii=False)
                 print(f"目录文件填充完成，结果已保存到: {output_file}")
                 return  # 成功则退出循环
             except Exception as e:
@@ -217,6 +221,65 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         sys_prompt_path = os.path.join(prompt_dir, prompt_file_name)
 
         return ChatInterface(handler_config, self.role_name, sys_prompt_path)
+    
+    def _ensure_main_entry_file(self, json_content: Dict) -> None:
+        """检查并确保proj_root下有主入口文件"""
+        import re
+        
+        if "proj_root" not in json_content:
+            return
+        
+        proj_root = json_content["proj_root"]
+        if not isinstance(proj_root, dict):
+            return
+        
+        # 常见主入口文件命名模式（不区分大小写）
+        main_patterns = [
+            r'^main$',
+            r'^Main$',
+            r'^app$',
+            r'^App$',
+            r'^index$',
+            r'^Index$',
+            r'^run$',
+            r'^Run$',
+            r'^start$',
+            r'^Start$',
+            r'^launcher$',
+            r'^Launcher$',
+            r'^bootstrap$',
+            r'^Bootstrap$'
+        ]
+        
+        # 检查proj_root直接子节点是否有主入口文件
+        has_main_entry = False
+        for key, value in proj_root.items():
+            # 只检查文件节点（值为字符串的节点）
+            if isinstance(value, str):
+                # 使用正则表达式匹配
+                for pattern in main_patterns:
+                    if re.match(pattern, key, re.IGNORECASE):
+                        has_main_entry = True
+                        print(f"{Colors.OKGREEN}检测到主入口文件: {key}{Colors.ENDC}")
+                        break
+            if has_main_entry:
+                break
+        
+        # 如果没有找到主入口文件，添加一个
+        if not has_main_entry:
+            # 优先使用 'main' 作为主入口文件名
+            main_file_name = 'main'
+            
+            # 如果 'main' 已经被用作目录名，尝试其他名称
+            if main_file_name in proj_root and isinstance(proj_root[main_file_name], dict):
+                for alt_name in ['app', 'index', 'run', 'start', 'launcher']:
+                    if alt_name not in proj_root or not isinstance(proj_root[alt_name], dict):
+                        main_file_name = alt_name
+                        break
+            
+            # 添加主入口文件
+            proj_root[main_file_name] = "主入口程序，执行初始化并启动程序"
+            print(f"{Colors.OKGREEN}未检测到主入口文件，已自动添加: {main_file_name}{Colors.ENDC}")
     
     async def _get_ai_response(self, handler: ChatInterface, requirement_content: str) -> str:
         """异步获取AI响应"""

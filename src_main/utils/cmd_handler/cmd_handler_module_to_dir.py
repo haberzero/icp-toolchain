@@ -62,12 +62,17 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: 需求分析结果为空{Colors.ENDC}")
             return
         
-        # 过滤掉ExternalLibraryDependencies字段
+        # 过滤掉ExternalLibraryDependencies字段，并移除module_breakdown下各模块的dependencies字段
         try:
             requirement_json = json.loads(requirement_content)
             # 移除ExternalLibraryDependencies字段，因为module_to_dir只关注模块结构，不关注外部库
             if 'ExternalLibraryDependencies' in requirement_json:
                 del requirement_json['ExternalLibraryDependencies']
+            # 移除module_breakdown中各子模块的dependencies字段，避免干扰目录结构生成判断
+            if 'module_breakdown' in requirement_json and isinstance(requirement_json['module_breakdown'], dict):
+                for module in requirement_json['module_breakdown'].values():
+                    if isinstance(module, dict) and 'dependencies' in module:
+                        del module['dependencies']
             # 将过滤后的内容转换回JSON字符串
             filtered_requirement_content = json.dumps(requirement_json, indent=2, ensure_ascii=False)
         except json.JSONDecodeError as e:

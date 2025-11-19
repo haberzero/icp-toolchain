@@ -16,6 +16,12 @@ FILE_DESCRIPTION_PLACEHOLDER
 
 EXISTING_FILE_DESCRIPTIONS_PLACEHOLDER
 
+仅允许考虑使用以下第三方库：
+EXTERNAL_LIB_ALLOWLIST_PLACEHOLDER
+
+模块依赖的建议（仅可从允许库中选择）：
+MODULE_DEPENDENCY_SUGGESTIONS_PLACEHOLDER
+
 请基于以上信息，结合用户的原始编程需求和当前文件在项目中的作用，为当前文件生成详细且准确的功能需求描述。
 
 考虑以下要点：
@@ -25,5 +31,7 @@ EXISTING_FILE_DESCRIPTIONS_PLACEHOLDER
 3. 如何与已生成的其他文件进行交互
 4. 对外提供哪些接口和服务
 5. 需要遵循哪些约束和规范
+6. 只允许使用上述已列出的第三方库
+7. 不使用当前文件不需要的第三方库
 
 请严格按照系统提示词中定义的格式输出结果，不要添加任何解释性文字。

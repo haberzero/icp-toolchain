@@ -500,9 +500,14 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             error_msg = f"读取符号规范化提示词失败: {e}"
             print(f"    {Colors.FAIL}错误: {error_msg}{Colors.ENDC}")
             raise RuntimeError(error_msg)
+
+        # 获取目标编程语言
+        icp_config_file = os.path.join(self.proj_config_data_dir, 'icp_config.json')
+        target_language = self.proj_config_data.get('target_language', 'python')
         
         # 填充占位符
         user_prompt = user_prompt_template
+        user_prompt = user_prompt.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
         user_prompt = user_prompt.replace('FILE_PATH_PLACEHOLDER', file_path)
         user_prompt = user_prompt.replace('CONTEXT_INFO_PLACEHOLDER', f"文件路径: {file_path}")
         user_prompt = user_prompt.replace('AST_SYMBOLS_PLACEHOLDER', symbols_text)
@@ -668,7 +673,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         """
         if not dependencies:
             return '暂无可用的依赖符号'
-        
+
         ibc_data_manager = get_ibc_data_manager()
         lines = ['可用的已生成符号：', '']
         

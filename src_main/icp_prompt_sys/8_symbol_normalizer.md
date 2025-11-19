@@ -20,19 +20,7 @@
 2. **仅包含字母（a-z, A-Z）、数字（0-9）、下划线（_）**
 3. **不能使用编程语言的保留关键字**
 4. **长度建议在2-50个字符之间**
-
-### 命名风格
-
-根据符号类型选择合适的命名风格：
-
-- **类名（class）**：使用大驼峰命名法（PascalCase）
-  - 示例：`UserManager`, `DatabaseConnection`, `QueryBuilder`
-  
-- **函数/方法名（func）**：使用小驼峰命名法（camelCase）或下划线命名法（snake_case）
-  - 示例：`getUserInfo`, `calculate_total_price`, `send_request`
-  
-- **变量名（var）**：使用小驼峰命名法或下划线命名法
-  - 示例：`userData`, `max_retry_count`, `config_path`
+5. **根据目标编程语言的符号命名习惯进行标识符规范化**
 
 ### 命名原则
 
@@ -93,12 +81,12 @@
 ```json
 {
   "自然语言符号名1": {
-    "normalized_name": "规范化后的标识符",
-    "visibility": "可见性枚举值"
+    "normalized_name": "<normalized_identifier>",
+    "visibility": "<visibility_enum_value>"
   },
   "自然语言符号名2": {
-    "normalized_name": "another_identifier",
-    "visibility": "public"
+    "normalized_name": "<normalized_identifier2>",
+    "visibility": "<visibility_enum_value2>"
   }
 }
 ```

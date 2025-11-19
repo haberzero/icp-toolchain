@@ -96,6 +96,7 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         if cycle_detected:
             print(f"  {Colors.FAIL}错误: 检测到循环依赖: {cycle_detected}{Colors.ENDC}")
             return
+        print(f"  {Colors.OKGREEN}循环依赖检测通过{Colors.ENDC}")
 
         # 生成dir_content.json文件，使用新生成的依赖关系
         self._generate_dir_content_json(proj_root, new_dependent_relation)
@@ -329,6 +330,37 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         user_prompt = user_prompt.replace('FILE_DESCRIPTION_PLACEHOLDER', file_desc_json)
         user_prompt = user_prompt.replace('EXISTING_FILE_DESCRIPTIONS_PLACEHOLDER', 
                                         '\n\n'.join(accumulated_descriptions) if accumulated_descriptions else '暂无已生成的文件需求描述')
+        # 构建第三方库允许清单，来自 refined_requirements.json 的 ExternalLibraryDependencies
+        allowed_libs_text = "（不允许使用任何第三方库）"
+        allowed_lib_keys = set()
+        try:
+            refined_requirements_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
+            with open(refined_requirements_file, 'r', encoding='utf-8') as rf:
+                refined_data = json.load(rf)
+                libs = refined_data.get('ExternalLibraryDependencies', {})
+                if isinstance(libs, dict) and libs:
+                    allowed_lines = [f"- {name}: {desc}" for name, desc in libs.items()]
+                    allowed_libs_text = "\n".join(allowed_lines)
+                    allowed_lib_keys = set(libs.keys())
+                # 基于 module_breakdown 的 dependencies 生成模块依赖建议（仅限允许库中出现的）
+                module_suggestions_text = "（无可用模块依赖建议）"
+                module_suggestions_lines = []
+                module_breakdown = refined_data.get('module_breakdown', {})
+                if isinstance(module_breakdown, dict):
+                    for mod_name, mod_obj in module_breakdown.items():
+                        if isinstance(mod_obj, dict):
+                            deps = mod_obj.get('dependencies', [])
+                            if isinstance(deps, list) and deps:
+                                filtered = [dep for dep in deps if dep in allowed_lib_keys]
+                                if filtered:
+                                    module_suggestions_lines.append(f"- {mod_name}: {', '.join(filtered)}")
+                if module_suggestions_lines:
+                    module_suggestions_text = "\n".join(module_suggestions_lines)
+        except Exception:
+            module_suggestions_text = "（无可用模块依赖建议）"
+            pass
+        user_prompt = user_prompt.replace('EXTERNAL_LIB_ALLOWLIST_PLACEHOLDER', allowed_libs_text)
+        user_prompt = user_prompt.replace('MODULE_DEPENDENCY_SUGGESTIONS_PLACEHOLDER', module_suggestions_text)
 
         # 调用AI生成需求描述
         response_content = asyncio.run(self._get_ai_response_1(self.ai_handler_1, user_prompt))
