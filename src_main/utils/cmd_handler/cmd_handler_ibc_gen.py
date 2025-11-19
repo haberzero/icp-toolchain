@@ -503,7 +503,13 @@ class CmdHandlerIbcGen(BaseCmdHandler):
 
         # 获取目标编程语言
         icp_config_file = os.path.join(self.proj_config_data_dir, 'icp_config.json')
-        target_language = self.proj_config_data.get('target_language', 'python')
+        try:
+            with open(icp_config_file, 'r', encoding='utf-8') as f:
+                icp_config_json = json.load(f)
+        except Exception as e:
+            print(f"错误: 读取配置文件失败: {e}")
+            return None
+        target_language = icp_config_json.get('target_language', 'python')
         
         # 填充占位符
         user_prompt = user_prompt_template
