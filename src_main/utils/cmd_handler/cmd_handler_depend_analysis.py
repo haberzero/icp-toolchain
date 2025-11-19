@@ -50,17 +50,17 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             
         print(f"{Colors.OKBLUE}开始进行依赖分析...{Colors.ENDC}")
         
-        # 读取精炼需求
-        refined_requirement_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
+        # 读取文件级实现规划
+        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
         try:
-            with open(refined_requirement_file, 'r', encoding='utf-8') as f:
-                refined_requirement_content = f.read()
+            with open(implementation_plan_file, 'r', encoding='utf-8') as f:
+                implementation_plan_content = f.read()
         except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取精炼需求失败: {e}{Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 读取文件级实现规划失败: {e}{Colors.ENDC}")
             return
             
-        if not refined_requirement_content:
-            print(f"  {Colors.FAIL}错误: 精炼需求内容为空{Colors.ENDC}")
+        if not implementation_plan_content:
+            print(f"  {Colors.FAIL}错误: 文件级实现规划内容为空{Colors.ENDC}")
             return
             
         # 读取带文件描述的目录结构
@@ -95,7 +95,7 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             
         # 填充占位符
         user_prompt = user_prompt_template
-        user_prompt = user_prompt.replace('PROGRAMMING_REQUIREMENT_PLACEHOLDER', refined_requirement_content)
+        user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_content)
         user_prompt = user_prompt.replace('JSON_STRUCTURE_PLACEHOLDER', dir_with_files_content)
         
         max_attempts = 5
@@ -131,8 +131,12 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
                 continue
                 
             # 检查dependent_relation中的依赖路径是否都存在于proj_root中
-            if not DirJsonFuncs.validate_dependent_paths(new_json_content["dependent_relation"], new_json_content["proj_root"]):
+            is_valid, validation_errors = DirJsonFuncs.validate_dependent_paths(new_json_content["dependent_relation"], new_json_content["proj_root"])
+            if not is_valid:
                 print(f"{Colors.WARNING}警告: 生成的 dependent_relation 出现了 proj_root 下不存在的路径{Colors.ENDC}")
+                print(f"{Colors.WARNING}具体错误如下:{Colors.ENDC}")
+                for error in validation_errors:
+                    print(f"  - {error}")
                 continue
             
             # 检查是否存在循环依赖
@@ -181,10 +185,10 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
 
     def _check_cmd_requirement(self) -> bool:
         """验证依赖分析命令的前置条件"""
-        # 检查精炼需求文件是否存在
-        refined_requirement_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
-        if not os.path.exists(refined_requirement_file):
-            print(f"  {Colors.WARNING}警告: 精炼需求文件不存在，请先执行需求分析命令{Colors.ENDC}")
+        # 检查文件级实现规划文件是否存在
+        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        if not os.path.exists(implementation_plan_file):
+            print(f"  {Colors.WARNING}警告: 文件级实现规划文件不存在，请先执行目录文件填充命令{Colors.ENDC}")
             return False
             
         # 检查带文件描述的目录结构文件是否存在

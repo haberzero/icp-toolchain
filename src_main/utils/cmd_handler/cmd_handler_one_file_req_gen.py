@@ -114,9 +114,13 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         user_data_manager = get_user_data_manager()
         user_requirements = user_data_manager.get_user_prompt()
         
-        # 检查用户原始需求是否存在
-        if not user_requirements:
-            print(f"  {Colors.FAIL}错误: 未找到用户原始需求，请确认需求已正确加载{Colors.ENDC}")
+        # 读取文件级实现规划
+        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        try:
+            with open(implementation_plan_file, 'r', encoding='utf-8') as f:
+                implementation_plan_content = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取文件级实现规划失败: {e}{Colors.ENDC}")
             return
 
         # 初始化累积描述字典，用于为后续文件生成提供上下文
@@ -138,6 +142,7 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
                 file_path, 
                 file_description, 
                 user_requirements,  # 使用用户原始需求
+                implementation_plan_content,  # 使用文件级实现规划
                 list(accumulated_descriptions_dict.values())
             )
 
@@ -306,6 +311,7 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         file_path: str, 
         file_description: str, 
         user_requirements: str,
+        implementation_plan: str,
         accumulated_descriptions: List[str]
     ) -> str:
         """创建新的文件需求描述"""
@@ -326,7 +332,8 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
             ensure_ascii=False)
         
         user_prompt = user_prompt_template
-        user_prompt = user_prompt.replace('USER_REQUIREMENTS_PLACEHOLDER', user_requirements)  # 使用新的占位符
+        user_prompt = user_prompt.replace('USER_REQUIREMENTS_PLACEHOLDER', user_requirements)
+        user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan)
         user_prompt = user_prompt.replace('FILE_DESCRIPTION_PLACEHOLDER', file_desc_json)
         user_prompt = user_prompt.replace('EXISTING_FILE_DESCRIPTIONS_PLACEHOLDER', 
                                         '\n\n'.join(accumulated_descriptions) if accumulated_descriptions else '暂无已生成的文件需求描述')
@@ -538,6 +545,25 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         final_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_refined.json')
         if not os.path.exists(final_dir_file):
             print(f"  {Colors.WARNING}警告: 目录结构文件不存在，请先执行循环依赖解决命令{Colors.ENDC}")
+            return False
+        
+        # 检查文件级实现规划文件是否存在
+        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        if not os.path.exists(implementation_plan_file):
+            print(f"  {Colors.WARNING}警告: 文件级实现规划文件不存在，请先执行目录文件填充命令{Colors.ENDC}")
+            return False
+        
+        # 检查用户原始需求是否存在
+        user_data_manager = get_user_data_manager()
+        user_requirements = user_data_manager.get_user_prompt()
+        if not user_requirements:
+            print(f"  {Colors.WARNING}警告: 用户原始需求不存在，请先加载用户需求{Colors.ENDC}")
+            return False
+        
+        # 检查精炼需求文件是否存在（用于获取第三方库信息）
+        refined_requirements_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
+        if not os.path.exists(refined_requirements_file):
+            print(f"  {Colors.WARNING}警告: 精炼需求文件不存在，请先执行需求分析命令{Colors.ENDC}")
             return False
         
         return True

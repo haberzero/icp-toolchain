@@ -36,12 +36,17 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         self.proj_config_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_config')
         self.icp_api_config_file = os.path.join(self.proj_config_data_dir, 'icp_api_config.json')
 
-        self.ai_handler: ChatInterface
-        self.role_name = "4_dir_file_fill"
-        ai_handler = self._init_ai_handlers()
-        if ai_handler is not None:
-            self.ai_handler = ai_handler
-            self.ai_handler.init_chat_chain()
+        self.ai_handler_1: ChatInterface
+        self.ai_handler_2: ChatInterface
+        self.role_name_1 = "4_dir_file_fill"
+        self.role_name_2 = "4_dir_file_fill_plan_gen"
+        ai_handler_1, ai_handler_2 = self._init_ai_handlers()
+        if ai_handler_1 is not None:
+            self.ai_handler_1 = ai_handler_1
+            self.ai_handler_1.init_chat_chain()
+        if ai_handler_2 is not None:
+            self.ai_handler_2 = ai_handler_2
+            self.ai_handler_2.init_chat_chain()
 
     def execute(self):
         """执行目录文件填充"""
@@ -100,8 +105,8 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         
         max_attempts = 3
         for attempt in range(max_attempts):
-            print(f"{self.role_name}正在进行第 {attempt + 1} 次尝试...")
-            response_content = asyncio.run(self._get_ai_response(self.ai_handler, user_prompt))
+            print(f"{self.role_name_1}正在进行第 {attempt + 1} 次尝试...")
+            response_content = asyncio.run(self._get_ai_response_1(self.ai_handler_1, user_prompt))
             cleaned_content = response_content.strip()
 
             # 移除可能的代码块标记
@@ -140,10 +145,19 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
                     # 保存修改后的JSON内容，而不是原始的cleaned_content
                     json.dump(new_json_content, f, indent=2, ensure_ascii=False)
                 print(f"目录文件填充完成，结果已保存到: {output_file}")
-                return  # 成功则退出循环
             except Exception as e:
                 print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
                 return
+                
+            # 使用第二个AI handler生成文件级别的实现规划描述
+            print(f"{Colors.OKBLUE}开始生成文件级实现规划...{Colors.ENDC}")
+            plan_output_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+            self._generate_implementation_plan_2(
+                requirement_content, 
+                cleaned_content, 
+                plan_output_file
+            )
+            return  # 成功则退出循环
                 
         print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的目录结构{Colors.ENDC}")
 
@@ -165,14 +179,24 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
 
     def _check_ai_handler(self) -> bool:
         """验证AI处理器是否初始化成功"""
-        # 检查AI处理器是否初始化成功
-        if not hasattr(self, 'ai_handler') or self.ai_handler is None:
-            print(f"  {Colors.FAIL}错误: {self.role_name} AI处理器未正确初始化{Colors.ENDC}")
+        # 检查AI处理器1是否初始化成功
+        if not hasattr(self, 'ai_handler_1') or self.ai_handler_1 is None:
+            print(f"  {Colors.FAIL}错误: {self.role_name_1} AI处理器1未正确初始化{Colors.ENDC}")
             return False
             
-        # 检查AI处理器是否连接成功
-        if not hasattr(self.ai_handler, 'llm') or self.ai_handler.llm is None:
-            print(f"  {Colors.FAIL}错误: {self.role_name} AI模型连接失败{Colors.ENDC}")
+        # 检查AI处理器1是否连接成功
+        if not hasattr(self.ai_handler_1, 'llm') or self.ai_handler_1.llm is None:
+            print(f"  {Colors.FAIL}错误: {self.role_name_1} AI模型1连接失败{Colors.ENDC}")
+            return False
+            
+        # 检查AI处理器2是否初始化成功
+        if not hasattr(self, 'ai_handler_2') or self.ai_handler_2 is None:
+            print(f"  {Colors.FAIL}错误: {self.role_name_2} AI处理器2未正确初始化{Colors.ENDC}")
+            return False
+            
+        # 检查AI处理器2是否连接成功
+        if not hasattr(self.ai_handler_2, 'llm') or self.ai_handler_2.llm is None:
+            print(f"  {Colors.FAIL}错误: {self.role_name_2} AI模型2连接失败{Colors.ENDC}")
             return False
             
         return True
@@ -187,14 +211,14 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         # 检查配置文件是否存在
         if not os.path.exists(self.icp_api_config_file):
             print(f"错误: 配置文件 {self.icp_api_config_file} 不存在，请创建该文件并填充必要内容")
-            return None
+            return None, None
         
         try:
             with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
                 config = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
-            return None
+            return None, None
         
         # 优先检查是否有dir_file_fill_handler配置
         if 'dir_file_fill_handler' in config:
@@ -213,14 +237,20 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             )
         else:
             print("错误: 配置文件缺少dir_file_fill_handler或coder_handler配置")
-            return None
+            return None, None
 
         app_data_manager = get_app_data_manager()
         prompt_dir = app_data_manager.get_prompt_dir()
-        prompt_file_name = self.role_name + ".md"
-        sys_prompt_path = os.path.join(prompt_dir, prompt_file_name)
+        prompt_file_name_1 = self.role_name_1 + ".md"
+        prompt_file_name_2 = self.role_name_2 + ".md"
+        sys_prompt_path_1 = os.path.join(prompt_dir, prompt_file_name_1)
+        sys_prompt_path_2 = os.path.join(prompt_dir, prompt_file_name_2)
 
-        return ChatInterface(handler_config, self.role_name, sys_prompt_path)
+        # 创建两个AI处理器实例
+        ai_handler_1 = ChatInterface(handler_config, self.role_name_1, sys_prompt_path_1)
+        ai_handler_2 = ChatInterface(handler_config, self.role_name_2, sys_prompt_path_2)
+
+        return ai_handler_1, ai_handler_2
     
     def _ensure_main_entry_file(self, json_content: Dict) -> None:
         """检查并确保proj_root下有主入口文件"""
@@ -281,8 +311,59 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             proj_root[main_file_name] = "主入口程序，执行初始化并启动程序"
             print(f"{Colors.OKGREEN}未检测到主入口文件，已自动添加: {main_file_name}{Colors.ENDC}")
     
-    async def _get_ai_response(self, handler: ChatInterface, requirement_content: str) -> str:
-        """异步获取AI响应"""
+    def _generate_implementation_plan_2(
+        self,
+        requirement_content: str,
+        dir_file_content: str,
+        output_file_path: str
+    ) -> None:
+        """生成文件级实现规划描述"""
+        # 读取用户原始需求
+        user_data_manager = get_user_data_manager()
+        user_requirements = user_data_manager.get_user_prompt()
+        
+        if not user_requirements:
+            print(f"  {Colors.FAIL}错误: 未找到用户原始需求{Colors.ENDC}")
+            return
+        
+        # 构建用户提示词
+        app_data_manager = get_app_data_manager()
+        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'dir_file_fill_plan_gen_user.md')
+        try:
+            with open(user_prompt_file, 'r', encoding='utf-8') as f:
+                user_prompt_template = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+            return
+        
+        # 填充占位符
+        user_prompt = user_prompt_template
+        user_prompt = user_prompt.replace('USER_ORIGINAL_REQUIREMENTS_PLACEHOLDER', user_requirements)
+        user_prompt = user_prompt.replace('REFINED_REQUIREMENTS_PLACEHOLDER', requirement_content)
+        user_prompt = user_prompt.replace('DIR_FILE_CONTENT_PLACEHOLDER', dir_file_content)
+        
+        # 调用AI生成实现规划
+        response_content = asyncio.run(self._get_ai_response_2(self.ai_handler_2, user_prompt))
+        cleaned_content = response_content.strip()
+        
+        # 移除可能的代码块标记
+        lines = cleaned_content.split('\n')
+        if lines and lines[0].strip().startswith('```'):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith('```'):
+            lines = lines[:-1]
+        cleaned_content = '\n'.join(lines).strip()
+        
+        # 保存实现规划
+        try:
+            with open(output_file_path, 'w', encoding='utf-8') as f:
+                f.write(cleaned_content)
+            print(f"{Colors.OKGREEN}文件级实现规划已生成并保存到: {output_file_path}{Colors.ENDC}")
+        except Exception as e:
+            print(f"{Colors.FAIL}错误: 保存实现规划失败: {e}{Colors.ENDC}")
+    
+    async def _get_ai_response_1(self, handler: ChatInterface, requirement_content: str) -> str:
+        """异步获取AI响应（处理器1）"""
         response_content = ""
         def collect_response(content):
             nonlocal response_content
@@ -290,7 +371,21 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             # 实时在CLI中显示AI回复
             print(content, end="", flush=True)
             
-        print(f"{self.role_name}正在填充目录文件...")
+        print(f"{self.role_name_1}正在填充目录文件...")
         await handler.stream_response(requirement_content, collect_response)
-        print(f"\n{self.role_name}运行完毕。")
+        print(f"\n{self.role_name_1}运行完毕。")
+        return response_content
+    
+    async def _get_ai_response_2(self, handler: ChatInterface, requirement_content: str) -> str:
+        """异步获取AI响应（处理器2）"""
+        response_content = ""
+        def collect_response(content):
+            nonlocal response_content
+            response_content += content
+            # 实时在CLI中显示AI回复
+            print(content, end="", flush=True)
+            
+        print(f"{self.role_name_2}正在生成实现规划...")
+        await handler.stream_response(requirement_content, collect_response)
+        print(f"\n{self.role_name_2}运行完毕。")
         return response_content

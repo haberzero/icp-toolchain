@@ -274,12 +274,16 @@ class DirJsonFuncs:
         return ""
 
     @staticmethod
-    def validate_dependent_paths(dependent_relation: Dict[str, Any], proj_root: Dict[str, Any]) -> bool:
+    def validate_dependent_paths(dependent_relation: Dict[str, Any], proj_root: Dict[str, Any]) -> tuple[bool, List[str]]:
         """
         检查dependent_relation中的依赖路径是否都存在于proj_root中
+        返回: (是否有效, 错误信息列表)
         """
+        errors = []
+        
         if not isinstance(dependent_relation, dict):
-            return False
+            errors.append("dependent_relation 不是有效的字典类型")
+            return False, errors
             
         # 收集proj_root中的所有路径
         proj_root_paths = DirJsonFuncs._collect_paths(proj_root)
@@ -288,15 +292,16 @@ class DirJsonFuncs:
         for dep_key, dep_value in dependent_relation.items():
             # 检查依赖项路径是否存在
             if dep_key not in proj_root_paths:
-                return False
+                errors.append(f"dependent_relation 中的键 '{dep_key}' 在 proj_root 中不存在")
 
             # 检查依赖项的值是否为列表
             if not isinstance(dep_value, list):
-                return False
+                errors.append(f"dependent_relation 中 '{dep_key}' 的值不是列表类型")
+                continue
 
             # 检查依赖项中的被依赖路径是否存在
             for sub_dep_key in dep_value:
                 if sub_dep_key not in proj_root_paths:
-                    return False
+                    errors.append(f"dependent_relation 中 '{dep_key}' 依赖的路径 '{sub_dep_key}' 在 proj_root 中不存在")
         
-        return True
+        return len(errors) == 0, errors
