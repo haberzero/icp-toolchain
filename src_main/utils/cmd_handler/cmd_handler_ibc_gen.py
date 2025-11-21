@@ -182,7 +182,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             try:
                 normalized_symbols_dict = self._normalize_symbols(
                     file_path,
-                    symbol_table
+                    symbol_table,
+                    ibc_code
                 )
             except RuntimeError as e:
                 print(f"  {Colors.FAIL}错误: 符号规范化失败 {file_path}: {e}{Colors.ENDC}")
@@ -336,9 +337,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt = user_prompt.replace('IMPORT_CONTENT_PLACEHOLDER', import_content if import_content else '无')
         user_prompt = user_prompt.replace('AVAILABLE_SYMBOLS_PLACEHOLDER', available_symbols_text)
 
-        # 保存用户提示词到ibc_gen_temp目录
-        self._save_user_prompt_to_temp(file_path, user_prompt, 'ibc_gen_prompt.txt')
-
         # 调用AI生成半自然语言行为描述代码
         response_content = asyncio.run(self._get_ai_response(self.ai_handler_1, user_prompt))
         
@@ -475,7 +473,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     def _normalize_symbols(
         self, 
         file_path: str, 
-        file_symbol_table: FileSymbolTable
+        file_symbol_table: FileSymbolTable,
+        ibc_code: str
     ) -> Dict[str, Dict[str, str]]:
         """
         对符号进行规范化处理
@@ -483,6 +482,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         Args:
             file_path: 文件路径
             file_symbol_table: 文件符号表
+            ibc_code: IBC代码内容
             
         Returns:
             Dict[str, Dict[str, str]]: 规范化后的符号信息字典
@@ -531,11 +531,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt = user_prompt_template
         user_prompt = user_prompt.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
         user_prompt = user_prompt.replace('FILE_PATH_PLACEHOLDER', file_path)
-        user_prompt = user_prompt.replace('CONTEXT_INFO_PLACEHOLDER', f"文件路径: {file_path}")
+        user_prompt = user_prompt.replace('CONTEXT_INFO_PLACEHOLDER', ibc_code)
         user_prompt = user_prompt.replace('AST_SYMBOLS_PLACEHOLDER', symbols_text)
-        
-        # 保存用户提示词到ibc_gen_temp目录
-        self._save_user_prompt_to_temp(file_path, user_prompt, 'symbol_normalizer_prompt.txt')
         
         # 调用AI，支持重试机制
         max_retries = 3
@@ -630,45 +627,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         pattern = r'^[a-zA-Z_][a-zA-Z0-9_]*$'
         return re.match(pattern, identifier) is not None
     
-    def _save_user_prompt_to_temp(
-        self,
-        file_path: str,
-        user_prompt: str,
-        prompt_filename: str
-    ) -> None:
-        """
-        保存用户提示词到ibc_gen_temp目录
-        
-        Args:
-            file_path: 文件相对路径（如 "src/main.py"）
-            user_prompt: 用户提示词内容
-            prompt_filename: 提示词文件名（如 "ibc_gen_prompt.txt"）
-        """
-        try:
-            # 构建 ibc_gen_temp 目录路径
-            temp_dir = os.path.join(self.proj_work_dir, 'ibc_gen_temp')
-            
-            # 获取文件所在目录
-            file_dir = os.path.dirname(file_path)
-            if file_dir:
-                prompt_dir = os.path.join(temp_dir, file_dir)
-            else:
-                prompt_dir = temp_dir
-            
-            # 确保目录存在
-            os.makedirs(prompt_dir, exist_ok=True)
-            
-            # 构建完整的提示词文件路径
-            prompt_file_path = os.path.join(prompt_dir, f"{os.path.basename(file_path)}_{prompt_filename}")
-            
-            # 写入文件
-            with open(prompt_file_path, 'w', encoding='utf-8') as f:
-                f.write(user_prompt)
-            
-            print(f"    {Colors.OKGREEN}用户提示词已保存: {prompt_file_path}{Colors.ENDC}")
-        except Exception as e:
-            print(f"    {Colors.WARNING}警告: 保存用户提示词失败: {e}{Colors.ENDC}")
-    
+
     # ========== 符号信息构建 ==========
     
     def _build_available_symbols_text(
