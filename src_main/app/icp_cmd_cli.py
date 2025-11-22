@@ -26,7 +26,7 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
-class CmdInterface:
+class IcpCmdCli:
     def __init__(self):
         # 初始化管理器和命令处理器
         self.proj_cfg_manager = get_proj_cfg_manager()

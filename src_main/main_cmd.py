@@ -8,7 +8,7 @@ from ui.path_selector import PathSelector
 from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
 from data_exchange.app_data_manager import get_instance as get_app_data_manager
 from data_exchange.user_data_manager import get_instance as get_user_data_manager
-from app.cmd_interface import CmdInterface
+from app.icp_cmd_cli import IcpCmdCli
 
 
 # CMD 模式启动
@@ -63,7 +63,7 @@ def main():
                 requirement_content = f.read()
             user_data_manager.set_user_prompt(requirement_content)
 
-    cmd_interface = CmdInterface()
+    cmd_interface = IcpCmdCli()
     cmd_interface.start_cli()
 
 if __name__ == "__main__":
