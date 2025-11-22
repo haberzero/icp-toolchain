@@ -1,16 +1,16 @@
 from typing import Dict, List, Optional
 
-from utils.cmd_handler.base_cmd_handler import BaseCmdHandler
-from utils.cmd_handler.cmd_handler_quit import CmdHandlerQuit
-from utils.cmd_handler.cmd_handler_help import CmdHandlerHelp
-from utils.cmd_handler.cmd_handler_para_extract import CmdHandlerParaExtract
-from utils.cmd_handler.cmd_handler_req_analysis import CmdHandlerReqAnalysis
-from utils.cmd_handler.cmd_handler_module_to_dir import CmdHandlerModuleToDir
-from utils.cmd_handler.cmd_handler_dir_file_fill import CmdHandlerDirFileFill
-from utils.cmd_handler.cmd_handler_depend_analysis import CmdHandlerDependAnalysis
-from utils.cmd_handler.cmd_handler_depend_refine import CmdHandlerDependRefine
-from utils.cmd_handler.cmd_handler_one_file_req_gen import CmdHandlerOneFileReqGen
-from utils.cmd_handler.cmd_handler_ibc_gen import CmdHandlerIbcGen
+from .base_cmd_handler import BaseCmdHandler
+from .cmd_handler_quit import CmdHandlerQuit
+from .cmd_handler_help import CmdHandlerHelp
+from .cmd_handler_para_extract import CmdHandlerParaExtract
+from .cmd_handler_req_analysis import CmdHandlerReqAnalysis
+from .cmd_handler_module_to_dir import CmdHandlerModuleToDir
+from .cmd_handler_dir_file_fill import CmdHandlerDirFileFill
+from .cmd_handler_depend_analysis import CmdHandlerDependAnalysis
+from .cmd_handler_depend_refine import CmdHandlerDependRefine
+from .cmd_handler_one_file_req_gen import CmdHandlerOneFileReqGen
+from .cmd_handler_ibc_gen import CmdHandlerIbcGen
 
 
 # TODO: 是否有必要进行倒置？
