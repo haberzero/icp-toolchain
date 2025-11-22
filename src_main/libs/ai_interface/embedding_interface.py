@@ -1,15 +1,15 @@
 import requests
-from dataclasses import dataclass
-from pydantic import SecretStr
 
 from typedef.cmd_data_types import EmbeddingApiConfig
-
-from langchain.embeddings.base import Embeddings
 
 EMBEDDING_HANDLER_DEBUG_FLAG = False
 
 
-class EmbeddingHandler(Embeddings):
+class EmbeddingHandler:
+    """
+    Embedding处理器，提供文本向量化功能
+    使用标准 OpenAI API 格式进行调用
+    """
     def __init__(self, api_config: EmbeddingApiConfig):
         self.base_url = api_config.base_url
         self.api_key = api_config.api_key
