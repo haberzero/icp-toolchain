@@ -17,7 +17,7 @@ from typedef.cmd_data_types import Colors
 
 from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
 from data_exchange.user_data_manager import get_instance as get_user_data_manager
-from utils.cmd_handler.command_manager import CommandManager
+from .cmd_handler.command_manager import CommandManager
 
 
 def signal_handler(sig, frame):
