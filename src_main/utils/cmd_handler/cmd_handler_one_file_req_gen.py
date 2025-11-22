@@ -11,7 +11,8 @@ from data_exchange.app_data_manager import get_instance as get_app_data_manager
 from data_exchange.user_data_manager import get_instance as get_user_data_manager
 
 from utils.cmd_handler.base_cmd_handler import BaseCmdHandler
-from libs.ai_interface.chat_interface import ChatInterface
+from utils.icp_ai_handler import ICPChatHandler
+from libs.ai_interface.chat_interface import ResponseStatus
 from libs.dir_json_funcs import DirJsonFuncs
 
 
@@ -32,17 +33,10 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         self.proj_config_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_config')
         self.icp_api_config_file = os.path.join(self.proj_config_data_dir, 'icp_api_config.json')
 
-        self.ai_handler_1: ChatInterface
-        self.ai_handler_2: ChatInterface
+        self.chat_handler = ICPChatHandler()
         self.role_name_1 = "7_one_file_req_gen"
         self.role_name_2 = "7_one_file_req_depend_analyzer"
-        ai_handler_1, ai_handler_2 = self._init_ai_handlers()
-        if ai_handler_1 is not None:
-            self.ai_handler_1 = ai_handler_1
-            self.ai_handler_1.init_chat_chain()
-        if ai_handler_2 is not None:
-            self.ai_handler_2 = ai_handler_2
-            self.ai_handler_2.init_chat_chain()
+        self._init_ai_handlers()
 
     def execute(self):
         """执行IBC目录结构创建"""
@@ -370,7 +364,7 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         user_prompt = user_prompt.replace('MODULE_DEPENDENCY_SUGGESTIONS_PLACEHOLDER', module_suggestions_text)
 
         # 调用AI生成需求描述
-        response_content = asyncio.run(self._get_ai_response_1(self.ai_handler_1, user_prompt))
+        response_content = asyncio.run(self._get_ai_response_1(user_prompt))
         return response_content
 
     def _generate_file_dependencies_2(
@@ -500,7 +494,7 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         user_prompt = user_prompt.replace('AVAILABLE_MODULES_PLACEHOLDER', available_modules_text if available_modules_text else '暂无其他模块')
 
         # 调用AI分析依赖关系
-        response_content = asyncio.run(self._get_ai_response_2(self.ai_handler_2, user_prompt))
+        response_content = asyncio.run(self._get_ai_response_2(user_prompt))
         
         # 移除可能的代码块标记
         cleaned_content = response_content.strip()
@@ -570,26 +564,15 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
     
     def _check_ai_handler(self) -> bool:
         """验证AI处理器是否初始化成功"""
-        # 检查AI处理器是否初始化成功
-        if not hasattr(self, 'ai_handler_1') or self.ai_handler_1 is None:
-            print(f"  {Colors.FAIL}错误: {self.role_name_1} AI处理器1未正确初始化{Colors.ENDC}")
+        if not ICPChatHandler.is_initialized():
+            print(f"  {Colors.FAIL}错误: ChatInterface 未正确初始化{Colors.ENDC}")
             return False
-            
-        # 检查AI处理器是否连接成功
-        if not hasattr(self.ai_handler_1, 'llm') or self.ai_handler_1.llm is None:
-            print(f"  {Colors.FAIL}错误: {self.role_name_1} AI模型1连接失败{Colors.ENDC}")
+        if not self.chat_handler.has_role(self.role_name_1):
+            print(f"  {Colors.FAIL}错误: 角色 {self.role_name_1} 未加载{Colors.ENDC}")
             return False
-            
-        # 检查AI处理器2是否初始化成功
-        if not hasattr(self, 'ai_handler_2') or self.ai_handler_2 is None:
-            print(f"  {Colors.FAIL}错误: {self.role_name_2} AI处理器2未正确初始化{Colors.ENDC}")
+        if not self.chat_handler.has_role(self.role_name_2):
+            print(f"  {Colors.FAIL}错误: 角色 {self.role_name_2} 未加载{Colors.ENDC}")
             return False
-            
-        # 检查AI处理器2是否连接成功
-        if not hasattr(self.ai_handler_2, 'llm') or self.ai_handler_2.llm is None:
-            print(f"  {Colors.FAIL}错误: {self.role_name_2} AI模型2连接失败{Colors.ENDC}")
-            return False
-            
         return True
     
     def is_cmd_valid(self):
@@ -597,49 +580,41 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
 
     def _init_ai_handlers(self):
         """初始化AI处理器"""
-        # 检查配置文件是否存在
         if not os.path.exists(self.icp_api_config_file):
-            print(f"错误: 配置文件 {self.icp_api_config_file} 不存在，请创建该文件并填充必要内容")
-            return None, None
+            print(f"错误: 配置文件 {self.icp_api_config_file} 不存在")
+            return
         
         try:
             with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
                 config = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
-            return None, None
+            return
         
-        # 优先检查是否有dependency_refine_handler配置
         if 'dependency_refine_handler' in config:
             chat_api_config = config['dependency_refine_handler']
-            handler_config = ChatApiConfig(
-                base_url=chat_api_config.get('api-url', ''),
-                api_key=SecretStr(chat_api_config.get('api-key', '')),
-                model=chat_api_config.get('model', '')
-            )
         elif 'coder_handler' in config:
             chat_api_config = config['coder_handler']
-            handler_config = ChatApiConfig(
-                base_url=chat_api_config.get('api-url', ''),
-                api_key=SecretStr(chat_api_config.get('api-key', '')),
-                model=chat_api_config.get('model', '')
-            )
         else:
-            print("错误: 配置文件缺少dependency_refine_handler或coder_handler配置")
-            return None, None
-
+            print("错误: 配置文件缺少配置")
+            return
+        
+        handler_config = ChatApiConfig(
+            base_url=chat_api_config.get('api-url', ''),
+            api_key=SecretStr(chat_api_config.get('api-key', '')),
+            model=chat_api_config.get('model', '')
+        )
+        
+        if not ICPChatHandler.is_initialized():
+            ICPChatHandler.initialize_chat_interface(handler_config)
+        
         app_data_manager = get_app_data_manager()
         prompt_dir = app_data_manager.get_prompt_dir()
-        prompt_file_name_1 = self.role_name_1 + ".md"
-        prompt_file_name_2 = self.role_name_2 + ".md"
-        sys_prompt_path_1 = os.path.join(prompt_dir, prompt_file_name_1)
-        sys_prompt_path_2 = os.path.join(prompt_dir, prompt_file_name_2)
-
-        # 创建两个AI处理器实例
-        ai_handler_1 = ChatInterface(handler_config, self.role_name_1, sys_prompt_path_1)
-        ai_handler_2 = ChatInterface(handler_config, self.role_name_2, sys_prompt_path_2)
-
-        return ai_handler_1, ai_handler_2
+        sys_prompt_path_1 = os.path.join(prompt_dir, self.role_name_1 + ".md")
+        sys_prompt_path_2 = os.path.join(prompt_dir, self.role_name_2 + ".md")
+        
+        self.chat_handler.load_role_from_file(self.role_name_1, sys_prompt_path_1)
+        self.chat_handler.load_role_from_file(self.role_name_2, sys_prompt_path_2)
 
     def _build_file_desc_dict(self, ibc_root_path: str, file_creation_order_list: List[str]) -> Dict[str, str]:
         """构建文件描述字典"""
@@ -676,30 +651,32 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
                 
         return file_desc_dict
 
-    async def _get_ai_response_1(self, handler: ChatInterface, requirement_content: str) -> str:
+    async def _get_ai_response_1(self, user_prompt: str) -> str:
         """异步获取AI响应（处理器1）"""
         response_content = ""
         def collect_response(content):
             nonlocal response_content
             response_content += content
-            # 实时在CLI中显示AI回复
             print(content, end="", flush=True)
-            
         print(f"{self.role_name_1}正在生成目录结构...")
-        await handler.stream_response(requirement_content, collect_response)
-        print(f"\n{self.role_name_1}运行完毕。")
-        return response_content
+        status = await self.chat_handler.get_role_response(self.role_name_1, user_prompt, collect_response)
+        if status == ResponseStatus.SUCCESS:
+            print(f"\n{self.role_name_1}运行完毕。")
+            return response_content
+        print(f"\n{Colors.FAIL}错误: 响应失败 {status}{Colors.ENDC}")
+        return ""
 
-    async def _get_ai_response_2(self, handler: ChatInterface, requirement_content: str) -> str:
+    async def _get_ai_response_2(self, user_prompt: str) -> str:
         """异步获取AI响应（处理器2）"""
         response_content = ""
         def collect_response(content):
             nonlocal response_content
             response_content += content
-            # 实时在CLI中显示AI回复
             print(content, end="", flush=True)
-            
         print(f"{self.role_name_2}正在分析依赖关系...")
-        await handler.stream_response(requirement_content, collect_response)
-        print(f"\n{self.role_name_2}运行完毕。")
-        return response_content
+        status = await self.chat_handler.get_role_response(self.role_name_2, user_prompt, collect_response)
+        if status == ResponseStatus.SUCCESS:
+            print(f"\n{self.role_name_2}运行完毕。")
+            return response_content
+        print(f"\n{Colors.FAIL}错误: 响应失败 {status}{Colors.ENDC}")
+        return ""

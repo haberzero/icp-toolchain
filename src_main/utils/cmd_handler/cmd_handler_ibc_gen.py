@@ -19,7 +19,8 @@ from data_exchange.user_data_manager import get_instance as get_user_data_manage
 from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
 
 from utils.cmd_handler.base_cmd_handler import BaseCmdHandler
-from libs.ai_interface.chat_interface import ChatInterface
+from utils.icp_ai_handler import ICPChatHandler
+from libs.ai_interface.chat_interface import ResponseStatus
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code, IbcAnalyzerError
 from utils.ibc_analyzer.ibc_symbol_gen import IbcSymbolGenerator
 from libs.dir_json_funcs import DirJsonFuncs
@@ -46,15 +47,11 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self.role_name_1 = "8_intent_behavior_code_gen"
         self.role_name_2 = "8_symbol_normalizer"
         
+        # 使用新的 ICPChatHandler
+        self.chat_handler = ICPChatHandler()
+        
         # 初始化AI处理器
-        ai_handler_1 = self._init_ai_handler_1()
-        ai_handler_2 = self._init_ai_handler_2()
-        if ai_handler_1 is not None:
-            self.ai_handler_1 = ai_handler_1
-            self.ai_handler_1.init_chat_chain()
-        if ai_handler_2 is not None:
-            self.ai_handler_2 = ai_handler_2
-            self.ai_handler_2.init_chat_chain()
+        self._init_ai_handlers()
 
     def execute(self):
         """执行半自然语言行为描述代码生成"""
@@ -338,7 +335,12 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt = user_prompt.replace('AVAILABLE_SYMBOLS_PLACEHOLDER', available_symbols_text)
 
         # 调用AI生成半自然语言行为描述代码
-        response_content = asyncio.run(self._get_ai_response(self.ai_handler_1, user_prompt))
+        response_content = asyncio.run(self._get_ai_response(self.role_name_1, user_prompt))
+        
+        # 如果响应为空，说明AI调用失败
+        if not response_content:
+            print(f"    {Colors.WARNING}警告: AI响应为空{Colors.ENDC}")
+            return ""
         
         # 移除可能的代码块标记
         lines = response_content.split('\n')
@@ -379,23 +381,45 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     
     def _check_ai_handler(self) -> bool:
         """验证AI处理器是否初始化成功"""
-        return hasattr(self, 'ai_handler_1') and self.ai_handler_1 is not None
+        # 检查共享的ChatInterface是否初始化
+        if not ICPChatHandler.is_initialized():
+            return False
+        
+        # 检查角色1是否已加载
+        if not self.chat_handler.has_role(self.role_name_1):
+            return False
+        
+        return True
     
-    async def _get_ai_response(self, handler: ChatInterface, requirement_content: str) -> str:
+    async def _get_ai_response(self, role_name: str, user_prompt: str) -> str:
         """异步获取AI响应"""
         response_content = ""
+        
         def collect_response(content):
             nonlocal response_content
             response_content += content
-            # 实时在CLI中显示AI回复
             print(content, end="", flush=True)
-            
-        # 获取handler的role_name
-        role_name = handler.role_name if hasattr(handler, 'role_name') else 'AI'
+        
         print(f"    {role_name}正在生成响应...")
-        await handler.stream_response(requirement_content, collect_response)
-        print(f"\n    {role_name}运行完毕。")
-        return response_content
+        
+        status = await self.chat_handler.get_role_response(
+            role_name=role_name,
+            user_prompt=user_prompt,
+            callback=collect_response
+        )
+        
+        if status == ResponseStatus.SUCCESS:
+            print(f"\n    {role_name}运行完毕。")
+            return response_content
+        elif status == ResponseStatus.CLIENT_NOT_INITIALIZED:
+            print(f"\n{Colors.FAIL}错误: ChatInterface未初始化{Colors.ENDC}")
+            return ""
+        elif status == ResponseStatus.STREAM_FAILED_AFTER_RETRY:
+            print(f"\n{Colors.FAIL}错误: 流式响应失败{Colors.ENDC}")
+            return ""
+        else:
+            print(f"\n{Colors.FAIL}错误: 未知状态 {status}{Colors.ENDC}")
+            return ""
     
     # ========== 辅助方法 ==========
     
@@ -497,7 +521,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             return {}
         
         # 检查AI处理器2是否初始化
-        if not hasattr(self, 'ai_handler_2') or self.ai_handler_2 is None:
+        if not self.chat_handler.has_role(self.role_name_2):
             error_msg = f"符号规范化AI处理器未初始化，请检查配置文件并重新初始化AI处理器"
             print(f"    {Colors.FAIL}错误: {error_msg}{Colors.ENDC}")
             raise RuntimeError(error_msg)
@@ -539,7 +563,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         for attempt in range(max_retries):
             try:
                 print(f"    正在调用AI进行符号规范化（尝试 {attempt + 1}/{max_retries}）...")
-                response_content = asyncio.run(self._get_ai_response(self.ai_handler_2, user_prompt))
+                response_content = asyncio.run(self._get_ai_response(self.role_name_2, user_prompt))
                 
                 # 解析JSON响应
                 normalized_symbols = self._parse_symbol_normalizer_response(response_content)
@@ -739,26 +763,27 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     
     # ========== 修改的方法：AI处理器初始化 ==========
     
-    def _init_ai_handler_1(self) -> Optional[ChatInterface]:
-        """初始化AI处理器1（IBC代码生成）"""
+    def _init_ai_handlers(self):
+        """初始化AI处理器"""
         if not os.path.exists(self.icp_api_config_file):
             print(f"错误: 配置文件 {self.icp_api_config_file} 不存在")
-            return None
+            return
         
         try:
             with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
                 config = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
-            return None
+            return
         
+        # 处理器1：IBC代码生成
         if 'intent_behavior_code_gen_handler' in config:
             chat_api_config = config['intent_behavior_code_gen_handler']
         elif 'coder_handler' in config:
             chat_api_config = config['coder_handler']
         else:
             print("错误: 配置文件缺少intent_behavior_code_gen_handler或coder_handler配置")
-            return None
+            return
         
         handler_config = ChatApiConfig(
             base_url=chat_api_config.get('api-url', ''),
@@ -766,39 +791,26 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             model=chat_api_config.get('model', '')
         )
         
+        # 初始化共享的ChatInterface（只初始化一次）
+        if not ICPChatHandler.is_initialized():
+            ICPChatHandler.initialize_chat_interface(handler_config)
+        
+        # 加载角色1：IBC代码生成
         app_data_manager = get_app_data_manager()
         prompt_dir = app_data_manager.get_prompt_dir()
-        sys_prompt_path = os.path.join(prompt_dir, f"{self.role_name_1}.md")
+        sys_prompt_path_1 = os.path.join(prompt_dir, f"{self.role_name_1}.md")
+        self.chat_handler.load_role_from_file(self.role_name_1, sys_prompt_path_1)
         
-        return ChatInterface(handler_config, self.role_name_1, sys_prompt_path)
-    
-    def _init_ai_handler_2(self) -> Optional[ChatInterface]:
-        """初始化AI处理器2（符号规范化）"""
-        if not os.path.exists(self.icp_api_config_file):
-            return None
-        
-        try:
-            with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-        except Exception:
-            return None
-        
+        # 处理器2：符号规范化
         # 优先查找symbol_normalizer_handler配置
         if 'symbol_normalizer_handler' in config:
-            chat_api_config = config['symbol_normalizer_handler']
+            chat_api_config_2 = config['symbol_normalizer_handler']
         elif 'coder_handler' in config:
-            chat_api_config = config['coder_handler']
+            chat_api_config_2 = config['coder_handler']
         else:
-            return None
+            # 如果没有符号规范化配置，也不影响基本功能
+            chat_api_config_2 = chat_api_config
         
-        handler_config = ChatApiConfig(
-            base_url=chat_api_config.get('api-url', ''),
-            api_key=SecretStr(chat_api_config.get('api-key', '')),
-            model=chat_api_config.get('model', '')
-        )
-        
-        app_data_manager = get_app_data_manager()
-        prompt_dir = app_data_manager.get_prompt_dir()
-        sys_prompt_path = os.path.join(prompt_dir, f"{self.role_name_2}.md")
-        
-        return ChatInterface(handler_config, self.role_name_2, sys_prompt_path)
+        # 加载角色2：符号规范化
+        sys_prompt_path_2 = os.path.join(prompt_dir, f"{self.role_name_2}.md")
+        self.chat_handler.load_role_from_file(self.role_name_2, sys_prompt_path_2)
