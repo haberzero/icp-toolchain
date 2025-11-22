@@ -44,7 +44,7 @@ class User():
     # 1. 解析IBC代码生成AST
     print("\n1. 解析IBC代码...")
     try:
-        ast_dict = analyze_ibc_code(ibc_code)
+        ast_dict, _ = analyze_ibc_code(ibc_code)
         print(f"   ✓ 解析成功，生成 {len(ast_dict)} 个AST节点")
     except Exception as e:
         print(f"   ✗ 解析失败: {e}")
