@@ -26,6 +26,9 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
+# TODO: 现在的整个cmd_handler中的所有代码，特别是execute的结构，需要经历一次完整重构。
+# 初期demo实现时设计的逻辑有缺陷，又叠加上太多Agent生成的代码，导致现在整个cmd_handler的代码非常臃肿且难以维护。
+
 class IcpCmdCli:
     def __init__(self):
         # 初始化管理器和命令处理器
