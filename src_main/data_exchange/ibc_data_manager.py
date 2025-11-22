@@ -9,7 +9,7 @@ import json
 import os
 from typing import Dict, Any
 from typedef.ibc_data_types import (
-    IbcParserBaseState, AstNodeType, ModuleNode, ClassNode, 
+    IbcBaseAstNode, AstNodeType, ModuleNode, ClassNode, 
     FunctionNode, VariableNode, BehaviorStepNode,
     SymbolNode, FileSymbolTable
 )
@@ -29,11 +29,11 @@ class IbcDataManager:
     def __init__(self):
         if not hasattr(self, '_initialized'):
             self._initialized = True
-            self.ast_dict: Dict[int, IbcParserBaseState] = {}
+            self.ast_dict: Dict[int, IbcBaseAstNode] = {}
     
     # ==================== AST数据管理 ====================
     
-    def save_ast_to_file(self, ast_dict: Dict[int, IbcParserBaseState], file_path: str) -> bool:
+    def save_ast_to_file(self, ast_dict: Dict[int, IbcBaseAstNode], file_path: str) -> bool:
         """
         将AST字典保存到JSON文件
         
@@ -67,7 +67,7 @@ class IbcDataManager:
             print(f"保存AST到文件失败: {e}")
             return False
     
-    def load_ast_from_file(self, file_path: str) -> Dict[int, IbcParserBaseState]:
+    def load_ast_from_file(self, file_path: str) -> Dict[int, IbcBaseAstNode]:
         """
         从JSON文件加载AST字典
         
@@ -87,7 +87,7 @@ class IbcDataManager:
                 serializable_dict = json.load(f)
             
             # 将字典反序列化为AST节点对象
-            ast_dict: Dict[int, IbcParserBaseState] = {}
+            ast_dict: Dict[int, IbcBaseAstNode] = {}
             for uid_str, node_dict in serializable_dict.items():
                 uid = int(uid_str)
                 node = self._create_node_from_dict(node_dict)
@@ -100,7 +100,7 @@ class IbcDataManager:
             print(f"从文件加载AST失败: {e}")
             return {}
     
-    def _create_node_from_dict(self, node_dict: Dict[str, Any]) -> IbcParserBaseState:
+    def _create_node_from_dict(self, node_dict: Dict[str, Any]) -> IbcBaseAstNode:
         """
         根据字典创建对应类型的AST节点
         
@@ -124,13 +124,13 @@ class IbcDataManager:
         elif class_type == "BehaviorStepNode":
             return BehaviorStepNode.from_dict(node_dict)
         else:
-            return IbcParserBaseState.from_dict(node_dict)
+            return IbcBaseAstNode.from_dict(node_dict)
     
-    def get_current_ast(self) -> Dict[int, IbcParserBaseState]:
+    def get_current_ast(self) -> Dict[int, IbcBaseAstNode]:
         """获取当前的AST字典"""
         return self.ast_dict
     
-    def set_current_ast(self, ast_dict: Dict[int, IbcParserBaseState]) -> None:
+    def set_current_ast(self, ast_dict: Dict[int, IbcBaseAstNode]) -> None:
         """设置当前的AST字典"""
         self.ast_dict = ast_dict
     

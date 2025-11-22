@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import List, Dict, Any, Optional, Tuple, Callable
 from typedef.ibc_data_types import (
-    IbcTokenType, Token, IbcParserBaseState, AstNodeType, 
+    IbcTokenType, Token, IbcBaseAstNode, AstNodeType, 
     ModuleNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode
 )
 
@@ -44,7 +44,7 @@ class IbcParser:
         self.uid_generator = IbcParserUidGenerator()
         self.line_num = 0
         # 修改state_stack为直接存储状态机实例，而不是ParserState枚举
-        self.ast_nodes: Dict[int, IbcParserBaseState] = {0: IbcParserBaseState(uid=0, node_type=AstNodeType.DEFAULT)}  # 根节点
+        self.ast_nodes: Dict[int, IbcBaseAstNode] = {0: IbcBaseAstNode(uid=0, node_type=AstNodeType.DEFAULT)}  # 根节点
         self.state_stack: List[Tuple[BaseState, int]] = [(TopLevelState(0, self.uid_generator, self.ast_nodes), 0)]  # 栈内容：(状态机实例, 栈顶节点uid)
         
         # 暂存的特殊行内容
@@ -52,7 +52,7 @@ class IbcParser:
         self.pending_description = ""
         
         # 跟踪上一个AST节点
-        self.last_ast_node: Optional[IbcParserBaseState] = self.ast_nodes[0]
+        self.last_ast_node: Optional[IbcBaseAstNode] = self.ast_nodes[0]
         self.last_ast_node_uid = 0
 
         # 状态变量，指示当前token应该被如何处理
@@ -247,7 +247,7 @@ class IbcParser:
         self.state_stack.append((state_obj, parent_uid))
         self._process_token_in_current_state(token)
     
-    def parse(self) -> Dict[int, IbcParserBaseState]:
+    def parse(self) -> Dict[int, IbcBaseAstNode]:
         """执行解析"""
         while not self._is_at_end():
             token = self._consume_token()

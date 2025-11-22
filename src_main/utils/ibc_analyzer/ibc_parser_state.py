@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import List, Dict, Optional
 from typedef.ibc_data_types import (
-    IbcTokenType, Token, IbcParserBaseState, AstNodeType, 
+    IbcTokenType, Token, IbcBaseAstNode, AstNodeType, 
     ModuleNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode
 )
 
@@ -39,7 +39,7 @@ class BaseState:
         self, 
         parent_uid: int, 
         uid_generator: IbcParserUidGenerator, 
-        ast_node_dict: Dict[int, IbcParserBaseState]
+        ast_node_dict: Dict[int, IbcBaseAstNode]
     ):
         self.state_type = ParserState.BASE_STATE
         self.parent_uid = parent_uid
@@ -61,7 +61,7 @@ class BaseState:
 
 class TopLevelState(BaseState):
     """顶层状态类, 目前实际上不会被调用。token的处理逻辑主要集中在各自的状态机逻辑中 """
-    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcParserBaseState]):
+    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcBaseAstNode]):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
         self.state_type = ParserState.TOP_LEVEL
 
@@ -78,7 +78,7 @@ class ModuleDeclSubState(Enum):
 
 class ModuleDeclState(BaseState):
     """模块声明状态类"""
-    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcParserBaseState]):
+    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcBaseAstNode]):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
         self.state_type = ParserState.MODULE_DECL
         self.module_name = ""
@@ -152,7 +152,7 @@ class VarDeclSubState(Enum):
 
 class VarDeclState(BaseState):
     """变量声明状态类"""
-    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcParserBaseState]):
+    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcBaseAstNode]):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
         self.state_type = ParserState.VAR_DECL
         # TODO: 暂时删除了单行内多变量声明的支持，但List仍暂时保留，未来可能仍想办法引入单行多变量声明
@@ -237,7 +237,7 @@ class DescriptionSubState(Enum):
 
 class DescriptionState(BaseState):
     """描述状态类, 不产生节点, 产生解析内容"""
-    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcParserBaseState]):
+    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcBaseAstNode]):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
         self.state_type = ParserState.DESCRIPTION
         self.content = ""
@@ -320,7 +320,7 @@ class IntentCommentSubState(Enum):
 
 class IntentCommentState(BaseState):
     """描述状态类, 不产生节点, 产生解析内容"""
-    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcParserBaseState]):
+    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcBaseAstNode]):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
         self.state_type = ParserState.INTENT_COMMENT
         self.content = ""
@@ -365,7 +365,7 @@ class ClassDeclSubState(Enum):
 # 备注：目前逻辑中不允许多继承
 class ClassDeclState(BaseState):
     """类声明状态类"""
-    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcParserBaseState]):
+    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcBaseAstNode]):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
         self.state_type = ParserState.CLASS_DECL
         self.class_name = ""
@@ -459,7 +459,7 @@ class ClassDeclState(BaseState):
 
 class ClassContentState(BaseState):
     """类内容状态类, 目前实际上不会被调用。token的处理逻辑主要集中在各自的状态机逻辑中 """
-    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcParserBaseState]):
+    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcBaseAstNode]):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
         self.state_type = ParserState.CLASS_CONTENT
 
@@ -484,7 +484,7 @@ class FuncDeclSubState(Enum):
 
 class FuncDeclState(BaseState):
     """函数声明状态类。支持多行函数参数书写"""
-    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcParserBaseState]):
+    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcBaseAstNode]):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
         self.state_type = ParserState.FUNC_DECL
         self.func_name = ""
@@ -631,7 +631,7 @@ class FuncDeclState(BaseState):
 
 class FuncContentState(BaseState):
     """函数内容状态类, 目前实际上不会被调用。token的处理逻辑主要集中在各自的状态机逻辑中 """
-    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcParserBaseState]):
+    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcBaseAstNode]):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
         self.state_type = ParserState.FUNC_CONTENT
 
@@ -651,7 +651,7 @@ class BehaviorStepSubState(Enum):
 
 class BehaviorStepState(BaseState):
     """行为步骤状态类"""
-    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcParserBaseState]):
+    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcBaseAstNode]):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
         self.state_type = ParserState.BEHAVIOR_STEP
         self.content = ""

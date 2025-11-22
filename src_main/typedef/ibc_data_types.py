@@ -59,7 +59,7 @@ class AstNodeType(Enum):
 
 
 @dataclass
-class IbcParserBaseState:
+class IbcBaseAstNode:
     """AST基础节点类"""
     uid: int = 0
     parent_uid: int = 0
@@ -78,9 +78,9 @@ class IbcParserBaseState:
         }
     
     @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'IbcParserBaseState':
+    def from_dict(data: Dict[str, Any]) -> 'IbcBaseAstNode':
         """从字典创建节点"""
-        return IbcParserBaseState(
+        return IbcBaseAstNode(
             uid=data.get("uid", 0),
             parent_uid=data.get("parent_uid", 0),
             children_uids=data.get("children_uids", []),
@@ -103,7 +103,7 @@ class IbcParserBaseState:
 
 
 @dataclass
-class ModuleNode(IbcParserBaseState):
+class ModuleNode(IbcBaseAstNode):
     """Module节点类"""
     identifier: str = ""
     content: str = ""
@@ -135,7 +135,7 @@ class ModuleNode(IbcParserBaseState):
 
 
 @dataclass
-class ClassNode(IbcParserBaseState):
+class ClassNode(IbcBaseAstNode):
     """Class节点类"""
     identifier: str = ""
     external_desc: str = ""
@@ -173,7 +173,7 @@ class ClassNode(IbcParserBaseState):
 
 
 @dataclass
-class FunctionNode(IbcParserBaseState):
+class FunctionNode(IbcBaseAstNode):
     """Function节点类"""
     identifier: str = ""
     external_desc: str = ""
@@ -211,7 +211,7 @@ class FunctionNode(IbcParserBaseState):
 
 
 @dataclass
-class VariableNode(IbcParserBaseState):
+class VariableNode(IbcBaseAstNode):
     """Variable节点类"""
     identifier: str = ""
     content: str = ""
@@ -249,7 +249,7 @@ class VariableNode(IbcParserBaseState):
 
 
 @dataclass
-class BehaviorStepNode(IbcParserBaseState):
+class BehaviorStepNode(IbcBaseAstNode):
     """BehaviorStep节点类"""
     content: str = ""
     symbol_refs: List[str] = field(default_factory=list)

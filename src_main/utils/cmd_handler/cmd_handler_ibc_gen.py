@@ -18,7 +18,7 @@ from data_exchange.app_data_manager import get_instance as get_app_data_manager
 from data_exchange.user_data_manager import get_instance as get_user_data_manager
 from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
 
-from .base_cmd_handler import BaseCmdHandler
+from utils.cmd_handler.base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 from libs.ai_interface.chat_interface import ResponseStatus
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code, IbcAnalyzerError
@@ -148,81 +148,43 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 ibc_root_path
             )
             
-            # 生成IBC代码（带重试机制）
-            max_retries = 3
-            retry_count = 0
-            success = False
+            # 生成IBC代码
+            print(f"    正在生成IBC代码...")
+            ibc_code = self._generate_ibc_code(
+                file_path,
+                file_req_content,
+                user_requirements,
+                project_structure_json,
+                available_symbols_text
+            )
             
-            ibc_code = None
-            symbol_table = None
-            normalized_symbols_dict = None
+            if not ibc_code:
+                print(f"  {Colors.WARNING}警告: 未能为文件生成IBC代码: {file_path}{Colors.ENDC}")
+                continue
             
-            while retry_count < max_retries and not success:
-                try:
-                    if retry_count > 0:
-                        print(f"    {Colors.OKBLUE}正在重试生成IBC代码... (尝试 {retry_count + 1}/{max_retries}){Colors.ENDC}")
-                    else:
-                        print(f"    正在生成IBC代码...")
-                    
-                    # 生成IBC代码
-                    ibc_code = self._generate_ibc_code(
-                        file_path,
-                        file_req_content,
-                        user_requirements,
-                        project_structure_json,
-                        available_symbols_text
-                    )
-                    
-                    if not ibc_code:
-                        raise RuntimeError("未能生成IBC代码")
-                    
-                    # 保存IBC代码到文件
-                    ibc_file_path = os.path.join(ibc_root_path, f"{file_path}.ibc")
-                    self._save_ibc_code(ibc_file_path, ibc_code)
-                    
-                    # 解析IBC代码生成AST
-                    print(f"    正在分析IBC代码生成AST...")
-                    ast_dict, symbol_table = analyze_ibc_code(ibc_code)
-                    
-                    # 对符号进行规范化处理
-                    print(f"    正在进行符号规范化...")
-                    normalized_symbols_dict = self._normalize_symbols(
-                        file_path,
-                        symbol_table,
-                        ibc_code
-                    )
-                    
-                    # 所有步骤成功完成
-                    success = True
-                    print(f"    {Colors.OKGREEN}IBC代码生成成功{Colors.ENDC}")
-                    
-                except IbcAnalyzerError as e:
-                    retry_count += 1
-                    print(f"  {Colors.FAIL}错误: IBC代码分析失败 {file_path}: {e}{Colors.ENDC}")
-                    if retry_count < max_retries:
-                        print(f"  {Colors.WARNING}将重新生成IBC代码...{Colors.ENDC}")
-                    else:
-                        print(f"  {Colors.FAIL}已达到最大重试次数({max_retries})，跳过该文件{Colors.ENDC}")
-                        
-                except RuntimeError as e:
-                    retry_count += 1
-                    print(f"  {Colors.FAIL}错误: {e} {file_path}{Colors.ENDC}")
-                    if retry_count < max_retries:
-                        print(f"  {Colors.WARNING}将重新生成IBC代码...{Colors.ENDC}")
-                    else:
-                        print(f"  {Colors.FAIL}已达到最大重试次数({max_retries})，跳过该文件{Colors.ENDC}")
-                        
-                except Exception as e:
-                    retry_count += 1
-                    print(f"  {Colors.FAIL}错误: 处理失败 {file_path}: {e}{Colors.ENDC}")
-                    if retry_count < max_retries:
-                        print(f"  {Colors.WARNING}将重新生成IBC代码...{Colors.ENDC}")
-                    else:
-                        print(f"  {Colors.FAIL}已达到最大重试次数({max_retries})，跳过该文件{Colors.ENDC}")
+            # 保存IBC代码到文件
+            ibc_file_path = os.path.join(ibc_root_path, f"{file_path}.ibc")
+            self._save_ibc_code(ibc_file_path, ibc_code)
             
-            # 如果所有重试都失败，跳过该文件
-            if not success:
-                print(f"  {Colors.WARNING}跳过文件: {file_path}{Colors.ENDC}")
+            # 解析IBC代码生成AST
+            print(f"    正在分析IBC代码生成AST...")
+            try:
+                ast_dict, symbol_table = analyze_ibc_code(ibc_code)
+            except IbcAnalyzerError as e:
+                print(f"  {Colors.FAIL}错误: IBC代码分析失败 {file_path}: {e}{Colors.ENDC}")
+                continue
+            
+            # 对符号进行规范化处理
+            print(f"    正在进行符号规范化...")
+            try:
+                normalized_symbols_dict = self._normalize_symbols(
+                    file_path,
+                    symbol_table,
+                    ibc_code
+                )
+            except RuntimeError as e:
+                print(f"  {Colors.FAIL}错误: 符号规范化失败 {file_path}: {e}{Colors.ENDC}")
+                print(f"  {Colors.WARNING}请检查AI连接配置并重新运行命令{Colors.ENDC}")
                 continue
             
             # 更新符号表中的规范化信息
