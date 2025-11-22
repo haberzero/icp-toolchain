@@ -58,6 +58,7 @@ class AstNodeType(Enum):
     BEHAVIOR_STEP = "BEHAVIOR_STEP"
 
 
+# TODO: 关于to_dict以及from_dict方法，以后可能需要重构。应该用一个专用的工厂类处理
 @dataclass
 class IbcBaseAstNode:
     """AST基础节点类"""
@@ -283,7 +284,7 @@ class BehaviorStepNode(IbcBaseAstNode):
         return f"BehaviorStepNode(uid={self.uid})"
 
 
-
+# TODO: 下面的代码和AST持久化存储有关，完全由AI生成，通过了一些脚本测试，之后需要过来仔细review一遍
 class VisibilityTypes(Enum):
     PUBLIC = "public"
     PRIVATE = "private"
