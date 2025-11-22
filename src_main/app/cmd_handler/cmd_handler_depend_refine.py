@@ -10,7 +10,7 @@ from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
 from data_exchange.app_data_manager import get_instance as get_app_data_manager
 from data_exchange.user_data_manager import get_instance as get_user_data_manager
 
-from utils.cmd_handler.base_cmd_handler import BaseCmdHandler
+from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 from libs.ai_interface.chat_interface import ResponseStatus
 from libs.dir_json_funcs import DirJsonFuncs

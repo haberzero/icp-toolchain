@@ -2,7 +2,7 @@ import sys
 from typing import List
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus
-from utils.cmd_handler.base_cmd_handler import BaseCmdHandler
+from .base_cmd_handler import BaseCmdHandler
 
 
 class CmdHandlerQuit(BaseCmdHandler):
