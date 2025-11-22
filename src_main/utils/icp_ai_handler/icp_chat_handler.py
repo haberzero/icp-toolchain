@@ -59,16 +59,6 @@ class ICPChatHandler:
         """
         return cls._is_initialized and cls._shared_chat_interface is not None
     
-    @classmethod
-    def get_shared_interface(cls) -> Optional[ChatInterface]:
-        """
-        获取共享的ChatInterface实例
-        
-        Returns:
-            Optional[ChatInterface]: 共享的ChatInterface实例，未初始化时返回None
-        """
-        return cls._shared_chat_interface
-    
     def add_role_to_map(self, role_name: str, sys_prompt: str) -> None:
         """
         添加角色到映射表

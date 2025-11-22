@@ -115,4 +115,5 @@ class ChatInterface:
                     return ResponseStatus.STREAM_FAILED_AFTER_RETRY
         
         # 不应该到达这里
+        print("FOR DEV: Should not reach here!!! Please check the code logic.")
         return ResponseStatus.STREAM_FAILED_AFTER_RETRY
