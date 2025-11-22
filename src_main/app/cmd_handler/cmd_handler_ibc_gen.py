@@ -110,6 +110,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         project_structure_json = json.dumps(proj_root, indent=2, ensure_ascii=False)
         
         # 初始化更新状态跟踪字典：记录每个文件是否需要更新
+        # TODO: 逻辑有缺陷，等待重构
         update_status = self._initialize_update_status(
             file_creation_order_list,
             staging_dir_path,
@@ -183,6 +184,15 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                     # 解析IBC代码生成AST
                     print(f"    正在分析IBC代码生成AST...")
                     ast_dict, symbol_table = analyze_ibc_code(ibc_code)
+                    
+                    # 保存AST到文件
+                    ast_file_path = self._get_ast_file_path(ibc_file_path)
+                    print(f"    正在保存AST到文件...")
+                    ibc_data_manager = get_ibc_data_manager()
+                    if ibc_data_manager.save_ast_to_file(ast_dict, ast_file_path):
+                        print(f"    {Colors.OKGREEN}AST已保存: {ast_file_path}{Colors.ENDC}")
+                    else:
+                        print(f"    {Colors.WARNING}警告: AST保存失败{Colors.ENDC}")
                     
                     # 对符号进行规范化处理
                     print(f"    正在进行符号规范化...")
@@ -400,6 +410,31 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             print(f"    {Colors.OKGREEN}IBC代码已保存: {ibc_file_path}{Colors.ENDC}")
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 保存IBC代码失败 {ibc_file_path}: {e}{Colors.ENDC}")
+    
+    def _get_ast_file_path(self, ibc_file_path: str) -> str:
+        """根据ibc文件路径生成AST文件路径
+        
+        Args:
+            ibc_file_path: ibc文件的完整路径，例如: /path/to/file.ibc
+            
+        Returns:
+            str: AST文件路径，例如: /path/to/fileIbcAst.json
+        """
+        # 获取目录路径和文件名
+        dir_path = os.path.dirname(ibc_file_path)
+        file_name = os.path.basename(ibc_file_path)
+        
+        # 去掉.ibc后缀,得到原始文件名
+        if file_name.endswith('.ibc'):
+            base_name = file_name[:-4]  # 移除.ibc后缀
+        else:
+            base_name = file_name
+        
+        # 构建AST文件名: XxxFileNameXxxIbcAst.json
+        ast_file_name = f"{base_name}IbcAst.json"
+        
+        # 返回完整路径
+        return os.path.join(dir_path, ast_file_name)
 
     def _check_cmd_requirement(self) -> bool:
         """验证命令的前置条件"""
@@ -470,8 +505,16 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         """
         初始化更新状态字典
         
-        遍历所有文件，检查每个文件的MD5是否与已保存的符号表中的MD5匹配。
-        如果不匹配，则标记为需要更新。
+        遍历所有文件，检查以下条件判断是否需要重新生成：
+        1. 需求文件的MD5是否与已保存的符号表中的MD5匹配
+        2. 目标IBC文件是否存在
+        3. 符号表文件是否存在
+        
+        满足以下任一条件则需要更新：
+        - 需求文件的MD5发生变化
+        - 需求文件不存在
+        - IBC文件不存在
+        - 符号表文件不存在
         
         Args:
             file_creation_order_list: 文件创建顺序列表
@@ -483,17 +526,37 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         """
         update_status = {}
         ibc_data_manager = get_ibc_data_manager()
+        
         for file_path in file_creation_order_list:
-            # 加载已保存的符号表
-            file_symbol_table = ibc_data_manager.load_file_symbols(ibc_root_path, file_path)
-            
             # 计算当前需求文件的MD5
             req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
             current_md5 = self._calculate_file_md5(req_file_path)
             
-            # 判断是否需要更新：MD5不匹配或文件不存在
-            needs_update = (file_symbol_table.file_md5 != current_md5) or not current_md5
-            update_status[file_path] = needs_update
+            # 检查需求文件是否存在
+            if not current_md5:
+                update_status[file_path] = True
+                continue
+            
+            # 检查IBC文件是否存在
+            ibc_file_path = os.path.join(ibc_root_path, f"{file_path}.ibc")
+            if not os.path.exists(ibc_file_path):
+                update_status[file_path] = True
+                continue
+            
+            # 检查符号表文件是否存在
+            symbol_table_file = os.path.join(ibc_root_path, f"{file_path}_symbols.json")
+            if not os.path.exists(symbol_table_file):
+                update_status[file_path] = True
+                continue
+            
+            # 加载已保存的符号表
+            file_symbol_table = ibc_data_manager.load_file_symbols(ibc_root_path, file_path)
+            
+            # 判断MD5是否匹配
+            if file_symbol_table.file_md5 != current_md5:
+                update_status[file_path] = True
+            else:
+                update_status[file_path] = False
         
         return update_status
     
