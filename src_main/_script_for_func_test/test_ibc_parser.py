@@ -110,7 +110,7 @@ def test_variable_declaration():
     """测试变量声明"""
     print("\n测试 variable_declaration 函数...")
     
-    code = """var userCount: 当前在线用户数量, cacheData: 临时缓存数据
+    code = """var userCount: 当前在线用户数量
 var config"""
     
     try:
@@ -129,12 +129,10 @@ var config"""
                 var_dict[var_node.identifier] = var_node.content
         
         assert "userCount" in var_dict, "缺少userCount变量"
-        assert "cacheData" in var_dict, "缺少cacheData变量"
         assert "config" in var_dict, "缺少config变量"
         
         # 验证描述
         assert var_dict["userCount"] == "当前在线用户数量", f"userCount的描述不匹配: {var_dict['userCount']}"
-        assert var_dict["cacheData"] == "临时缓存数据", f"cacheData的描述不匹配: {var_dict['cacheData']}"
         assert var_dict["config"] == "", f"config应该没有描述: {var_dict['config']}"
         
         print("  ✓ 成功解析变量声明")

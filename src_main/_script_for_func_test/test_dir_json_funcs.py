@@ -294,7 +294,7 @@ def test_validate_dependent_paths():
         ]
     }
     
-    result = DirJsonFuncs.validate_dependent_paths(valid_dependent_relation, proj_root)
+    result, _ = DirJsonFuncs.validate_dependent_paths(valid_dependent_relation, proj_root)
     assert result, "依赖路径应该有效"
     print("  ✓ 成功验证了有效的依赖路径")
     
@@ -305,7 +305,7 @@ def test_validate_dependent_paths():
         ]
     }
     
-    result = DirJsonFuncs.validate_dependent_paths(invalid_dependent_relation, proj_root)
+    result, _ = DirJsonFuncs.validate_dependent_paths(invalid_dependent_relation, proj_root)
     assert not result, "依赖路径应该无效"
     print("  ✓ 成功检测到无效的依赖路径")
 

@@ -512,7 +512,9 @@ def test_empty_description_symbols():
     print("测试无描述符号提取")
     print("=" * 60)
     
-    code = """var data1, data2, data3
+    code = """var data1
+var data2
+var data3
 
 class SimpleClass():
     func simpleFunc(param1, param2):
