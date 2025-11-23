@@ -26,6 +26,8 @@ from utils.ibc_analyzer.ibc_symbol_gen import IbcSymbolGenerator
 from libs.dir_json_funcs import DirJsonFuncs
 
 
+# TODO: 从这个文件已经体现出来，整体逻辑已经过于杂乱糟糕了，错误处理也乱糟糟的。等demo发出去之后需要抽空彻底重构
+# 现在为了尽快完成demo暂时妥协了，目前看来ai还能适应并且仍然能完成编写
 class CmdHandlerIbcGen(BaseCmdHandler):
     """将单文件需求描述转换为半自然语言行为描述代码"""
     
