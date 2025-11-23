@@ -20,10 +20,13 @@ from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
+from utils.icp_ai_handler.icp_embedding_handler import ICPEmbeddingHandler
 from libs.ai_interface.chat_interface import ResponseStatus
+from libs.ai_interface.embedding_interface import EmbeddingStatus
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code, IbcAnalyzerError
 from utils.ibc_analyzer.ibc_symbol_gen import IbcSymbolGenerator
 from libs.dir_json_funcs import DirJsonFuncs
+from libs.symbol_vector_db_manager import SymbolVectorDBManager
 
 
 # TODO: 从这个文件已经体现出来，整体逻辑已经过于杂乱糟糕了，错误处理也乱糟糟的。等demo发出去之后需要抽空彻底重构
@@ -51,6 +54,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         # 使用新的 ICPChatHandler
         self.chat_handler = ICPChatHandler()
+        self.embedding_handler = ICPEmbeddingHandler()
+        
+        # 符号向量数据库管理器（延迟初始化）
+        self.vector_db_manager = None
         
         # 初始化AI处理器
         self._init_ai_handlers()
@@ -61,6 +68,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             return
             
         print(f"{Colors.OKBLUE}开始生成半自然语言行为描述代码...{Colors.ENDC}")
+        
+        # 初始化符号向量数据库
+        vector_db_path = os.path.join(self.proj_data_dir, 'symbol_vector_db')
+        self.vector_db_manager = SymbolVectorDBManager(vector_db_path, self.embedding_handler)
 
         # 读取IBC目录结构
         ibc_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
@@ -261,6 +272,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             if success:
                 print(f"  {Colors.OKGREEN}文件处理完成: {file_path}{Colors.ENDC}")
+                
+                # 将符号表添加到向量数据库
+                print(f"    正在将符号添加到向量数据库...")
+                self.vector_db_manager.add_file_symbols(file_path, symbol_table)
             else:
                 print(f"  {Colors.WARNING}警告: 符号表保存失败: {file_path}{Colors.ENDC}")
         
@@ -420,7 +435,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             ibc_file_path: ibc文件的完整路径，例如: /path/to/file.ibc
             
         Returns:
-            str: AST文件路径，例如: /path/to/fileIbcAst.json
+            str: AST文件路径，例如: /path/to/file_ibc_ast.json
         """
         # 获取目录路径和文件名
         dir_path = os.path.dirname(ibc_file_path)
@@ -432,8 +447,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         else:
             base_name = file_name
         
-        # 构建AST文件名: XxxFileNameXxxIbcAst.json
-        ast_file_name = f"{base_name}IbcAst.json"
+        # 构建AST文件名: XxxFileNameXxx_ibc_ast.json
+        ast_file_name = f"{base_name}_ibc_ast.json"
         
         # 返回完整路径
         return os.path.join(dir_path, ast_file_name)
@@ -462,6 +477,11 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         # 检查角色1是否已加载
         if not self.chat_handler.has_role(self.role_name_1):
+            return False
+        
+        # 检查EmbeddingHandler是否初始化
+        if not ICPEmbeddingHandler.is_initialized():
+            print(f"  {Colors.WARNING}警告: Embedding处理器未初始化{Colors.ENDC}")
             return False
         
         return True
@@ -798,6 +818,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             dep_symbol_table = ibc_data_manager.load_file_symbols(ibc_root_path, dep_file)
             
             if not dep_symbol_table.symbols:
+                # TODO: 不应该直接continue 虽然理论上来说不应该进入这里
                 continue
             
             lines.append(f"来自文件：{dep_file}")
@@ -810,6 +831,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 is_visible = False
                 
                 if not symbol.visibility:
+                    # TODO: 这里逻辑有问题，不应该出现未规范化的内容，以后来修
                     # 未规范化的符号，也列出
                     is_visible = True
                 elif symbol.visibility in externally_visible_types:
@@ -917,3 +939,21 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 加载角色2：符号规范化
         sys_prompt_path_2 = os.path.join(prompt_dir, f"{self.role_name_2}.md")
         self.chat_handler.load_role_from_file(self.role_name_2, sys_prompt_path_2)
+        
+        # Embedding处理器配置
+        if 'embedding_handler' in config:
+            embedding_api_config = config['embedding_handler']
+        else:
+            print("警告: 配置文件缺少embedding_handler配置，使用coder_handler配置")
+            embedding_api_config = chat_api_config
+        
+        from typedef.cmd_data_types import EmbeddingApiConfig
+        embedding_config = EmbeddingApiConfig(
+            base_url=embedding_api_config.get('api-url', ''),
+            api_key=SecretStr(embedding_api_config.get('api-key', '')),
+            model=embedding_api_config.get('model', '')
+        )
+        
+        # 初始化共享的EmbeddingHandler（只初始化一次）
+        if not ICPEmbeddingHandler.is_initialized():
+            ICPEmbeddingHandler.initialize_embedding_handler(embedding_config)

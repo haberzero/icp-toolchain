@@ -253,15 +253,14 @@ $符号分层路径.符号名$
 
 **规则**：
 
-- 建议使用点号分隔层级：`$路径.模块.类.方法$`
 - 只能在行为步骤描述中使用
 - 不允许嵌套式引用
 - 引用外部文件定义的函数、变量、类等符号必须使用 `$` 标记
 - 参数列表分离：调用函数/方法时，参数写在 `$符号$` 外面，如 `$函数名$(参数1, 参数2)`
-- 层级路径清晰：使用点号分隔模块路径，如 `$模块.子模块.符号名$`
+- 层级路径清晰：使用点号分隔模块路径，如 `$模块.子模块.符号名$`，`$模块.类.方法$`
 - 避免过度使用：对于显而易见的当前文件符号，无需强制使用 `$` 标记
 
-**示例1：引用当前文件内的符号**
+**示例1：引用当前文件内的符号，非必要**
 
 ```intent_behavior_code
 var maxRetries: 最大重试次数
@@ -281,31 +280,32 @@ func 发送请求(请求数据):
 
 ```intent_behavior_code
 module utils.logger: 日志工具模块
+module utils.validator: 数据验证工具模块
 module config.settings: 配置管理模块
 
 func 初始化应用():
     // 显式引用外部配置模块的函数
-    配置对象 = $config.settings.load_config$("app.json")
+    配置对象 = $settings.load_config$("app.json")
     
     // 显式引用外部日志模块的类
-    日志器 = $utils.logger.Logger$(配置对象.log_level)
+    日志器 = $logger.Logger$(配置对象.log_level)
     
     // 使用外部模块的全局变量
-    如果 $config.settings.DEBUG_MODE$:
-        $日志器.set_debug$(True)
+    如果 $settings.DEBUG_MODE$:
+        日志器.set_debug(True)
     
     返回 配置对象, 日志器
 
 func 处理业务逻辑(数据, 日志器):
     // 引用外部文件定义的验证函数
-    验证结果 = $utils.validator.validate_data$(数据)
+    验证结果 = $validator.validate_data$(数据)
     
     如果 验证结果.is_valid:
         // 调用方法时，参数列表单独书写，不包含在 $ $ 中
-        $日志器.info$("数据验证通过")
+        日志器.info("数据验证通过")
         返回 处理成功
     否则:
-        $日志器.error$("数据验证失败: " + 验证结果.error_message)
+        日志器.error("数据验证失败: " + 验证结果.error_message)
         返回 处理失败
 ```
 

@@ -11,6 +11,7 @@ from .cmd_handler_depend_analysis import CmdHandlerDependAnalysis
 from .cmd_handler_depend_refine import CmdHandlerDependRefine
 from .cmd_handler_one_file_req_gen import CmdHandlerOneFileReqGen
 from .cmd_handler_ibc_gen import CmdHandlerIbcGen
+from .cmd_handler_code_gen import CmdHandlerCodeGen
 
 
 # TODO: 是否有必要进行倒置？
@@ -97,6 +98,10 @@ class CommandManager:
         # 半自然语言行为描述代码生成命令
         intent_behavior_code_gen_cmd = CmdHandlerIbcGen()
         commands.append(intent_behavior_code_gen_cmd)
+
+        # 目标代码生成命令
+        code_gen_cmd = CmdHandlerCodeGen()
+        commands.append(code_gen_cmd)
 
         # IBC到目标代码转换命令
         # ibc_to_target_code_cmd = CmdHandlerIbcToTargetCode()
