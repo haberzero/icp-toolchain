@@ -1,6 +1,6 @@
-import requests
 import time
 from typing import List, Optional
+from openai import OpenAI
 
 from typedef.cmd_data_types import EmbeddingApiConfig
 
@@ -29,39 +29,39 @@ class EmbeddingHandler:
             max_retry: 最大重试次数
             retry_delay: 重试延迟(秒)
         """
+        # 确保base_url以斜杠结尾
+        # base_url = api_config.base_url
+        # if not base_url.endswith('/'):
+        #     base_url = base_url + '/'
         self.base_url = api_config.base_url
         self.api_key = api_config.api_key
         self.model = api_config.model
         self.max_retry = max_retry
         self.retry_delay = retry_delay
         self.is_initialized = False
+        
+        # 初始化OpenAI客户端
+        self.client = OpenAI(
+            api_key=self.api_key.get_secret_value(),
+            base_url=self.base_url
+        )
+        
         self.init_embedding_handler()
 
     def init_embedding_handler(self):
         """初始化Embedding处理器，测试连接性，支持重试"""
         for attempt in range(self.max_retry):
             try:
-                payload = {
-                    "model": self.model,
-                    "input": "test string"
-                }
-                headers = {
-                    "Authorization": f"Bearer {self.api_key.get_secret_value()}",
-                    "Content-Type": "application/json"
-                }
-                response = requests.post(
-                    f"{self.base_url}embeddings",
-                    json=payload,
-                    headers=headers,
-                    timeout=10
+                response = self.client.embeddings.create(
+                    model=self.model,
+                    input="test string"
                 )
                 
                 if EMBEDDING_HANDLER_DEBUG_FLAG:
-                    print(response.json())
+                    print(response.model_dump())
                 
-                response.raise_for_status()
-                
-                if response.status_code == 200:
+                # 检查返回数据是否有效
+                if response.data and len(response.data) > 0:
                     print(f"EmbeddingHandler 初始化成功 (模型: {self.model})")
                     self.is_initialized = True
                     return
@@ -123,24 +123,12 @@ class EmbeddingHandler:
         """
         for attempt in range(self.max_retry):
             try:
-                payload = {
-                    "model": self.model,
-                    "input": text + " [SEP]"
-                }
-                headers = {
-                    "Authorization": f"Bearer {self.api_key.get_secret_value()}",
-                    "Content-Type": "application/json"
-                }
-                
-                response = requests.post(
-                    f"{self.base_url}embeddings",
-                    json=payload,
-                    headers=headers,
-                    timeout=30
+                response = self.client.embeddings.create(
+                    model=self.model,
+                    input=text + " [SEP]"
                 )
-                response.raise_for_status()
                 
-                embedding = response.json().get('data')[0].get('embedding')
+                embedding = response.data[0].embedding
                 return (embedding, EmbeddingStatus.SUCCESS)
                 
             except Exception as e:
