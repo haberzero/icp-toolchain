@@ -21,6 +21,9 @@ htmlcov/
 .venv
 venv/
 
+# poetry
+poetry.lock
+
 # IDE-specific files
 .vscode/
 .idea/
