@@ -1,0 +1,27 @@
+[project]
+name = "icp-toolchain"
+version = "0.0.1"
+description = ""
+authors = [
+    {name = "Nan Shi (施楠)",email = "yunnan_shinan@qq.com"}
+]
+license = {text = "MIT License"}
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "lancedb (>=0.25.3,<0.26.0)",
+    "openai (>=2.8.1,<3.0.0)",
+    "pydantic (>=2.12.4,<3.0.0)"
+]
+
+[dependency-groups]
+dev = [
+    "lancedb (>=0.25.3,<0.26.0)",
+    "openai (>=2.8.1,<3.0.0)",
+    "pydantic (>=2.12.4,<3.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
