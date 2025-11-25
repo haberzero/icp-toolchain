@@ -4,8 +4,6 @@ from openai import OpenAI
 
 from typedef.cmd_data_types import EmbeddingApiConfig
 
-EMBEDDING_HANDLER_DEBUG_FLAG = False
-
 
 class EmbeddingStatus:
     """嵌入操作状态码"""
@@ -46,9 +44,9 @@ class EmbeddingInterface:
             base_url=self.base_url
         )
         
-        self.init_embedding_handler()
+        self.init_embedding_interface()
 
-    def init_embedding_handler(self):
+    def init_embedding_interface(self):
         """初始化Embedding处理器，测试连接性，支持重试"""
         for attempt in range(self.max_retry):
             try:
@@ -56,23 +54,20 @@ class EmbeddingInterface:
                     model=self.model,
                     input="test string"
                 )
-                
-                if EMBEDDING_HANDLER_DEBUG_FLAG:
-                    print(response.model_dump())
-                
+
                 # 检查返回数据是否有效
                 if response.data and len(response.data) > 0:
-                    print(f"EmbeddingHandler 初始化成功 (模型: {self.model})")
+                    print(f"EmbeddingInterface 初始化成功 (模型: {self.model})")
                     self.is_initialized = True
                     return
                     
             except Exception as e:
-                print(f"EmbeddingHandler 初始化失败 (尝试 {attempt + 1}/{self.max_retry}): {e}")
+                print(f"EmbeddingInterface 初始化失败 (尝试 {attempt + 1}/{self.max_retry}): {e}")
                 if attempt < self.max_retry - 1:
                     time.sleep(self.retry_delay)
         
         self.is_initialized = False
-        print(f"EmbeddingHandler 初始化最终失败，已尝试 {self.max_retry} 次")
+        print(f"EmbeddingInterface 初始化最终失败，已尝试 {self.max_retry} 次")
 
     def embed_documents(self, texts: List[str]) -> tuple[List[List[float]], str]:
         """
