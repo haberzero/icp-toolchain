@@ -17,8 +17,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from pydantic import SecretStr
-from typedef.cmd_data_types import EmbeddingApiConfig
-from libs.ai_interface.embedding_interface import EmbeddingInterface, EmbeddingStatus
+from typedef.ai_data_types import EmbeddingApiConfig, EmbeddingStatus
 from utils.icp_ai_handler.icp_embedding_handler import ICPEmbeddingHandler
 
 

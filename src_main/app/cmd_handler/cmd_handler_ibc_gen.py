@@ -6,7 +6,8 @@ import re
 from typing import List, Dict, Any, Optional
 from pydantic import SecretStr
 
-from typedef.cmd_data_types import CommandInfo, CmdProcStatus, ChatApiConfig, Colors, EmbeddingApiConfig
+from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
+from typedef.ai_data_types import ChatApiConfig, EmbeddingApiConfig
 from typedef.ibc_data_types import (
     IbcBaseAstNode, AstNodeType, ClassNode, FunctionNode, VariableNode, 
     VisibilityTypes, SymbolType, FileSymbolTable, SymbolNode
@@ -20,7 +21,7 @@ from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 from utils.icp_ai_handler.icp_embedding_handler import ICPEmbeddingHandler
-from libs.ai_interface.chat_interface import ResponseStatus
+from typedef.ai_data_types import ChatResponseStatus
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code, IbcAnalyzerError
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.symbol_vector_db_manager import SymbolVectorDBManager
@@ -578,13 +579,13 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             callback=collect_response
         )
         
-        if status == ResponseStatus.SUCCESS:
+        if status == ChatResponseStatus.SUCCESS:
             print(f"\n    {role_name}运行完毕。")
             return response_content
-        elif status == ResponseStatus.CLIENT_NOT_INITIALIZED:
+        elif status == ChatResponseStatus.CLIENT_NOT_INITIALIZED:
             print(f"\n{Colors.FAIL}错误: ChatInterface未初始化{Colors.ENDC}")
             return ""
-        elif status == ResponseStatus.STREAM_FAILED_AFTER_RETRY:
+        elif status == ChatResponseStatus.STREAM_FAILED:
             print(f"\n{Colors.FAIL}错误: 流式响应失败{Colors.ENDC}")
             return ""
         else:

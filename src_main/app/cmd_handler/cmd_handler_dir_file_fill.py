@@ -5,7 +5,8 @@ from typing import List, Dict, Any
 
 from pydantic import SecretStr
 
-from typedef.cmd_data_types import CommandInfo, CmdProcStatus, ChatApiConfig, Colors
+from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
+from typedef.ai_data_types import ChatApiConfig
 
 from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
 from data_exchange.app_data_manager import get_instance as get_app_data_manager
@@ -13,7 +14,7 @@ from data_exchange.user_data_manager import get_instance as get_user_data_manage
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
-from libs.ai_interface.chat_interface import ResponseStatus
+from typedef.ai_data_types import ChatResponseStatus
 from libs.dir_json_funcs import DirJsonFuncs
 
 
@@ -375,13 +376,13 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             callback=collect_response
         )
         
-        if status == ResponseStatus.SUCCESS:
+        if status == ChatResponseStatus.SUCCESS:
             print(f"\n{self.role_name_1}运行完毕。")
             return response_content
-        elif status == ResponseStatus.CLIENT_NOT_INITIALIZED:
+        elif status == ChatResponseStatus.CLIENT_NOT_INITIALIZED:
             print(f"\n{Colors.FAIL}错误: ChatInterface未初始化{Colors.ENDC}")
             return ""
-        elif status == ResponseStatus.STREAM_FAILED_AFTER_RETRY:
+        elif status == ChatResponseStatus.STREAM_FAILED:
             print(f"\n{Colors.FAIL}错误: 流式响应失败{Colors.ENDC}")
             return ""
         else:
@@ -405,13 +406,13 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             callback=collect_response
         )
         
-        if status == ResponseStatus.SUCCESS:
+        if status == ChatResponseStatus.SUCCESS:
             print(f"\n{self.role_name_2}运行完毕。")
             return response_content
-        elif status == ResponseStatus.CLIENT_NOT_INITIALIZED:
+        elif status == ChatResponseStatus.CLIENT_NOT_INITIALIZED:
             print(f"\n{Colors.FAIL}错误: ChatInterface未初始化{Colors.ENDC}")
             return ""
-        elif status == ResponseStatus.STREAM_FAILED_AFTER_RETRY:
+        elif status == ChatResponseStatus.STREAM_FAILED:
             print(f"\n{Colors.FAIL}错误: 流式响应失败{Colors.ENDC}")
             return ""
         else:

@@ -3,21 +3,25 @@ ICP Embedding Handler - 管理嵌入向量服务的包装器
 
 这个模块提供了一个高层次的接口来管理文本嵌入服务，
 共享 EmbeddingInterfaces 实例以避免资源浪费。
+包含重试机制逻辑。
 """
 
+import time
 from typing import List, Optional, Tuple
 from pydantic import SecretStr
 
-from typedef.cmd_data_types import EmbeddingApiConfig
-from libs.ai_interface.embedding_interface import EmbeddingInterface, EmbeddingStatus
+from typedef.ai_data_types import EmbeddingApiConfig, EmbeddingStatus
+from libs.ai_interface.embedding_interface import EmbeddingInterface
 
 
 class ICPEmbeddingHandler:
-    """ICP嵌入处理器，提供文本向量化服务"""
+    """ICP嵌入处理器，提供文本向量化服务，并提供重试机制"""
     
     # 类变量：共享的 EmbeddingInterface 实例
     _shared_embedding_interface: Optional[EmbeddingInterface] = None
     _is_initialized: bool = False
+    _max_retry: int = 3
+    _retry_delay: float = 1.0
     
     def __init__(self):
         """初始化ICP嵌入处理器"""
@@ -31,7 +35,7 @@ class ICPEmbeddingHandler:
         retry_delay: float = 1.0
     ) -> bool:
         """
-        初始化共享的 EmbeddingInterface
+        初始化共享的 EmbeddingInterface，支持重试机制
         
         Args:
             api_config: API配置信息
@@ -42,8 +46,28 @@ class ICPEmbeddingHandler:
             bool: 是否初始化成功
         """
         if cls._shared_embedding_interface is None:
-            cls._shared_embedding_interface = EmbeddingInterface(api_config, max_retry, retry_delay)
-            cls._is_initialized = cls._shared_embedding_interface.is_initialized
+            cls._max_retry = max_retry
+            cls._retry_delay = retry_delay
+            
+            # 带重试的初始化
+            for attempt in range(max_retry):
+                try:
+                    cls._shared_embedding_interface = EmbeddingInterface(api_config)
+                    if cls._shared_embedding_interface.client is not None:
+                        # 测试连接
+                        _, status = cls._shared_embedding_interface.embed_query("test connection")
+                        if status == EmbeddingStatus.SUCCESS:
+                            print(f"EmbeddingInterface 初始化成功 (模型: {api_config.model})")
+                            cls._is_initialized = True
+                            return True
+                except Exception as e:
+                    print(f"EmbeddingInterface 初始化失败 (尝试 {attempt + 1}/{max_retry}): {e}")
+                    if attempt < max_retry - 1:
+                        time.sleep(retry_delay)
+            
+            cls._is_initialized = False
+            print(f"EmbeddingInterface 初始化最终失败，已尝试 {max_retry} 次")
+            return False
         
         return cls._is_initialized
     
@@ -56,20 +80,10 @@ class ICPEmbeddingHandler:
             bool: 是否已初始化
         """
         return cls._is_initialized and cls._shared_embedding_interface is not None
-    
-    @classmethod
-    def get_shared_handler(cls) -> Optional[EmbeddingInterface]:
-        """
-        获取共享的 EmbeddingInterface 实例
-        
-        Returns:
-            Optional[EmbeddingInterface]: 共享的 EmbeddingInterface 实例，未初始化时返回None
-        """
-        return cls._shared_embedding_interface
-    
+
     def embed_documents(self, texts: List[str]) -> Tuple[List[List[float]], str]:
         """
-        批量嵌入文本
+        批量嵌入文本（带内部重试机制）
         
         Args:
             texts: 文本列表
@@ -77,17 +91,31 @@ class ICPEmbeddingHandler:
         Returns:
             tuple: (embeddings, status) - 嵌入向量列表和状态码
                 - EmbeddingStatus.SUCCESS: 成功
-                - EmbeddingStatus.INIT_FAILED: 处理器未初始化
+                - EmbeddingStatus.CLIENT_NOT_INITIALIZED: 处理器未初始化
                 - EmbeddingStatus.REQUEST_FAILED: 请求失败
         """
         if not self.is_initialized():
-            return ([], EmbeddingStatus.INIT_FAILED)
+            return ([], EmbeddingStatus.CLIENT_NOT_INITIALIZED)
         
-        return self._shared_embedding_interface.embed_documents(texts)
+        # 带重试的调用
+        embeddings = []
+        status = EmbeddingStatus.REQUEST_FAILED
+
+        for attempt in range(self._max_retry):
+            embeddings, status = self._shared_embedding_interface.embed_query(texts)
+            
+            if status == EmbeddingStatus.SUCCESS:
+                return (embeddings, status)
+            
+            if attempt < self._max_retry - 1:
+                time.sleep(self._retry_delay)
+        
+        # 所有重试都失败，返回最后一次的结果
+        return (embeddings, status)
     
     def embed_query(self, text: str) -> Tuple[List[float], str]:
         """
-        嵌入单个查询文本
+        嵌入单个查询文本（带内部重试机制）
         
         Args:
             text: 查询文本
@@ -95,13 +123,27 @@ class ICPEmbeddingHandler:
         Returns:
             tuple: (embedding, status) - 嵌入向量和状态码
                 - EmbeddingStatus.SUCCESS: 成功
-                - EmbeddingStatus.INIT_FAILED: 处理器未初始化
+                - EmbeddingStatus.CLIENT_NOT_INITIALIZED: 处理器未初始化
                 - EmbeddingStatus.REQUEST_FAILED: 请求失败
         """
         if not self.is_initialized():
-            return ([], EmbeddingStatus.INIT_FAILED)
+            return ([], EmbeddingStatus.CLIENT_NOT_INITIALIZED)
         
-        return self._shared_embedding_interface.embed_query(text)
+        # 带重试的调用
+        embedding = []
+        status = EmbeddingStatus.REQUEST_FAILED
+        
+        for attempt in range(self._max_retry):
+            embedding, status = self._shared_embedding_interface.embed_query(text)
+            
+            if status == EmbeddingStatus.SUCCESS:
+                return (embedding, status)
+            
+            if attempt < self._max_retry - 1:
+                time.sleep(self._retry_delay)
+        
+        # 所有重试都失败，返回最后一次的结果
+        return (embedding, status)
     
     def check_connection(self) -> bool:
         """

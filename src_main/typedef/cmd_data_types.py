@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 from typing import List
-from pydantic import SecretStr
 
 
 class Colors:
@@ -29,15 +28,3 @@ class CmdProcStatus:
     SUCCESS = "SUCCESS"
     TIMEOUT = "TIMEOUT"
     CANCELED = "CANCELED"
-
-@dataclass
-class ChatApiConfig():
-    base_url: str
-    api_key: SecretStr
-    model: str
-
-@dataclass
-class EmbeddingApiConfig():
-    base_url: str
-    api_key: SecretStr
-    model: str

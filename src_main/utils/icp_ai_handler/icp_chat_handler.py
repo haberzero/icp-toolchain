@@ -3,22 +3,27 @@ ICP Chat Handler - 管理聊天角色和AI接口的包装器
 
 这个模块提供了一个高层次的接口来管理多个聊天角色，
 所有角色共享一个ChatInterface实例以避免资源浪费。
+包含重试机制逻辑。
 """
 
 import os
+import asyncio
+import time
 from typing import Dict, Callable, Optional
 from pydantic import SecretStr
 
-from typedef.cmd_data_types import ChatApiConfig
-from libs.ai_interface.chat_interface import ChatInterface, ResponseStatus
+from typedef.ai_data_types import ChatApiConfig, ChatResponseStatus
+from libs.ai_interface.chat_interface import ChatInterface
 
 
 class ICPChatHandler:
-    """ICP聊天处理器，管理多个角色的系统提示词"""
+    """ICP聊天处理器，管理多个角色的系统提示词，并提供重试机制"""
     
     # 类变量：共享的ChatInterface实例
     _shared_chat_interface: Optional[ChatInterface] = None
     _is_initialized: bool = False
+    _max_retry: int = 3
+    _retry_delay: float = 1.0
     
     def __init__(self):
         """初始化ICP聊天处理器"""
@@ -33,7 +38,7 @@ class ICPChatHandler:
         retry_delay: float = 1.0
     ) -> bool:
         """
-        初始化共享的ChatInterface实例（类方法）
+        初始化共享的ChatInterface实例（类方法），支持重试机制
         
         Args:
             api_config: API配置信息
@@ -44,8 +49,25 @@ class ICPChatHandler:
             bool: 是否初始化成功
         """
         if cls._shared_chat_interface is None:
-            cls._shared_chat_interface = ChatInterface(api_config, max_retry, retry_delay)
-            cls._is_initialized = cls._shared_chat_interface.client is not None
+            cls._max_retry = max_retry
+            cls._retry_delay = retry_delay
+            
+            # 带重试的初始化
+            for attempt in range(max_retry):
+                try:
+                    cls._shared_chat_interface = ChatInterface(api_config)
+                    if cls._shared_chat_interface.client is not None:
+                        print(f"ChatInterface 初始化成功 (模型: {api_config.model})")
+                        cls._is_initialized = True
+                        return True
+                except Exception as e:
+                    print(f"ChatInterface 初始化失败 (尝试 {attempt + 1}/{max_retry}): {e}")
+                    if attempt < max_retry - 1:
+                        time.sleep(retry_delay)
+            
+            cls._is_initialized = False
+            print(f"ChatInterface 初始化最终失败，已尝试 {max_retry} 次")
+            return False
         
         return cls._is_initialized
     
@@ -115,7 +137,7 @@ class ICPChatHandler:
         callback: Callable[[str], None]
     ) -> str:
         """
-        获取指定角色的AI响应（包装ChatInterface的stream_response）
+        获取指定角色的AI响应（包装ChatInterface的stream_response并添加重试机制）
         
         Args:
             role_name: 角色名称
@@ -124,30 +146,46 @@ class ICPChatHandler:
             
         Returns:
             str: 响应状态码
-                - ResponseStatus.SUCCESS: 成功
-                - ResponseStatus.CLIENT_NOT_INITIALIZED: 客户端未初始化
-                - ResponseStatus.STREAM_FAILED_AFTER_RETRY: 流式响应失败
-                - "ROLE_NOT_FOUND": 角色不存在
+                - ChatResponseStatus.SUCCESS: 成功
+                - ChatResponseStatus.CLIENT_NOT_INITIALIZED: 客户端未初始化
+                - ChatResponseStatus.STREAM_FAILED: 流式响应失败（重试后）
+                - ChatResponseStatus.ROLE_NOT_FOUND: 角色不存在
         """
         # 检查角色是否存在
         if role_name not in self._role_prompts:
-            return "ROLE_NOT_FOUND"
+            return ChatResponseStatus.ROLE_NOT_FOUND
         
         # 检查共享的ChatInterface是否已初始化
         if not self.is_initialized():
-            return ResponseStatus.CLIENT_NOT_INITIALIZED
+            return ChatResponseStatus.CLIENT_NOT_INITIALIZED
         
         # 获取角色的系统提示词
         sys_prompt = self._role_prompts[role_name]
         
-        # 调用共享的ChatInterface进行流式响应
-        status = await self._shared_chat_interface.stream_response(
-            sys_prompt=sys_prompt,
-            user_prompt=user_prompt,
-            callback=callback
-        )
-        
-        return status
+        # 带重试机制的流式响应
+        for attempt in range(self._max_retry):
+            status = await self._shared_chat_interface.stream_response(
+                sys_prompt=sys_prompt,
+                user_prompt=user_prompt,
+                callback=callback
+            )
+            
+            # 成功则返回
+            if status == ChatResponseStatus.SUCCESS:
+                return ChatResponseStatus.SUCCESS
+            
+            # 客户端未初始化，不需要重试
+            if status == ChatResponseStatus.CLIENT_NOT_INITIALIZED:
+                return ChatResponseStatus.CLIENT_NOT_INITIALIZED
+            
+            # 流式响应失败，进行重试
+            if attempt < self._max_retry - 1:
+                print(f"流式响应失败，正在重试 ({attempt + 1}/{self._max_retry})...")
+                return ChatResponseStatus.STREAM_RETRY
+
+        # 重试失败
+        print(f"流式响应失败 (已重试 {self._max_retry} 次)")
+        return ChatResponseStatus.STREAM_FAILED
     
     def load_role_from_file(self, role_name: str, prompt_file_path: str) -> bool:
         """
