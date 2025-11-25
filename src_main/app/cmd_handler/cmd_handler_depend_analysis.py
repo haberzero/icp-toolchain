@@ -42,6 +42,45 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         # 初始化AI处理器
         self._init_ai_handlers()
 
+    def _validate_response(self, cleaned_content: str) -> tuple[bool, Dict[str, Any]]:
+        """
+        验证AI响应内容是否符合要求
+        
+        Args:
+            cleaned_content: 清理后的AI响应内容
+            
+        Returns:
+            tuple[bool, Dict[str, Any]]: (是否有效, JSON内容字典)
+        """
+        # 验证是否为有效的JSON
+        try:
+            new_json_content = json.loads(cleaned_content)
+        except json.JSONDecodeError as e:
+            print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
+            print(f"AI返回内容: {cleaned_content}")
+            return False
+        
+        # 检查新JSON内容是否包含必需的根节点
+        if "proj_root" not in new_json_content or "dependent_relation" not in new_json_content:
+            print(f"{Colors.WARNING}警告: 生成的JSON缺少必需的根节点 proj_root 或 dependent_relation{Colors.ENDC}")
+            return False
+        
+        # 检查proj_root结构是否与原始结构一致
+        if not DirJsonFuncs.compare_structure(self.old_json_content["proj_root"], new_json_content["proj_root"]):
+            print(f"{Colors.WARNING}警告: proj_root结构与原始结构不一致{Colors.ENDC}")
+            return False
+            
+        # 检查dependent_relation中的依赖路径是否都存在于proj_root中
+        is_valid, validation_errors = DirJsonFuncs.validate_dependent_paths(new_json_content["dependent_relation"], new_json_content["proj_root"])
+        if not is_valid:
+            print(f"{Colors.WARNING}警告: 生成的 dependent_relation 出现了 proj_root 下不存在的路径{Colors.ENDC}")
+            print(f"{Colors.WARNING}具体错误如下:{Colors.ENDC}")
+            for error in validation_errors:
+                print(f"  - {error}")
+            return False
+        
+        return True
+
     def _build_user_prompt_for_depend_analyzer(self) -> str:
         """
         构建依赖分析的用户提示词
@@ -76,6 +115,7 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         if not dir_with_files_content:
             print(f"  {Colors.FAIL}错误: 带文件描述的目录结构内容为空{Colors.ENDC}")
             return ""
+        self.old_json_content = json.loads(dir_with_files_content)
 
         # 读取用户提示词模板
         app_data_manager = get_app_data_manager()
@@ -85,6 +125,10 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
                 user_prompt_template = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+            return ""
+        
+        if not user_prompt_template:
+            print(f"  {Colors.FAIL}错误: 用户提示词模板内容为空{Colors.ENDC}")
             return ""
             
         # 填充占位符
@@ -100,16 +144,6 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             return
             
         print(f"{Colors.OKBLUE}开始进行依赖分析...{Colors.ENDC}")
-        
-        # 读取带文件描述的目录结构，用于后续比对
-        dir_with_files_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_files.json')
-        try:
-            with open(dir_with_files_file, 'r', encoding='utf-8') as f:
-                dir_with_files_content = f.read()
-                old_json_content = json.loads(dir_with_files_content)
-        except (Exception, json.JSONDecodeError) as e:
-            print(f"  {Colors.FAIL}错误: 读取或解析目录结构失败: {e}{Colors.ENDC}")
-            return
 
         # 构建用户提示词
         user_prompt = self._build_user_prompt_for_depend_analyzer()
@@ -132,76 +166,24 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             # 清理代码块标记
             cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
             
-            # 验证是否为有效的JSON
-            try:
-                new_json_content = json.loads(cleaned_content)
-            except json.JSONDecodeError as e:
-                print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
-                print(f"AI返回内容: {cleaned_content}")
-                continue
-            
-            # 检查新JSON内容是否包含必需的根节点
-            if "proj_root" not in new_json_content or "dependent_relation" not in new_json_content:
-                print(f"{Colors.WARNING}警告: 生成的JSON缺少必需的根节点 proj_root 或 dependent_relation{Colors.ENDC}")
-                continue
-            
-            # 检查proj_root结构是否与原始结构一致
-            if not DirJsonFuncs.compare_structure(old_json_content["proj_root"], new_json_content["proj_root"]):
-                print(f"{Colors.WARNING}警告: proj_root结构与原始结构不一致{Colors.ENDC}")
-                continue
-                
-            # 检查dependent_relation中的依赖路径是否都存在于proj_root中
-            is_valid, validation_errors = DirJsonFuncs.validate_dependent_paths(new_json_content["dependent_relation"], new_json_content["proj_root"])
-            if not is_valid:
-                print(f"{Colors.WARNING}警告: 生成的 dependent_relation 出现了 proj_root 下不存在的路径{Colors.ENDC}")
-                print(f"{Colors.WARNING}具体错误如下:{Colors.ENDC}")
-                for error in validation_errors:
-                    print(f"  - {error}")
-                continue
-            
-            # 检查是否存在循环依赖
-            circular_dependencies = DirJsonFuncs.detect_circular_dependencies(new_json_content["dependent_relation"])
-            
-            if circular_dependencies:
-                # 存在循环依赖，将循环依赖信息保存到文件中
-                circular_deps_file = os.path.join(self.proj_data_dir, 'circular_dependencies.txt')
-                try:
-                    with open(circular_deps_file, 'w', encoding='utf-8') as f:
-                        for cycle in circular_dependencies:
-                            f.write(f"{cycle}\n")
-                    print(f"检测到循环依赖，已保存到: {circular_deps_file}")
-                    
-                    # 仍然保存依赖分析结果到icp_dir_content_with_depend.json
-                    output_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_depend.json')
-                    try:
-                        with open(output_file, 'w', encoding='utf-8') as f:
-                            f.write(cleaned_content)
-                        print(f"依赖分析结果已保存到: {output_file}")
-                        return  # 成功则退出循环
-                    except Exception as e:
-                        print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
-                        return
-                except Exception as e:
-                    print(f"{Colors.FAIL}错误: 保存循环依赖信息失败: {e}{Colors.ENDC}")
-                    return
-            else:
-                # 保存结果到icp_dir_content_with_depend.json
-                output_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_depend.json')
-                circular_deps_file = os.path.join(self.proj_data_dir, 'circular_dependencies.txt')
-                try:
-                    with open(output_file, 'w', encoding='utf-8') as f:
-                        f.write(cleaned_content)
-                    print(f"依赖分析完成，结果已保存到: {output_file}")
-                    with open(circular_deps_file, 'w', encoding='utf-8') as f:
-                        f.write("")
-                    print(f"未检测到循环依赖，循环依赖结果文本 {circular_deps_file} 已清空")
-                    return  # 成功则退出循环
-                except Exception as e:
-                    print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
-                    return
-                
-        print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的依赖关系{Colors.ENDC}")
-
+            # 验证响应内容
+            is_valid = self._validate_response(cleaned_content)
+            if is_valid:
+                break
+        
+        if attempt == max_attempts - 1:
+            print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的依赖关系{Colors.ENDC}")
+            return
+        
+        # 保存依赖分析结果到 icp_dir_content_with_depend.json
+        output_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_depend.json')
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(cleaned_content)
+            print(f"{Colors.OKBLUE}依赖分析完成，结果已保存到: {output_file}{Colors.ENDC}")
+        except Exception as e:
+            print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
+            return
 
     def _check_cmd_requirement(self) -> bool:
         """验证依赖分析命令的前置条件"""
