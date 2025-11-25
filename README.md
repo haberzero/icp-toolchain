@@ -11,33 +11,50 @@ v0.0.1 - 初始版本，demo状态，仅包含一个基本可用的命令行应�
 ## 基本使用说明
 
 1. 环境准备
+   
     a. 确保已安装python。截至目前，本仓库所使用语法特性不超过3.8，但出于版本生命周期以及未来的持续开发考量，建议 python >= 3.11
+   
     b. 安装poetry，截至2025.11.24，官方提供的安装指令：
-        Linux, macOS, Windows (WSL):
+   
+        Linux, macOS, WSL:
+   
         `curl -sSL https://install.python-poetry.org | python3 -`
+   
         Windows (Powershell):
+   
         `(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | py -`
+   
     c. 拉取代码仓库并进入仓库根目录
+   
         `git clone https://github.com/haberzero/icp-toolchain.git && cd icp-toolchain`
+   
     d. 安装项目依赖
+   
         `poetry install --no-root`
+   
     e. 环境激活
+   
         `poetry env activate`
 
-2. 工程模板及目录准备
+3. 工程模板及目录准备
+   
     a. 复制整个`./template_proj`至你所期望的路径下，并更改文件夹名称。请勿直接使用`template_proj`作为工程目录。
+   
     b. 修改工程目录下的`requirements.md`, 向其中填写清晰完整的编程需求，其中的文本会作为最初的用户编程提示词使用
+   
     c. 修改工程目录下的`.icp_proj_config/icp_api_config.json`, 填写`api-url`, `api-key`, `model` 等内容，目前仅使用`coder_handler`，建议模型`qwen3-coder-30b-a3b-instruct`。Embedding模型相对随意
+   
     d. 修改工程目录下的`.icp_proj_config/icp_config.json`, 填写目标编程语言以及目标后缀名
 
-3. 运行主命令行工具
+5. 运行主命令行工具
+   
     `poetry run ./src_main/main_cmd.py`
 
-4. 自 `para_extract` 指令开始，按顺序执行后续所有指令直到 `code_gen`。指令执行时可直接使用缩写，如 `PE`, `CG`
+7. 自 `para_extract` 指令开始，按顺序执行后续所有指令直到 `code_gen`。指令执行时可直接使用缩写，如 `PE`, `CG`
 
-5. 在生成过程中密切观察大模型的输出，并按需随时介入最新生成的文件以进行精细化调整（具体介入思路以及各中间文件的具体职责说明手册会在未来提供）
+8. 在生成过程中密切观察大模型的输出，并按需随时介入最新生成的文件以进行精细化调整（具体介入思路以及各中间文件的具体职责说明手册会在未来提供）
 
-6. 生成最终目标代码后，阅读代码并自行调试。调试时可考虑直接修改生成的代码文件，也可考虑修改相关 `.ibc` 文件后重新生成目标代码（暂译意图行为描述代码）
+9. 生成最终目标代码后，阅读代码并自行调试。调试时可考虑直接修改生成的代码文件，也可考虑修改相关 `.ibc` 文件后重新生成目标代码（暂译意图行为描述代码）
 
 ## 作者留言
 
