@@ -97,6 +97,58 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         
         print(f"{Colors.OKGREEN}IBC目录结构创建命令执行完毕!{Colors.ENDC}")
 
+    def _generate_single_file_requirement(self, file_path: str, proj_root_content: Dict) -> Optional[str]:
+        """为单个文件生成需求描述
+        
+        Args:
+            file_path: 文件路径
+            proj_root_content: 项目根目录内容
+            
+        Returns:
+            Optional[str]: 生成的需求描述，失败返回none
+        """
+        # 获取文件描述
+        file_description = DirJsonFuncs.get_file_description(proj_root_content, file_path)
+        if not file_description:
+            print(f"  {Colors.FAIL}错误: 无法获取文件描述: {file_path}{Colors.ENDC}")
+            return None
+        
+        # 生成新的文件需求描述
+        print(f"  {Colors.OKBLUE}正在为文件生成需求描述: {file_path}{Colors.ENDC}")
+        new_file_description = self._create_one_file_req_1(file_path)
+        if not new_file_description:
+            return None
+        
+        # 清理代码块标记
+        return ICPChatHandler.clean_code_block_markers(new_file_description)
+
+    def _save_file_requirement(self, file_path: str, content: str, staging_dir_path: str) -> bool:
+        """保存文件需求描述
+        
+        Args:
+            file_path: 文件路径
+            content: 需求描述内容
+            staging_dir_path: staging 目录路径
+            
+        Returns:
+            bool: 是否成功
+        """
+        req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
+        
+        # 确保文件的父目录存在
+        parent_dir = os.path.dirname(req_file_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
+        
+        try:
+            with open(req_file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            print(f"  {Colors.OKGREEN}文件需求描述已保存: {req_file_path}{Colors.ENDC}")
+            return True
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 保存文件需求描述失败 {req_file_path}: {e}{Colors.ENDC}")
+            return False
+
     def _generate_file_requirements_1(
             self, 
             staging_dir_path: str,  # 修改参数名称以反映实际用途
@@ -104,10 +156,6 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
             file_creation_order_list: List[str]
         ) -> None:
         """为每个文件生成需求描述"""
-        # 读取用户原始需求文本
-        user_data_manager = get_user_data_manager()
-        user_requirements = user_data_manager.get_user_prompt()
-        
         # 读取文件级实现规划
         implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
         try:
@@ -116,58 +164,16 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取文件级实现规划失败: {e}{Colors.ENDC}")
             return
-
-        # 初始化累积描述字典，用于为后续文件生成提供上下文
-        accumulated_descriptions_dict = {}
         
         # 按照依赖顺序为每个文件生成需求描述
         for file_path in file_creation_order_list:
-            # 获取文件描述
-            file_description = DirJsonFuncs.get_file_description(proj_root_content, file_path)
-            if not file_description:
-                print(f"  {Colors.FAIL}错误: 无法获取文件描述: {file_path}{Colors.ENDC}")
+            # 生成单个文件的需求描述
+            new_file_description = self._generate_single_file_requirement(file_path, proj_root_content)
+            if not new_file_description:
                 continue
             
-            # 为每个文件生成新的单文件编程需求描述
-            print(f"  {Colors.OKBLUE}正在为文件生成需求描述: {file_path}{Colors.ENDC}")
-            
-            # 生成新的文件需求描述
-            new_file_description = self._create_one_file_req_1(file_path)
-
-            # 清理代码块标记
-            new_file_description = ICPChatHandler.clean_code_block_markers(new_file_description)
-            
-            # 保存新生成的描述到src_staging目录下的文件
-            req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
-            
-            # 确保文件的父目录存在
-            parent_dir = os.path.dirname(req_file_path)
-            if parent_dir:
-                os.makedirs(parent_dir, exist_ok=True)
-            
-            try:
-                with open(req_file_path, 'w', encoding='utf-8') as f:
-                    f.write(new_file_description)
-                print(f"  {Colors.OKGREEN}文件需求描述已保存: {req_file_path}{Colors.ENDC}")
-            except Exception as e:
-                print(f"  {Colors.FAIL}错误: 保存文件需求描述失败 {req_file_path}: {e}{Colors.ENDC}")
-            
-            # 将新生成的描述添加到累积描述中，供后续文件使用
-            extracted_description = self._extract_description_content(new_file_description)
-            extracted_func = self._extract_func_content(new_file_description)
-            extracted_class = self._extract_class_content(new_file_description)
-            
-            # 组合所有提取的内容
-            formatted_description = f"文件 {file_path} 的接口描述:\n"
-            if extracted_class:
-                formatted_description += f"类信息:\n{extracted_class}\n\n"
-            if extracted_func:
-                formatted_description += f"函数信息:\n{extracted_func}\n\n"
-            if extracted_description:
-                formatted_description += f"描述信息:\n{extracted_description}"
-            
-            if formatted_description:
-                accumulated_descriptions_dict[file_path] = formatted_description
+            # 保存需求描述
+            self._save_file_requirement(file_path, new_file_description, staging_dir_path)
 
     def _extract_description_content(self, content: str) -> str:
         """从文件内容中提取description部分"""
@@ -307,6 +313,37 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         
         return response_content
 
+    def _analyze_single_file_dependency(self, file_path: str, staging_dir_path: str) -> List[str]:
+        """分析单个文件的依赖关系
+        
+        Args:
+            file_path: 文件路径
+            staging_dir_path: staging 目录路径
+            
+        Returns:
+            List[str]: 依赖文件列表
+        """
+        # 获取当前文件的需求描述
+        req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
+        try:
+            with open(req_file_path, 'r', encoding='utf-8') as f:
+                file_requirement_content = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取文件需求描述失败 {req_file_path}: {e}{Colors.ENDC}")
+            return []
+
+        # 从文件需求描述中提取module部分
+        module_content = self._extract_import_content(file_requirement_content)
+        if not module_content:
+            print(f"  {Colors.WARNING}警告: 无法提取module内容: {file_path}{Colors.ENDC}")
+            return []
+
+        # 生成依赖关系
+        dependencies = self._analyze_file_dependencies_2(file_path)
+        
+        # 从返回的依赖数据中提取依赖列表
+        return dependencies.get("dependencies", [])
+
     def _generate_file_dependencies_2(
         self,
         ibc_root_path: str,
@@ -327,30 +364,8 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
             if file_path in available_file_desc_dict:
                 del available_file_desc_dict[file_path]
             
-            # 获取当前文件的需求描述
-            req_file_path = os.path.join(ibc_root_path, f"{file_path}_one_file_req.txt")
-            try:
-                with open(req_file_path, 'r', encoding='utf-8') as f:
-                    file_requirement_content = f.read()
-            except Exception as e:
-                print(f"  {Colors.FAIL}错误: 读取文件需求描述失败 {req_file_path}: {e}{Colors.ENDC}")
-                # 即使读取失败，也要在依赖关系中添加空列表
-                new_dependent_relation[file_path] = []
-                continue
-
-            # 从文件需求描述中提取module部分
-            module_content = self._extract_import_content(file_requirement_content)
-            if not module_content:
-                print(f"  {Colors.WARNING}警告: 无法提取module内容: {file_path}{Colors.ENDC}")
-                # 即使无法提取module内容，也要在依赖关系中添加空列表
-                new_dependent_relation[file_path] = []
-                continue
-
-            # 生成依赖关系
-            dependencies = self._analyze_file_dependencies_2(file_path)
-            
-            # 从返回的依赖数据中提取依赖列表
-            dependency_list = dependencies.get("dependencies", [])
+            # 分析单个文件的依赖
+            dependency_list = self._analyze_single_file_dependency(file_path, ibc_root_path)
             new_dependent_relation[file_path] = dependency_list
         
         return new_dependent_relation
