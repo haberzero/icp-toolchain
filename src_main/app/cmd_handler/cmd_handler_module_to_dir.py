@@ -14,7 +14,6 @@ from data_exchange.user_data_manager import get_instance as get_user_data_manage
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
-from typedef.ai_data_types import ChatResponseStatus
 
 
 DEBUG_FLAG = False
@@ -78,7 +77,14 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: 需求分析结果不是有效的JSON格式: {e}{Colors.ENDC}")
             return
 
-        response_content = asyncio.run(self._get_ai_response(filtered_requirement_content))
+        response_content, success = asyncio.run(self.chat_handler.get_role_response(
+            role_name=self.role_name,
+            user_prompt=filtered_requirement_content
+        ))
+        
+        if not success:
+            print(f"{Colors.WARNING}警告: AI响应失败{Colors.ENDC}")
+            return
         
         if not response_content:
             print(f"{Colors.WARNING}警告: AI响应为空{Colors.ENDC}")
@@ -165,12 +171,3 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         app_data_manager = get_app_data_manager()
         sys_prompt_path = os.path.join(app_data_manager.get_prompt_dir(), self.role_name + ".md")
         self.chat_handler.load_role_from_file(self.role_name, sys_prompt_path)
-    
-    async def _get_ai_response(self, user_prompt: str) -> str:
-        print(f"{self.role_name}正在生成目录结构...")
-        response_content, status = await self.chat_handler.get_role_response(self.role_name, user_prompt)
-        if status == ChatResponseStatus.SUCCESS:
-            print(f"\n{self.role_name}运行完毕。")
-            return response_content
-        print(f"\n{Colors.FAIL}错误: 响应失败 {status}{Colors.ENDC}")
-        return ""

@@ -13,6 +13,7 @@ from typing import Dict, Optional, Tuple
 from pydantic import SecretStr
 
 from typedef.ai_data_types import ChatApiConfig, ChatResponseStatus
+from typedef.cmd_data_types import Colors
 from libs.ai_interface.chat_interface import ChatInterface
 
 
@@ -134,7 +135,7 @@ class ICPChatHandler:
         self, 
         role_name: str, 
         user_prompt: str
-    ) -> Tuple[str, str]:
+    ) -> Tuple[str, bool]:
         """
         获取指定角色的AI响应（包装ChatInterface的stream_response并添加重试机制）
         
@@ -143,20 +144,19 @@ class ICPChatHandler:
             user_prompt: 用户提示词
             
         Returns:
-            Tuple[str, str]: (响应内容, 状态码)
-                状态码:
-                - ChatResponseStatus.SUCCESS: 成功
-                - ChatResponseStatus.CLIENT_NOT_INITIALIZED: 客户端未初始化
-                - ChatResponseStatus.STREAM_FAILED: 流式响应失败（重试后）
-                - ChatResponseStatus.ROLE_NOT_FOUND: 角色不存在
+            Tuple[str, bool]: (响应内容, 是否成功)
         """
+        print(f"    {role_name}正在生成响应...")
+        
         # 检查角色是否存在
         if role_name not in self._role_prompts:
-            return ("", ChatResponseStatus.ROLE_NOT_FOUND)
+            print(f"\n{Colors.FAIL}错误: 角色 {role_name} 未找到{Colors.ENDC}")
+            return ("", False)
         
         # 检查共享的ChatInterface是否已初始化
         if not self.is_initialized():
-            return ("", ChatResponseStatus.CLIENT_NOT_INITIALIZED)
+            print(f"\n{Colors.FAIL}错误: ChatInterface未初始化{Colors.ENDC}")
+            return ("", False)
         
         # 获取角色的系统提示词
         sys_prompt = self._role_prompts[role_name]
@@ -179,22 +179,24 @@ class ICPChatHandler:
             
             # 成功则返回收集到的内容
             if status == ChatResponseStatus.SUCCESS:
-                return (response_content, ChatResponseStatus.SUCCESS)
+                print(f"\n    {role_name}运行完毕。")
+                return (response_content, True)
             
             # 客户端未初始化，不需要重试
             if status == ChatResponseStatus.CLIENT_NOT_INITIALIZED:
-                return ("", ChatResponseStatus.CLIENT_NOT_INITIALIZED)
+                print(f"\n{Colors.FAIL}错误: ChatInterface未初始化{Colors.ENDC}")
+                return ("", False)
             
             # 流式响应失败，清空当前收集到的内容并重试
             if attempt < self._max_retry - 1:
-                print(f"\n流式响应失败，正在重试 ({attempt + 1}/{self._max_retry})...")
+                print(f"\n{Colors.FAIL}流式响应失败，正在重试 ({attempt + 1}/{self._max_retry})...{Colors.ENDC}")
                 # 清空当前收集到的内容，准备重试
                 response_content = ""
                 continue
 
         # 重试失败
-        print(f"\n流式响应失败 (已重试 {self._max_retry} 次)")
-        return ("", ChatResponseStatus.STREAM_FAILED)
+        print(f"\n{Colors.FAIL}错误: 流式响应失败 (已重试 {self._max_retry} 次){Colors.ENDC}")
+        return ("", False)
     
     def load_role_from_file(self, role_name: str, prompt_file_path: str) -> bool:
         """

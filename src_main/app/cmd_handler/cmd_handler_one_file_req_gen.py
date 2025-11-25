@@ -13,7 +13,6 @@ from data_exchange.user_data_manager import get_instance as get_user_data_manage
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
-from typedef.ai_data_types import ChatResponseStatus
 from libs.dir_json_funcs import DirJsonFuncs
 
 
@@ -365,7 +364,14 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         user_prompt = user_prompt.replace('MODULE_DEPENDENCY_SUGGESTIONS_PLACEHOLDER', module_suggestions_text)
 
         # 调用AI生成需求描述
-        response_content = asyncio.run(self._get_ai_response_1(user_prompt))
+        response_content, success = asyncio.run(self.chat_handler.get_role_response(
+            role_name=self.role_name_1,
+            user_prompt=user_prompt
+        ))
+        
+        if not success:
+            return ""
+        
         return response_content
 
     def _generate_file_dependencies_2(
@@ -495,7 +501,16 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         user_prompt = user_prompt.replace('AVAILABLE_MODULES_PLACEHOLDER', available_modules_text if available_modules_text else '暂无其他模块')
 
         # 调用AI分析依赖关系
-        response_content = asyncio.run(self._get_ai_response_2(user_prompt))
+        response_content, success = asyncio.run(self.chat_handler.get_role_response(
+            role_name=self.role_name_2,
+            user_prompt=user_prompt
+        ))
+        
+        if not success:
+            return {
+                "file_path": file_path,
+                "dependencies": []
+            }
         
         # 移除可能的代码块标记
         cleaned_content = response_content.strip()
@@ -651,23 +666,3 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
                 continue
                 
         return file_desc_dict
-
-    async def _get_ai_response_1(self, user_prompt: str) -> str:
-        """异步获取AI响应（处理器1）"""
-        print(f"{self.role_name_1}正在生成目录结构...")
-        response_content, status = await self.chat_handler.get_role_response(self.role_name_1, user_prompt)
-        if status == ChatResponseStatus.SUCCESS:
-            print(f"\n{self.role_name_1}运行完毕。")
-            return response_content
-        print(f"\n{Colors.FAIL}错误: 响应失败 {status}{Colors.ENDC}")
-        return ""
-
-    async def _get_ai_response_2(self, user_prompt: str) -> str:
-        """异步获取AI响应（处理器2）"""
-        print(f"{self.role_name_2}正在分析依赖关系...")
-        response_content, status = await self.chat_handler.get_role_response(self.role_name_2, user_prompt)
-        if status == ChatResponseStatus.SUCCESS:
-            print(f"\n{self.role_name_2}运行完毕。")
-            return response_content
-        print(f"\n{Colors.FAIL}错误: 响应失败 {status}{Colors.ENDC}")
-        return ""

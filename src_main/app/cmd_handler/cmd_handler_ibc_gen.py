@@ -21,7 +21,6 @@ from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 from utils.icp_ai_handler.icp_embedding_handler import ICPEmbeddingHandler
-from typedef.ai_data_types import ChatResponseStatus
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code, IbcAnalyzerError
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.symbol_vector_db_manager import SymbolVectorDBManager
@@ -479,7 +478,14 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt = user_prompt.replace('AVAILABLE_SYMBOLS_PLACEHOLDER', available_symbols_text)
 
         # 调用AI生成半自然语言行为描述代码
-        response_content = asyncio.run(self._get_ai_response(self.role_name_1, user_prompt))
+        response_content, success = asyncio.run(self.chat_handler.get_role_response(
+            role_name=self.role_ibc_gen,
+            user_prompt=user_prompt
+        ))
+                        
+        if not success:
+            print(f"    {Colors.WARNING}警告: AI响应失败{Colors.ENDC}")
+            return ""
         
         # 如果响应为空，说明AI调用失败
         if not response_content:
@@ -562,27 +568,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         return True
     
-    async def _get_ai_response(self, role_name: str, user_prompt: str) -> str:
-        """异步获取AI响应"""
-        print(f"    {role_name}正在生成响应...")
-        
-        response_content, status = await self.chat_handler.get_role_response(
-            role_name=role_name,
-            user_prompt=user_prompt
-        )
-        
-        if status == ChatResponseStatus.SUCCESS:
-            print(f"\n    {role_name}运行完毕。")
-            return response_content
-        elif status == ChatResponseStatus.CLIENT_NOT_INITIALIZED:
-            print(f"\n{Colors.FAIL}错误: ChatInterface未初始化{Colors.ENDC}")
-            return ""
-        elif status == ChatResponseStatus.STREAM_FAILED:
-            print(f"\n{Colors.FAIL}错误: 流式响应失败{Colors.ENDC}")
-            return ""
-        else:
-            print(f"\n{Colors.FAIL}错误: 未知状态 {status}{Colors.ENDC}")
-            return ""
     
     # ========== 辅助方法 ==========
     
@@ -708,7 +693,14 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         for attempt in range(self.MAX_RETRY_COUNT):
             try:
                 print(f"    正在调用AI进行符号规范化（尝试 {attempt + 1}/{self.MAX_RETRY_COUNT}）...")
-                response_content = asyncio.run(self._get_ai_response(self.role_symbol_normalizer, user_prompt))
+                response_content, success = asyncio.run(self.chat_handler.get_role_response(
+                    role_name=self.role_symbol_normalizer,
+                    user_prompt=user_prompt
+                ))
+                
+                if not success:
+                    print(f"    {Colors.WARNING}警告: AI响应失败{Colors.ENDC}")
+                    continue
                 
                 normalized_symbols = self._parse_symbol_normalizer_response(response_content)
                 if normalized_symbols:

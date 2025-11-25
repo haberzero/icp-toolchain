@@ -14,7 +14,6 @@ from data_exchange.user_data_manager import get_instance as get_user_data_manage
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
-from typedef.ai_data_types import ChatResponseStatus
 
 
 DEBUG_FLAG = False
@@ -48,7 +47,14 @@ class CmdHandlerParaExtract(BaseCmdHandler):
             
         print(f"{Colors.OKBLUE}开始提取参数...{Colors.ENDC}")
         requirement_content = get_user_data_manager().get_user_prompt()
-        response_content = asyncio.run(self._get_ai_response(requirement_content))
+        response_content, success = asyncio.run(self.chat_handler.get_role_response(
+            role_name=self.role_name,
+            user_prompt=requirement_content
+        ))
+        
+        if not success:
+            print(f"{Colors.WARNING}警告: AI响应失败{Colors.ENDC}")
+            return
         
         if not response_content:
             print(f"{Colors.WARNING}警告: AI响应为空{Colors.ENDC}")
@@ -136,25 +142,3 @@ class CmdHandlerParaExtract(BaseCmdHandler):
         prompt_dir = app_data_manager.get_prompt_dir()
         sys_prompt_path = os.path.join(prompt_dir, self.role_name + ".md")
         self.chat_handler.load_role_from_file(self.role_name, sys_prompt_path)
-
-    async def _get_ai_response(self, user_prompt: str) -> str:
-        """异步获取AI响应"""
-        print(f"{self.role_name}正在进行参数提取...")
-        
-        response_content, status = await self.chat_handler.get_role_response(
-            role_name=self.role_name,
-            user_prompt=user_prompt
-        )
-        
-        if status == ChatResponseStatus.SUCCESS:
-            print(f"\n{self.role_name}运行完毕。")
-            return response_content
-        elif status == ChatResponseStatus.CLIENT_NOT_INITIALIZED:
-            print(f"\n{Colors.FAIL}错误: ChatInterface未初始化{Colors.ENDC}")
-            return ""
-        elif status == ChatResponseStatus.STREAM_FAILED:
-            print(f"\n{Colors.FAIL}错误: 流式响应失败{Colors.ENDC}")
-            return ""
-        else:
-            print(f"\n{Colors.FAIL}错误: 未知状态 {status}{Colors.ENDC}")
-            return ""

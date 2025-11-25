@@ -5,7 +5,7 @@ from typing import List, Dict
 from pydantic import SecretStr
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
-from typedef.ai_data_types import ChatApiConfig, EmbeddingApiConfig
+from typedef.ai_data_types import ChatApiConfig, EmbeddingApiConfig, EmbeddingStatus
 from typedef.ibc_data_types import IbcBaseAstNode
 
 from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
@@ -16,7 +16,6 @@ from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 from utils.icp_ai_handler.icp_embedding_handler import ICPEmbeddingHandler
-from typedef.ai_data_types import ChatResponseStatus, EmbeddingStatus
 from libs.dir_json_funcs import DirJsonFuncs
 from utils.ibc_analyzer.ibc_code_reconstructor import IbcCodeReconstructor
 from libs.symbol_vector_db_manager import SymbolVectorDBManager
@@ -219,7 +218,14 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         user_prompt = user_prompt.replace('IBC_CODE_PLACEHOLDER', ibc_code)
         
         # 调用AI生成目标代码
-        response_content = asyncio.run(self._get_ai_response(self.role_name, user_prompt))
+        response_content, success = asyncio.run(self.chat_handler.get_role_response(
+            role_name=self.role_name,
+            user_prompt=user_prompt
+        ))
+        
+        if not success:
+            print(f"    {Colors.WARNING}警告: AI响应失败{Colors.ENDC}")
+            return ""
         
         if not response_content:
             print(f"    {Colors.WARNING}警告: AI响应为空{Colors.ENDC}")
@@ -314,28 +320,6 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             return False
         
         return True
-    
-    async def _get_ai_response(self, role_name: str, user_prompt: str) -> str:
-        """异步获取AI响应"""
-        print(f"    {role_name}正在生成响应...")
-        
-        response_content, status = await self.chat_handler.get_role_response(
-            role_name=role_name,
-            user_prompt=user_prompt
-        )
-        
-        if status == ChatResponseStatus.SUCCESS:
-            print(f"\n    {role_name}运行完毕。")
-            return response_content
-        elif status == ChatResponseStatus.CLIENT_NOT_INITIALIZED:
-            print(f"\n{Colors.FAIL}错误: ChatInterface未初始化{Colors.ENDC}")
-            return ""
-        elif status == ChatResponseStatus.STREAM_FAILED:
-            print(f"\n{Colors.FAIL}错误: 流式响应失败{Colors.ENDC}")
-            return ""
-        else:
-            print(f"\n{Colors.FAIL}错误: 未知状态 {status}{Colors.ENDC}")
-            return ""
     
     def _init_ai_handlers(self):
         """初始化AI处理器"""
