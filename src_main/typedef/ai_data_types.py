@@ -13,7 +13,6 @@ class ChatResponseStatus:
     """Chat响应状态码"""
     SUCCESS = "SUCCESS"  # 响应成功
     CLIENT_NOT_INITIALIZED = "CLIENT_NOT_INITIALIZED"  # 客户端未初始化
-    STREAM_RETRY = "STREAM_RETRY"  # 流式响应重试
     STREAM_FAILED = "STREAM_FAILED"  # 流式响应失败
     ROLE_NOT_FOUND = "ROLE_NOT_FOUND"  # 角色不存在
 

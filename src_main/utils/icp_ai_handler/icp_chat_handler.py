@@ -9,7 +9,7 @@ ICP Chat Handler - 管理聊天角色和AI接口的包装器
 import os
 import asyncio
 import time
-from typing import Dict, Callable, Optional
+from typing import Dict, Optional, Tuple
 from pydantic import SecretStr
 
 from typedef.ai_data_types import ChatApiConfig, ChatResponseStatus
@@ -133,19 +133,18 @@ class ICPChatHandler:
     async def get_role_response(
         self, 
         role_name: str, 
-        user_prompt: str, 
-        callback: Callable[[str], None]
-    ) -> str:
+        user_prompt: str
+    ) -> Tuple[str, str]:
         """
         获取指定角色的AI响应（包装ChatInterface的stream_response并添加重试机制）
         
         Args:
             role_name: 角色名称
             user_prompt: 用户提示词
-            callback: 回调函数，用于接收流式响应内容
             
         Returns:
-            str: 响应状态码
+            Tuple[str, str]: (响应内容, 状态码)
+                状态码:
                 - ChatResponseStatus.SUCCESS: 成功
                 - ChatResponseStatus.CLIENT_NOT_INITIALIZED: 客户端未初始化
                 - ChatResponseStatus.STREAM_FAILED: 流式响应失败（重试后）
@@ -153,39 +152,49 @@ class ICPChatHandler:
         """
         # 检查角色是否存在
         if role_name not in self._role_prompts:
-            return ChatResponseStatus.ROLE_NOT_FOUND
+            return ("", ChatResponseStatus.ROLE_NOT_FOUND)
         
         # 检查共享的ChatInterface是否已初始化
         if not self.is_initialized():
-            return ChatResponseStatus.CLIENT_NOT_INITIALIZED
+            return ("", ChatResponseStatus.CLIENT_NOT_INITIALIZED)
         
         # 获取角色的系统提示词
         sys_prompt = self._role_prompts[role_name]
         
         # 带重试机制的流式响应
         for attempt in range(self._max_retry):
+            # 定义内部callback用于收集响应内容
+            response_content = ""
+            
+            def collect_and_print(content: str) -> None:
+                nonlocal response_content
+                response_content += content
+                print(content, end="", flush=True)
+            
             status = await self._shared_chat_interface.stream_response(
                 sys_prompt=sys_prompt,
                 user_prompt=user_prompt,
-                callback=callback
+                callback=collect_and_print
             )
             
-            # 成功则返回
+            # 成功则返回收集到的内容
             if status == ChatResponseStatus.SUCCESS:
-                return ChatResponseStatus.SUCCESS
+                return (response_content, ChatResponseStatus.SUCCESS)
             
             # 客户端未初始化，不需要重试
             if status == ChatResponseStatus.CLIENT_NOT_INITIALIZED:
-                return ChatResponseStatus.CLIENT_NOT_INITIALIZED
+                return ("", ChatResponseStatus.CLIENT_NOT_INITIALIZED)
             
-            # 流式响应失败，进行重试
+            # 流式响应失败，清空当前收集到的内容并重试
             if attempt < self._max_retry - 1:
-                print(f"流式响应失败，正在重试 ({attempt + 1}/{self._max_retry})...")
-                return ChatResponseStatus.STREAM_RETRY
+                print(f"\n流式响应失败，正在重试 ({attempt + 1}/{self._max_retry})...")
+                # 清空当前收集到的内容，准备重试
+                response_content = ""
+                continue
 
         # 重试失败
-        print(f"流式响应失败 (已重试 {self._max_retry} 次)")
-        return ChatResponseStatus.STREAM_FAILED
+        print(f"\n流式响应失败 (已重试 {self._max_retry} 次)")
+        return ("", ChatResponseStatus.STREAM_FAILED)
     
     def load_role_from_file(self, role_name: str, prompt_file_path: str) -> bool:
         """

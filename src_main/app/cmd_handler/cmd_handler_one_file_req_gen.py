@@ -654,13 +654,8 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
 
     async def _get_ai_response_1(self, user_prompt: str) -> str:
         """异步获取AI响应（处理器1）"""
-        response_content = ""
-        def collect_response(content):
-            nonlocal response_content
-            response_content += content
-            print(content, end="", flush=True)
         print(f"{self.role_name_1}正在生成目录结构...")
-        status = await self.chat_handler.get_role_response(self.role_name_1, user_prompt, collect_response)
+        response_content, status = await self.chat_handler.get_role_response(self.role_name_1, user_prompt)
         if status == ChatResponseStatus.SUCCESS:
             print(f"\n{self.role_name_1}运行完毕。")
             return response_content
@@ -669,13 +664,8 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
 
     async def _get_ai_response_2(self, user_prompt: str) -> str:
         """异步获取AI响应（处理器2）"""
-        response_content = ""
-        def collect_response(content):
-            nonlocal response_content
-            response_content += content
-            print(content, end="", flush=True)
         print(f"{self.role_name_2}正在分析依赖关系...")
-        status = await self.chat_handler.get_role_response(self.role_name_2, user_prompt, collect_response)
+        response_content, status = await self.chat_handler.get_role_response(self.role_name_2, user_prompt)
         if status == ChatResponseStatus.SUCCESS:
             print(f"\n{self.role_name_2}运行完毕。")
             return response_content

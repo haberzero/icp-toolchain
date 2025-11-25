@@ -167,13 +167,8 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         self.chat_handler.load_role_from_file(self.role_name, sys_prompt_path)
     
     async def _get_ai_response(self, user_prompt: str) -> str:
-        response_content = ""
-        def collect_response(content):
-            nonlocal response_content
-            response_content += content
-            print(content, end="", flush=True)
         print(f"{self.role_name}正在生成目录结构...")
-        status = await self.chat_handler.get_role_response(self.role_name, user_prompt, collect_response)
+        response_content, status = await self.chat_handler.get_role_response(self.role_name, user_prompt)
         if status == ChatResponseStatus.SUCCESS:
             print(f"\n{self.role_name}运行完毕。")
             return response_content

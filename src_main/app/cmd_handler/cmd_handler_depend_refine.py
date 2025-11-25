@@ -247,21 +247,12 @@ class CmdHandlerDependRefine(BaseCmdHandler):
     
     async def _get_ai_response(self, user_prompt: str) -> str:
         """异步获取AI响应"""
-        response_content = ""
-        
-        def collect_response(content):
-            nonlocal response_content
-            response_content += content
-            # 实时在CLI中显示AI回复
-            print(content, end="", flush=True)
-        
         print(f"{self.role_name}正在解决循环依赖...")
         
         # 调用ICPChatHandler获取响应
-        status = await self.chat_handler.get_role_response(
+        response_content, status = await self.chat_handler.get_role_response(
             role_name=self.role_name,
-            user_prompt=user_prompt,
-            callback=collect_response
+            user_prompt=user_prompt
         )
         
         # 检查状态

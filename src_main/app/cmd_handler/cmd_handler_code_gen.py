@@ -317,19 +317,11 @@ class CmdHandlerCodeGen(BaseCmdHandler):
     
     async def _get_ai_response(self, role_name: str, user_prompt: str) -> str:
         """异步获取AI响应"""
-        response_content = ""
-        
-        def collect_response(content):
-            nonlocal response_content
-            response_content += content
-            print(content, end="", flush=True)
-        
         print(f"    {role_name}正在生成响应...")
         
-        status = await self.chat_handler.get_role_response(
+        response_content, status = await self.chat_handler.get_role_response(
             role_name=role_name,
-            user_prompt=user_prompt,
-            callback=collect_response
+            user_prompt=user_prompt
         )
         
         if status == ChatResponseStatus.SUCCESS:
