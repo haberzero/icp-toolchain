@@ -16,8 +16,6 @@ from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 
 
-DEBUG_FLAG = False
-
 
 class CmdHandlerModuleToDir(BaseCmdHandler):
     """目录结构生成指令"""
@@ -90,15 +88,8 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             print(f"{Colors.WARNING}警告: AI响应为空{Colors.ENDC}")
             return
             
-        cleaned_content = response_content.strip()
-
-        # 移除可能的代码块标记
-        lines = cleaned_content.split('\n')
-        if lines and lines[0].strip().startswith('```'):
-            lines = lines[1:]
-        if lines and lines[-1].strip().startswith('```'):
-            lines = lines[:-1]
-        cleaned_content = '\n'.join(lines).strip()
+        # 清理代码块标记
+        cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
         
         # 验证是否为有效的JSON
         try:
@@ -107,10 +98,6 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
             print(f"AI返回内容: {cleaned_content}")
             return
-
-        if DEBUG_FLAG:
-            print(f"{Colors.HEADER}{Colors.BOLD}目录结构生成结果:{Colors.ENDC}")
-            print(cleaned_content)
         
         # 保存结果到icp_dir_content.json
         output_file = os.path.join(self.proj_data_dir, 'icp_dir_content.json')

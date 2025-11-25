@@ -17,8 +17,6 @@ from utils.icp_ai_handler import ICPChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
 
 
-DEBUG_FLAG = False
-
 
 class CmdHandlerDependAnalysis(BaseCmdHandler):
     """依赖分析指令"""
@@ -44,13 +42,15 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         # 初始化AI处理器
         self._init_ai_handlers()
 
-    def execute(self):
-        """执行依赖分析"""
-        if not self.is_cmd_valid():
-            return
-            
-        print(f"{Colors.OKBLUE}开始进行依赖分析...{Colors.ENDC}")
+    def _build_user_prompt_for_depend_analyzer(self) -> str:
+        """
+        构建依赖分析的用户提示词
         
+        从项目数据目录中读取所需文件，无需外部参数输入。
+        
+        Returns:
+            str: 完整的用户提示词，失败时返回空字符串
+        """
         # 读取文件级实现规划
         implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
         try:
@@ -58,11 +58,11 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
                 implementation_plan_content = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取文件级实现规划失败: {e}{Colors.ENDC}")
-            return
+            return ""
             
         if not implementation_plan_content:
             print(f"  {Colors.FAIL}错误: 文件级实现规划内容为空{Colors.ENDC}")
-            return
+            return ""
             
         # 读取带文件描述的目录结构
         dir_with_files_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_files.json')
@@ -71,20 +71,13 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
                 dir_with_files_content = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取带文件描述的目录结构失败: {e}{Colors.ENDC}")
-            return
+            return ""
             
         if not dir_with_files_content:
             print(f"  {Colors.FAIL}错误: 带文件描述的目录结构内容为空{Colors.ENDC}")
-            return
+            return ""
 
-        # 读取原始目录结构用于后续比对
-        try:
-            old_json_content = json.loads(dir_with_files_content)
-        except json.JSONDecodeError as e:
-            print(f"  {Colors.FAIL}错误: 原始目录结构不是有效的JSON格式: {e}{Colors.ENDC}")
-            return
-
-        # 构建用户提示词
+        # 读取用户提示词模板
         app_data_manager = get_app_data_manager()
         user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'depend_analysis_user.md')
         try:
@@ -92,12 +85,36 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
                 user_prompt_template = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
-            return
+            return ""
             
         # 填充占位符
         user_prompt = user_prompt_template
         user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_content)
         user_prompt = user_prompt.replace('JSON_STRUCTURE_PLACEHOLDER', dir_with_files_content)
+        
+        return user_prompt
+
+    def execute(self):
+        """执行依赖分析"""
+        if not self.is_cmd_valid():
+            return
+            
+        print(f"{Colors.OKBLUE}开始进行依赖分析...{Colors.ENDC}")
+        
+        # 读取带文件描述的目录结构，用于后续比对
+        dir_with_files_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_files.json')
+        try:
+            with open(dir_with_files_file, 'r', encoding='utf-8') as f:
+                dir_with_files_content = f.read()
+                old_json_content = json.loads(dir_with_files_content)
+        except (Exception, json.JSONDecodeError) as e:
+            print(f"  {Colors.FAIL}错误: 读取或解析目录结构失败: {e}{Colors.ENDC}")
+            return
+
+        # 构建用户提示词
+        user_prompt = self._build_user_prompt_for_depend_analyzer()
+        if not user_prompt:
+            return
         
         max_attempts = 5
         for attempt in range(max_attempts):
@@ -112,15 +129,8 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
                 print(f"{Colors.WARNING}警告: AI响应失败，将进行下一次尝试{Colors.ENDC}")
                 continue
                 
-            cleaned_content = response_content.strip()
-
-            # 移除可能的代码块标记
-            lines = cleaned_content.split('\n')
-            if lines and lines[0].strip().startswith('```'):
-                lines = lines[1:]
-            if lines and lines[-1].strip().startswith('```'):
-                lines = lines[:-1]
-            cleaned_content = '\n'.join(lines).strip()
+            # 清理代码块标记
+            cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
             
             # 验证是否为有效的JSON
             try:

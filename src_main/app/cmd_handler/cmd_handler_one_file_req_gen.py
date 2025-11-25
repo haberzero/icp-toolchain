@@ -132,21 +132,10 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
             print(f"  {Colors.OKBLUE}正在为文件生成需求描述: {file_path}{Colors.ENDC}")
             
             # 生成新的文件需求描述
-            new_file_description = self._create_one_file_req_1(
-                file_path, 
-                file_description, 
-                user_requirements,  # 使用用户原始需求
-                implementation_plan_content,  # 使用文件级实现规划
-                list(accumulated_descriptions_dict.values())
-            )
+            new_file_description = self._create_one_file_req_1(file_path)
 
-            # 移除可能的代码块标记
-            lines = new_file_description.split('\n')
-            if lines and lines[0].strip().startswith('```'):
-                lines = lines[1:]
-            if lines and lines[-1].strip().startswith('```'):
-                lines = lines[:-1]
-            new_file_description = '\n'.join(lines).strip()
+            # 清理代码块标记
+            new_file_description = ICPChatHandler.clean_code_block_markers(new_file_description)
             
             # 保存新生成的描述到src_staging目录下的文件
             req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
@@ -300,68 +289,12 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         
         return '\n'.join(class_lines)
 
-    def _create_one_file_req_1(
-        self, 
-        file_path: str, 
-        file_description: str, 
-        user_requirements: str,
-        implementation_plan: str,
-        accumulated_descriptions: List[str]
-    ) -> str:
+    def _create_one_file_req_1(self, file_path: str) -> str:
         """创建新的文件需求描述"""
         # 构建用户提示词
-        app_data_manager = get_app_data_manager()
-        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'one_file_req_gen_user.md')
-        try:
-            with open(user_prompt_file, 'r', encoding='utf-8') as f:
-                user_prompt_template = f.read()
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+        user_prompt = self._build_user_prompt_for_one_file_req_gen(file_path)
+        if not user_prompt:
             return ""
-            
-        # 填充占位符
-        file_desc_json = json.dumps(
-            {"path": file_path, "description": file_description}, 
-            indent=2, 
-            ensure_ascii=False)
-        
-        user_prompt = user_prompt_template
-        user_prompt = user_prompt.replace('USER_REQUIREMENTS_PLACEHOLDER', user_requirements)
-        user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan)
-        user_prompt = user_prompt.replace('FILE_DESCRIPTION_PLACEHOLDER', file_desc_json)
-        user_prompt = user_prompt.replace('EXISTING_FILE_DESCRIPTIONS_PLACEHOLDER', 
-                                        '\n\n'.join(accumulated_descriptions) if accumulated_descriptions else '暂无已生成的文件需求描述')
-        # 构建第三方库允许清单，来自 refined_requirements.json 的 ExternalLibraryDependencies
-        allowed_libs_text = "（不允许使用任何第三方库）"
-        allowed_lib_keys = set()
-        try:
-            refined_requirements_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
-            with open(refined_requirements_file, 'r', encoding='utf-8') as rf:
-                refined_data = json.load(rf)
-                libs = refined_data.get('ExternalLibraryDependencies', {})
-                if isinstance(libs, dict) and libs:
-                    allowed_lines = [f"- {name}: {desc}" for name, desc in libs.items()]
-                    allowed_libs_text = "\n".join(allowed_lines)
-                    allowed_lib_keys = set(libs.keys())
-                # 基于 module_breakdown 的 dependencies 生成模块依赖建议（仅限允许库中出现的）
-                module_suggestions_text = "（无可用模块依赖建议）"
-                module_suggestions_lines = []
-                module_breakdown = refined_data.get('module_breakdown', {})
-                if isinstance(module_breakdown, dict):
-                    for mod_name, mod_obj in module_breakdown.items():
-                        if isinstance(mod_obj, dict):
-                            deps = mod_obj.get('dependencies', [])
-                            if isinstance(deps, list) and deps:
-                                filtered = [dep for dep in deps if dep in allowed_lib_keys]
-                                if filtered:
-                                    module_suggestions_lines.append(f"- {mod_name}: {', '.join(filtered)}")
-                if module_suggestions_lines:
-                    module_suggestions_text = "\n".join(module_suggestions_lines)
-        except Exception:
-            module_suggestions_text = "（无可用模块依赖建议）"
-            pass
-        user_prompt = user_prompt.replace('EXTERNAL_LIB_ALLOWLIST_PLACEHOLDER', allowed_libs_text)
-        user_prompt = user_prompt.replace('MODULE_DEPENDENCY_SUGGESTIONS_PLACEHOLDER', module_suggestions_text)
 
         # 调用AI生成需求描述
         response_content, success = asyncio.run(self.chat_handler.get_role_response(
@@ -414,11 +347,7 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
                 continue
 
             # 生成依赖关系
-            dependencies = self._analyze_file_dependencies_2(
-                file_path,
-                module_content,
-                available_file_desc_dict  # 使用动态更新的字典
-            )
+            dependencies = self._analyze_file_dependencies_2(file_path)
             
             # 从返回的依赖数据中提取依赖列表
             dependency_list = dependencies.get("dependencies", [])
@@ -468,37 +397,16 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
 
     def _analyze_file_dependencies_2(
         self,
-        file_path: str,
-        module_content: str,
-        available_file_desc_dict: Dict[str, str]
+        file_path: str
     ) -> Dict[str, Any]:
         """分析文件依赖关系"""
         # 构建用户提示词
-        app_data_manager = get_app_data_manager()
-        # 使用新的依赖分析提示词模板
-        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'one_file_req_depend_analyzer_user.md')
-        try:
-            with open(user_prompt_file, 'r', encoding='utf-8') as f:
-                user_prompt_template = f.read()
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+        user_prompt = self._build_user_prompt_for_file_depend_analyzer(file_path)
+        if not user_prompt:
             return {
                 "file_path": file_path,
                 "dependencies": []
             }
-
-        # 构造可用模块信息（仅包含当前可依赖的模块）
-        available_modules_text = '\n\n'.join([
-            f"模块路径: {path}\n模块描述: {desc}" 
-            for path, desc in available_file_desc_dict.items() 
-            if path != file_path
-        ])
-
-        # 填充占位符
-        user_prompt = user_prompt_template
-        user_prompt = user_prompt.replace('CURRENT_FILE_REQUIREMENT_PLACEHOLDER', module_content)
-        user_prompt = user_prompt.replace('CURRENT_FILE_PATH_PLACEHOLDER', file_path)
-        user_prompt = user_prompt.replace('AVAILABLE_MODULES_PLACEHOLDER', available_modules_text if available_modules_text else '暂无其他模块')
 
         # 调用AI分析依赖关系
         response_content, success = asyncio.run(self.chat_handler.get_role_response(
@@ -631,6 +539,198 @@ class CmdHandlerOneFileReqGen(BaseCmdHandler):
         
         self.chat_handler.load_role_from_file(self.role_name_1, sys_prompt_path_1)
         self.chat_handler.load_role_from_file(self.role_name_2, sys_prompt_path_2)
+
+    def _build_user_prompt_for_one_file_req_gen(self, file_path: str) -> str:
+        """
+        构建单文件需求生成的用户提示词（role_name_1）
+        
+        从项目数据目录中直接读取所需信息，无需外部参数传递。
+        
+        Args:
+            file_path: 当前文件路径
+        
+        Returns:
+            str: 完整的用户提示词，失败时返回空字符串
+        """
+        # 读取用户原始需求
+        user_data_manager = get_user_data_manager()
+        user_requirements = user_data_manager.get_user_prompt()
+        if not user_requirements:
+            print(f"  {Colors.FAIL}错误: 读取用户需求失败{Colors.ENDC}")
+            return ""
+        
+        # 读取文件级实现规划
+        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        try:
+            with open(implementation_plan_file, 'r', encoding='utf-8') as f:
+                implementation_plan = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取文件级实现规划失败: {e}{Colors.ENDC}")
+            return ""
+        
+        # 读取最终目录结构获取文件描述
+        final_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_refined.json')
+        try:
+            with open(final_dir_file, 'r', encoding='utf-8') as f:
+                final_dir_content = json.load(f)
+            file_description = DirJsonFuncs.get_file_description(final_dir_content['proj_root'], file_path)
+            if not file_description:
+                print(f"  {Colors.FAIL}错误: 无法获取文件描述: {file_path}{Colors.ENDC}")
+                return ""
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取目录结构失败: {e}{Colors.ENDC}")
+            return ""
+        # 读取已生成的累积描述（从 staging 目录读取已存在的文件）
+        staging_dir_path = os.path.join(self.proj_work_dir, 'src_staging')
+        accumulated_descriptions = []
+        try:
+            # 读取所有已生成的文件描述
+            if os.path.exists(staging_dir_path):
+                for existing_file in os.listdir(staging_dir_path):
+                    if existing_file.endswith('_one_file_req.txt'):
+                        existing_path = os.path.join(staging_dir_path, existing_file)
+                        with open(existing_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                            # 提取关键信息
+                            extracted_desc = self._extract_description_content(content)
+                            extracted_func = self._extract_func_content(content)
+                            extracted_class = self._extract_class_content(content)
+                            
+                            formatted = f"文件 {existing_file[:-17]} 的接口描述:\n"
+                            if extracted_class:
+                                formatted += f"类信息:\n{extracted_class}\n\n"
+                            if extracted_func:
+                                formatted += f"函数信息:\n{extracted_func}\n\n"
+                            if extracted_desc:
+                                formatted += f"描述信息:\n{extracted_desc}"
+                            accumulated_descriptions.append(formatted)
+        except Exception as e:
+            print(f"  {Colors.WARNING}警告: 读取已生成文件失败: {e}{Colors.ENDC}")
+        # 读取用户提示词模板
+        app_data_manager = get_app_data_manager()
+        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'one_file_req_gen_user.md')
+        try:
+            with open(user_prompt_file, 'r', encoding='utf-8') as f:
+                user_prompt_template = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+            return ""
+            
+        # 构建文件描述JSON
+        file_desc_json = json.dumps(
+            {"path": file_path, "description": file_description}, 
+            indent=2, 
+            ensure_ascii=False)
+        
+        # 填充占位符
+        user_prompt = user_prompt_template
+        user_prompt = user_prompt.replace('USER_REQUIREMENTS_PLACEHOLDER', user_requirements)
+        user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan)
+        user_prompt = user_prompt.replace('FILE_DESCRIPTION_PLACEHOLDER', file_desc_json)
+        user_prompt = user_prompt.replace('EXISTING_FILE_DESCRIPTIONS_PLACEHOLDER', 
+                                        '\n\n'.join(accumulated_descriptions) if accumulated_descriptions else '暂无已生成的文件需求描述')
+        
+        # 构建第三方库允许清单，来自refined_requirements.json的ExternalLibraryDependencies
+        allowed_libs_text = "（不允许使用任何第三方库）"
+        allowed_lib_keys = set()
+        try:
+            refined_requirements_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
+            with open(refined_requirements_file, 'r', encoding='utf-8') as rf:
+                refined_data = json.load(rf)
+                libs = refined_data.get('ExternalLibraryDependencies', {})
+                if isinstance(libs, dict) and libs:
+                    allowed_lines = [f"- {name}: {desc}" for name, desc in libs.items()]
+                    allowed_libs_text = "\n".join(allowed_lines)
+                    allowed_lib_keys = set(libs.keys())
+                # 基于module_breakdown的dependencies生成模块依赖建议（仅限允许库中出现的）
+                module_suggestions_text = "（无可用模块依赖建议）"
+                module_suggestions_lines = []
+                module_breakdown = refined_data.get('module_breakdown', {})
+                if isinstance(module_breakdown, dict):
+                    for mod_name, mod_obj in module_breakdown.items():
+                        if isinstance(mod_obj, dict):
+                            deps = mod_obj.get('dependencies', [])
+                            if isinstance(deps, list) and deps:
+                                filtered = [dep for dep in deps if dep in allowed_lib_keys]
+                                if filtered:
+                                    module_suggestions_lines.append(f"- {mod_name}: {', '.join(filtered)}")
+                if module_suggestions_lines:
+                    module_suggestions_text = "\n".join(module_suggestions_lines)
+        except Exception:
+            module_suggestions_text = "（无可用模块依赖建议）"
+            pass
+        
+        user_prompt = user_prompt.replace('EXTERNAL_LIB_ALLOWLIST_PLACEHOLDER', allowed_libs_text)
+        user_prompt = user_prompt.replace('MODULE_DEPENDENCY_SUGGESTIONS_PLACEHOLDER', module_suggestions_text)
+        
+        return user_prompt
+
+    def _build_user_prompt_for_file_depend_analyzer(self, file_path: str) -> str:
+        """
+        构建文件依赖关系分析的用户提示词（role_name_2）
+        
+        从项目数据目录中直接读取所需信息，无需外部参数传递。
+        
+        Args:
+            file_path: 当前文件路径
+        
+        Returns:
+            str: 完整的用户提示词，失败时返回空字符串
+        """
+        # 读取当前文件的需求描述
+        staging_dir_path = os.path.join(self.proj_work_dir, 'src_staging')
+        req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
+        try:
+            with open(req_file_path, 'r', encoding='utf-8') as f:
+                file_requirement_content = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取文件需求描述失败: {e}{Colors.ENDC}")
+            return ""
+        
+        # 提取 module 内容
+        module_content = self._extract_import_content(file_requirement_content)
+        if not module_content:
+            print(f"  {Colors.WARNING}警告: 无法提取module内容: {file_path}{Colors.ENDC}")
+        
+        # 构建可用文件描述字典（从 staging 目录读取）
+        available_file_desc_dict = {}
+        try:
+            for existing_file in os.listdir(staging_dir_path):
+                if existing_file.endswith('_one_file_req.txt'):
+                    existing_file_path = existing_file[:-17]  # 移除 '_one_file_req.txt'
+                    if existing_file_path != file_path:  # 排除当前文件
+                        req_path = os.path.join(staging_dir_path, existing_file)
+                        with open(req_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        desc = self._extract_description_content(content)
+                        if desc:
+                            available_file_desc_dict[existing_file_path] = desc
+        except Exception as e:
+            print(f"  {Colors.WARNING}警告: 构建可用文件描述字典失败: {e}{Colors.ENDC}")
+        # 读取用户提示词模板
+        app_data_manager = get_app_data_manager()
+        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'one_file_req_depend_analyzer_user.md')
+        try:
+            with open(user_prompt_file, 'r', encoding='utf-8') as f:
+                user_prompt_template = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+            return ""
+
+        # 构造可用模块信息（仅包含当前可依赖的模块）
+        available_modules_text = '\n\n'.join([
+            f"模块路径: {path}\n模块描述: {desc}" 
+            for path, desc in available_file_desc_dict.items() 
+            if path != file_path
+        ])
+
+        # 填充占位符
+        user_prompt = user_prompt_template
+        user_prompt = user_prompt.replace('CURRENT_FILE_REQUIREMENT_PLACEHOLDER', module_content)
+        user_prompt = user_prompt.replace('CURRENT_FILE_PATH_PLACEHOLDER', file_path)
+        user_prompt = user_prompt.replace('AVAILABLE_MODULES_PLACEHOLDER', available_modules_text if available_modules_text else '暂无其他模块')
+
+        return user_prompt
 
     def _build_file_desc_dict(self, ibc_root_path: str, file_creation_order_list: List[str]) -> Dict[str, str]:
         """构建文件描述字典"""

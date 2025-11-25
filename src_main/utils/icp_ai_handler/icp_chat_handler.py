@@ -82,6 +82,28 @@ class ICPChatHandler:
         """
         return cls._is_initialized and cls._shared_chat_interface is not None
     
+    @staticmethod
+    def clean_code_block_markers(content: str) -> str:
+        """
+        清理响应内容中可能存在的代码块标记（```）
+        
+        Args:
+            content: 原始响应内容
+            
+        Returns:
+            str: 清理后的内容
+        """
+        cleaned_content = content.strip()
+        
+        # 移除可能的代码块标记
+        lines = cleaned_content.split('\n')
+        if lines and lines[0].strip().startswith('```'):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith('```'):
+            lines = lines[:-1]
+        
+        return '\n'.join(lines).strip()
+    
     def add_role_to_map(self, role_name: str, sys_prompt: str) -> None:
         """
         添加角色到映射表

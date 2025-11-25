@@ -153,13 +153,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             
             # 5. 调用AI生成目标代码
             print(f"    正在生成目标语言代码...")
-            target_code = self._generate_target_code(
-                file_path,
-                normalized_ibc_code,
-                user_requirements,
-                implementation_plan_content,
-                target_language
-            )
+            target_code = self._generate_target_code(file_path)
             
             if not target_code:
                 print(f"    {Colors.FAIL}错误: 目标代码生成失败{Colors.ENDC}")
@@ -178,28 +172,48 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         
         print(f"\n{Colors.OKGREEN}目标语言代码生成完毕!{Colors.ENDC}")
 
-    def _generate_target_code(
-        self,
-        file_path: str,
-        ibc_code: str,
-        user_requirements: str,
-        implementation_plan: str,
-        target_language: str
-    ) -> str:
+    def _build_user_prompt_for_target_code_gen(self, file_path: str) -> str:
         """
-        生成目标语言代码
+        构建目标代码生成的用户提示词
+        
+        从项目数据目录中直接读取所需信息，无需外部参数传递。
         
         Args:
-            file_path: 文件路径
-            ibc_code: 规范化后的IBC代码
-            user_requirements: 用户原始需求
-            implementation_plan: 文件级实现规划
-            target_language: 目标编程语言
-            
+            file_path: 当前处理的文件路径
+        
         Returns:
-            str: 生成的目标代码
+            str: 完整的用户提示词，失败时返回空字符串
         """
-        # 构建用户提示词
+        # 读取用户原始需求
+        user_data_manager = get_user_data_manager()
+        user_requirements = user_data_manager.get_user_prompt()
+        if not user_requirements:
+            print(f"  {Colors.FAIL}错误: 读取用户需求失败{Colors.ENDC}")
+            return ""
+        
+        # 读取文件级实现规划
+        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        implementation_plan = ""
+        try:
+            with open(implementation_plan_file, 'r', encoding='utf-8') as f:
+                implementation_plan = f.read()
+        except Exception as e:
+            print(f"  {Colors.WARNING}警告: 读取文件级实现规划失败: {e}{Colors.ENDC}")
+        
+        # 读取目标编程语言
+        target_language = self._get_target_language()
+        
+        # 读取规范化后的IBC代码
+        ibc_dir_name = self._get_ibc_directory_name()
+        ibc_root_path = os.path.join(self.proj_work_dir, ibc_dir_name)
+        normalized_ibc_file = os.path.join(ibc_root_path, f"{file_path}_normalized.ibc")
+        try:
+            with open(normalized_ibc_file, 'r', encoding='utf-8') as f:
+                ibc_code = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取规范化IBC代码失败: {e}{Colors.ENDC}")
+            return ""
+        # 读取用户提示词模板
         app_data_manager = get_app_data_manager()
         user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'target_code_gen_user.md')
         
@@ -210,12 +224,30 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
             return ""
         
+        # 填充模板
         user_prompt = user_prompt_template
         user_prompt = user_prompt.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
         user_prompt = user_prompt.replace('CURRENT_FILE_PATH_PLACEHOLDER', file_path)
         user_prompt = user_prompt.replace('USER_REQUIREMENTS_PLACEHOLDER', user_requirements)
         user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan)
         user_prompt = user_prompt.replace('IBC_CODE_PLACEHOLDER', ibc_code)
+        
+        return user_prompt
+
+    def _generate_target_code(self, file_path: str) -> str:
+        """
+        生成目标语言代码
+        
+        Args:
+            file_path: 文件路径
+            
+        Returns:
+            str: 生成的目标代码
+        """
+        # 构建用户提示词
+        user_prompt = self._build_user_prompt_for_target_code_gen(file_path)
+        if not user_prompt:
+            return ""
         
         # 调用AI生成目标代码
         response_content, success = asyncio.run(self.chat_handler.get_role_response(
@@ -231,13 +263,8 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             print(f"    {Colors.WARNING}警告: AI响应为空{Colors.ENDC}")
             return ""
         
-        # 移除可能的代码块标记
-        lines = response_content.split('\n')
-        if lines and lines[0].strip().startswith('```'):
-            lines = lines[1:]
-        if lines and lines[-1].strip().startswith('```'):
-            lines = lines[:-1]
-        cleaned_content = '\n'.join(lines).strip()
+        # 清理代码块标记
+        cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
         
         return cleaned_content
 

@@ -16,8 +16,6 @@ from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 
 
-DEBUG_FLAG = False
-
 
 class CmdHandlerReqAnalysis(BaseCmdHandler):
     """需求分析指令"""
@@ -60,19 +58,8 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
             print(f"{Colors.WARNING}警告: AI响应为空{Colors.ENDC}")
             return
             
-        cleaned_content = response_content.strip()
-
-        # 移除可能的代码块标记
-        lines = cleaned_content.split('\n')
-        if lines and lines[0].strip().startswith('```'):
-            lines = lines[1:]
-        if lines and lines[-1].strip().startswith('```'):
-            lines = lines[:-1]
-        cleaned_content = '\n'.join(lines).strip()
-
-        if DEBUG_FLAG:
-            print(f"{Colors.HEADER}{Colors.BOLD}需求分析结果:{Colors.ENDC}")
-            print(cleaned_content)
+        # 清理代码块标记
+        cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
         
         # 保存结果到refined_requirements.json
         os.makedirs(self.proj_data_dir, exist_ok=True)

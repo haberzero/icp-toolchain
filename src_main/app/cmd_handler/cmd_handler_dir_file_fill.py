@@ -17,8 +17,6 @@ from utils.icp_ai_handler import ICPChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
 
 
-DEBUG_FLAG = False
-
 
 class CmdHandlerDirFileFill(BaseCmdHandler):
     """目录文件填充指令"""
@@ -45,13 +43,15 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         # 初始化AI处理器
         self._init_ai_handlers()
 
-    def execute(self):
-        """执行目录文件填充"""
-        if not self.is_cmd_valid():
-            return
-            
-        print(f"{Colors.OKBLUE}开始进行目录文件填充...{Colors.ENDC}")
+    def _build_user_prompt_for_dir_file_filler(self) -> str:
+        """
+        构建目录文件填充的用户提示词（role_name_1）
         
+        从项目数据目录中读取所需文件，无需外部参数输入。
+        
+        Returns:
+            str: 完整的用户提示词，失败时返回空字符串
+        """
         # 读取需求分析结果
         requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
         try:
@@ -59,11 +59,11 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
                 requirement_content = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取需求分析结果失败: {e}{Colors.ENDC}")
-            return
+            return ""
             
         if not requirement_content:
             print(f"  {Colors.FAIL}错误: 需求分析结果为空{Colors.ENDC}")
-            return
+            return ""
             
         # 读取目录结构
         dir_structure_file = os.path.join(self.proj_data_dir, 'icp_dir_content.json')
@@ -72,20 +72,13 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
                 dir_structure_content = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取目录结构失败: {e}{Colors.ENDC}")
-            return
+            return ""
             
         if not dir_structure_content:
             print(f"  {Colors.FAIL}错误: 目录结构内容为空{Colors.ENDC}")
-            return
-            
-        # 读取原始目录结构用于后续比对
-        try:
-            old_json_content = json.loads(dir_structure_content)
-        except json.JSONDecodeError as e:
-            print(f"  {Colors.FAIL}错误: 原始目录结构不是有效的JSON格式: {e}{Colors.ENDC}")
-            return
+            return ""
 
-        # 构建用户提示词
+        # 读取用户提示词模板
         app_data_manager = get_app_data_manager()
         user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'dir_file_fill_user.md')
         try:
@@ -93,12 +86,97 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
                 user_prompt_template = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
-            return
+            return ""
             
         # 填充占位符
         user_prompt = user_prompt_template
         user_prompt = user_prompt.replace('PROGRAMMING_REQUIREMENT_PLACEHOLDER', requirement_content)
         user_prompt = user_prompt.replace('JSON_STRUCTURE_PLACEHOLDER', dir_structure_content)
+        
+        return user_prompt
+
+    def _build_user_prompt_for_plan_generator(self) -> str:
+        """
+        构建文件级实现规划生成的用户提示词（role_name_2）
+        
+        从项目数据目录中直接读取所需信息，无需外部参数传递。
+        
+        Returns:
+            str: 完整的用户提示词，失败时返回空字符串
+        """
+        # 读取用户原始需求
+        user_data_manager = get_user_data_manager()
+        user_requirements = user_data_manager.get_user_prompt()
+        if not user_requirements:
+            print(f"  {Colors.FAIL}错误: 未找到用户原始需求{Colors.ENDC}")
+            return ""
+        
+        # 读取精炼需求内容
+        requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
+        try:
+            with open(requirement_analysis_file, 'r', encoding='utf-8') as f:
+                requirement_content = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取需求分析结果失败: {e}{Colors.ENDC}")
+            return ""
+        
+        # 读取目录文件内容
+        dir_file_path = os.path.join(self.proj_data_dir, 'icp_dir_content_filled.json')
+        try:
+            with open(dir_file_path, 'r', encoding='utf-8') as f:
+                dir_file_content = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取目录文件内容失败: {e}{Colors.ENDC}")
+            return ""
+
+        # 读取用户提示词模板
+        app_data_manager = get_app_data_manager()
+        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'dir_file_fill_plan_gen_user.md')
+        try:
+            with open(user_prompt_file, 'r', encoding='utf-8') as f:
+                user_prompt_template = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+            return ""
+        
+        # 填充占位符
+        user_prompt = user_prompt_template
+        user_prompt = user_prompt.replace('USER_ORIGINAL_REQUIREMENTS_PLACEHOLDER', user_requirements)
+        user_prompt = user_prompt.replace('REFINED_REQUIREMENTS_PLACEHOLDER', requirement_content)
+        user_prompt = user_prompt.replace('DIR_FILE_CONTENT_PLACEHOLDER', dir_file_content)
+        
+        return user_prompt
+
+    def execute(self):
+        """执行目录文件填充"""
+        if not self.is_cmd_valid():
+            return
+            
+        print(f"{Colors.OKBLUE}开始进行目录文件填充...{Colors.ENDC}")
+        
+        # 读取需求分析结果，用于后续保存到plan_generator
+        requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
+        try:
+            with open(requirement_analysis_file, 'r', encoding='utf-8') as f:
+                requirement_content = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取需求分析结果失败: {e}{Colors.ENDC}")
+            return
+            
+        # 读取目录结构用于后续比对
+        dir_structure_file = os.path.join(self.proj_data_dir, 'icp_dir_content.json')
+        try:
+            with open(dir_structure_file, 'r', encoding='utf-8') as f:
+                dir_structure_content = f.read()
+                old_json_content = json.loads(dir_structure_content)
+        except (Exception, json.JSONDecodeError) as e:
+            print(f"  {Colors.FAIL}错误: 读取或解析目录结构失败: {e}{Colors.ENDC}")
+            return
+
+        # 构建用户提示词
+        user_prompt = self._build_user_prompt_for_dir_file_filler()
+        if not user_prompt:
+            return
         
         max_attempts = 3
         for attempt in range(max_attempts):
@@ -113,15 +191,8 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
                 print(f"{Colors.WARNING}警告: AI响应失败，将进行下一次尝试{Colors.ENDC}")
                 continue
                 
-            cleaned_content = response_content.strip()
-
-            # 移除可能的代码块标记
-            lines = cleaned_content.split('\n')
-            if lines and lines[0].strip().startswith('```'):
-                lines = lines[1:]
-            if lines and lines[-1].strip().startswith('```'):
-                lines = lines[:-1]
-            cleaned_content = '\n'.join(lines).strip()
+            # 清理代码块标记
+            cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
             
             # 验证是否为有效的JSON
             try:
@@ -157,12 +228,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
                 
             # 使用第二个AI handler生成文件级别的实现规划描述
             print(f"{Colors.OKBLUE}开始生成文件级实现规划...{Colors.ENDC}")
-            plan_output_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
-            self._generate_implementation_plan_2(
-                requirement_content, 
-                cleaned_content, 
-                plan_output_file
-            )
+            self._generate_implementation_plan_2()
             return  # 成功则退出循环
                 
         print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的目录结构{Colors.ENDC}")
@@ -310,36 +376,12 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             proj_root[main_file_name] = "主入口程序，执行初始化并启动程序"
             print(f"{Colors.OKGREEN}未检测到主入口文件，已自动添加: {main_file_name}{Colors.ENDC}")
     
-    def _generate_implementation_plan_2(
-        self,
-        requirement_content: str,
-        dir_file_content: str,
-        output_file_path: str
-    ) -> None:
+    def _generate_implementation_plan_2(self) -> None:
         """生成文件级实现规划描述"""
-        # 读取用户原始需求
-        user_data_manager = get_user_data_manager()
-        user_requirements = user_data_manager.get_user_prompt()
-        
-        if not user_requirements:
-            print(f"  {Colors.FAIL}错误: 未找到用户原始需求{Colors.ENDC}")
-            return
-        
         # 构建用户提示词
-        app_data_manager = get_app_data_manager()
-        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'dir_file_fill_plan_gen_user.md')
-        try:
-            with open(user_prompt_file, 'r', encoding='utf-8') as f:
-                user_prompt_template = f.read()
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+        user_prompt = self._build_user_prompt_for_plan_generator()
+        if not user_prompt:
             return
-        
-        # 填充占位符
-        user_prompt = user_prompt_template
-        user_prompt = user_prompt.replace('USER_ORIGINAL_REQUIREMENTS_PLACEHOLDER', user_requirements)
-        user_prompt = user_prompt.replace('REFINED_REQUIREMENTS_PLACEHOLDER', requirement_content)
-        user_prompt = user_prompt.replace('DIR_FILE_CONTENT_PLACEHOLDER', dir_file_content)
         
         # 调用AI生成实现规划
         response_content, success = asyncio.run(self.chat_handler.get_role_response(
@@ -351,17 +393,11 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             print(f"{Colors.WARNING}警告: AI响应失败{Colors.ENDC}")
             return
         
-        cleaned_content = response_content.strip()
-        
-        # 移除可能的代码块标记
-        lines = cleaned_content.split('\n')
-        if lines and lines[0].strip().startswith('```'):
-            lines = lines[1:]
-        if lines and lines[-1].strip().startswith('```'):
-            lines = lines[:-1]
-        cleaned_content = '\n'.join(lines).strip()
+        # 清理代码块标记
+        cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
         
         # 保存实现规划
+        output_file_path = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
         try:
             with open(output_file_path, 'w', encoding='utf-8') as f:
                 f.write(cleaned_content)

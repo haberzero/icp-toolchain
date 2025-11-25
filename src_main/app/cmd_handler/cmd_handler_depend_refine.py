@@ -16,8 +16,6 @@ from utils.icp_ai_handler import ICPChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
 
 
-DEBUG_FLAG = False
-
 
 class CmdHandlerDependRefine(BaseCmdHandler):
     """解决循环依赖指令"""
@@ -43,6 +41,55 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         # 初始化AI处理器
         self._init_ai_handlers()
 
+    def _build_user_prompt_for_depend_refiner(self) -> str:
+        """
+        构建依赖修复的用户提示词
+        
+        从项目数据目录中读取所需文件，无需外部参数输入。
+        注意：该方法为第一次调用生成初始prompt，后续重试需要在execute方法中动态更新。
+        
+        Returns:
+            str: 完整的用户提示词，失败时返回空字符串
+        """
+        # 读取依赖分析结果
+        depend_analysis_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_depend.json')
+        try:
+            with open(depend_analysis_file, 'r', encoding='utf-8') as f:
+                depend_content = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取依赖分析结果失败: {e}{Colors.ENDC}")
+            return ""
+            
+        if not depend_content:
+            print(f"  {Colors.FAIL}错误: 依赖分析结果为空{Colors.ENDC}")
+            return ""
+
+        # 读取循环依赖信息
+        circular_deps_file = os.path.join(self.proj_data_dir, 'circular_dependencies.txt')
+        try:
+            with open(circular_deps_file, 'r', encoding='utf-8') as f:
+                circular_deps_content = f.read().strip()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取循环依赖信息失败: {e}{Colors.ENDC}")
+            return ""
+
+        # 读取用户提示词模板
+        app_data_manager = get_app_data_manager()
+        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'depend_refine_user.md')
+        try:
+            with open(user_prompt_file, 'r', encoding='utf-8') as f:
+                user_prompt_template = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+            return ""
+            
+        # 填充占位符
+        user_prompt = user_prompt_template
+        user_prompt = user_prompt.replace('CIRCULAR_DEPENDENCIES_PLACEHOLDER', circular_deps_content)
+        user_prompt = user_prompt.replace('DEPENDENCY_STRUCTURE_PLACEHOLDER', depend_content)
+        
+        return user_prompt
+
     def execute(self):
         """执行循环依赖解决"""
         if not self.is_cmd_valid():
@@ -50,7 +97,7 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         
         print(f"{Colors.OKBLUE}开始解决循环依赖问题...{Colors.ENDC}")
         
-        # 读取依赖分析结果
+        # 读取依赖分析结果用于后续更新
         depend_analysis_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_depend.json')
         try:
             with open(depend_analysis_file, 'r', encoding='utf-8') as f:
@@ -58,10 +105,6 @@ class CmdHandlerDependRefine(BaseCmdHandler):
                 new_json_content = json.loads(depend_content)
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取依赖分析结果失败: {e}{Colors.ENDC}")
-            return
-            
-        if not depend_content:
-            print(f"  {Colors.FAIL}错误: 依赖分析结果为空{Colors.ENDC}")
             return
 
         # 读取循环依赖信息
@@ -76,7 +119,12 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         if not circular_deps_content:
             print(f"  {Colors.OKBLUE}信息: 循环依赖信息为空，没有检测到循环依赖，无需执行{Colors.ENDC}")
 
-        # 构建用户提示词
+        # 构建初始用户提示词
+        user_prompt = self._build_user_prompt_for_depend_refiner()
+        if not user_prompt:
+            return
+        
+        # 读取模板以便后续重试使用
         app_data_manager = get_app_data_manager()
         user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'depend_refine_user.md')
         try:
@@ -85,11 +133,6 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
             return
-            
-        # 填充占位符
-        user_prompt = user_prompt_template
-        user_prompt = user_prompt.replace('CIRCULAR_DEPENDENCIES_PLACEHOLDER', circular_deps_content)
-        user_prompt = user_prompt.replace('DEPENDENCY_STRUCTURE_PLACEHOLDER', depend_content)
         
         attempt = 0
         if not circular_deps_content:
@@ -109,15 +152,8 @@ class CmdHandlerDependRefine(BaseCmdHandler):
                 print(f"{Colors.WARNING}警告: AI响应失败，将进行下一次尝试{Colors.ENDC}")
                 continue
                 
-            cleaned_content = response_content.strip()
-
-            # 移除可能的代码块标记
-            lines = cleaned_content.split('\n')
-            if lines and lines[0].strip().startswith('```'):
-                lines = lines[1:]
-            if lines and lines[-1].strip().startswith('```'):
-                lines = lines[:-1]
-            cleaned_content = '\n'.join(lines).strip()
+            # 清理代码块标记
+            cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
             
             # 验证是否为有效的JSON
             try:

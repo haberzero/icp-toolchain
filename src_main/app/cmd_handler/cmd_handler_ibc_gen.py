@@ -164,9 +164,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 dependent_relation=dependent_relation,
                 update_status=update_status,
                 staging_dir_path=staging_dir_path,
-                ibc_root_path=ibc_root_path,
-                user_requirements=user_requirements,
-                project_structure_json=project_structure_json
+                ibc_root_path=ibc_root_path
             )
     
     def _process_single_file(
@@ -175,9 +173,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         dependent_relation: Dict[str, List[str]],
         update_status: Dict[str, bool],
         staging_dir_path: str,
-        ibc_root_path: str,
-        user_requirements: str,
-        project_structure_json: str
+        ibc_root_path: str
     ):
         """处理单个文件"""
         print(f"  {Colors.OKBLUE}正在处理文件: {file_path}{Colors.ENDC}")
@@ -187,24 +183,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             print(f"    {Colors.WARNING}文件及其依赖均未变化，跳过生成: {file_path}{Colors.ENDC}")
             return
         
-        # 读取文件需求
-        file_req_content = self._read_file_requirements(file_path, staging_dir_path)
-        if not file_req_content:
-            return
-        
-        # 构建可用符号
-        available_symbols_text = self._build_available_symbols_text(
-            dependent_relation.get(file_path, []),
-            ibc_root_path
-        )
-        
         # 生成并保存IBC代码（带重试）
         success = self._generate_and_save_ibc_with_retry(
             file_path=file_path,
-            file_req_content=file_req_content,
-            user_requirements=user_requirements,
-            project_structure_json=project_structure_json,
-            available_symbols_text=available_symbols_text,
             staging_dir_path=staging_dir_path,
             ibc_root_path=ibc_root_path
         )
@@ -242,10 +223,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     def _generate_and_save_ibc_with_retry(
         self,
         file_path: str,
-        file_req_content: str,
-        user_requirements: str,
-        project_structure_json: str,
-        available_symbols_text: str,
         staging_dir_path: str,
         ibc_root_path: str
     ) -> bool:
@@ -258,10 +235,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             try:
                 # 生成IBC代码
-                ibc_code = self._generate_ibc_code(
-                    file_path, file_req_content, user_requirements,
-                    project_structure_json, available_symbols_text
-                )
+                ibc_code = self._generate_ibc_code(file_path)
                 if not ibc_code:
                     print(f"    {Colors.WARNING}警告: AI响应为空{Colors.ENDC}")
                     continue
@@ -416,66 +390,20 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         return '\n'.join(section_lines)
 
-    def _generate_ibc_code(
-        self, 
-        file_path: str, 
-        file_req_content: str,
-        user_requirements: str,
-        project_structure_json: str,
-        available_symbols_text: str
-    ) -> str:
+    def _generate_ibc_code(self, file_path: str) -> str:
         """
         生成IBC代码
         
         Args:
             file_path: 文件路径
-            file_req_content: 文件需求内容
-            user_requirements: 用户原始需求
-            project_structure_json: 项目结构JSON
-            available_symbols_text: 可用符号文本
             
         Returns:
             str: 生成的IBC代码
         """
-        # 读取文件级实现规划
-        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
-        implementation_plan_content = ""
-        try:
-            with open(implementation_plan_file, 'r', encoding='utf-8') as f:
-                implementation_plan_content = f.read()
-        except Exception as e:
-            print(f"  {Colors.WARNING}警告: 读取文件级实现规划失败: {e}，将仅使用文件需求描述{Colors.ENDC}")
-        
-        # 提取各个部分的内容
-        class_content = self._extract_section_content(file_req_content, 'class')
-        func_content = self._extract_section_content(file_req_content, 'func')
-        var_content = self._extract_section_content(file_req_content, 'var')
-        others_content = self._extract_section_content(file_req_content, 'others')
-        behavior_content = self._extract_section_content(file_req_content, 'behavior')
-        import_content = self._extract_section_content(file_req_content, 'import')
-        
         # 构建用户提示词
-        app_data_manager = get_app_data_manager()
-        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'intent_code_behavior_gen_user.md')
-        try:
-            with open(user_prompt_file, 'r', encoding='utf-8') as f:
-                user_prompt_template = f.read()
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+        user_prompt = self._build_user_prompt_for_ibc_generator(file_path)
+        if not user_prompt:
             return ""
-            
-        user_prompt = user_prompt_template
-        user_prompt = user_prompt.replace('USER_REQUIREMENTS_PLACEHOLDER', user_requirements)
-        user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_content)
-        user_prompt = user_prompt.replace('PROJECT_STRUCTURE_PLACEHOLDER', project_structure_json)
-        user_prompt = user_prompt.replace('CURRENT_FILE_PATH_PLACEHOLDER', file_path)
-        user_prompt = user_prompt.replace('CLASS_CONTENT_PLACEHOLDER', class_content if class_content else '无')
-        user_prompt = user_prompt.replace('FUNC_CONTENT_PLACEHOLDER', func_content if func_content else '无')
-        user_prompt = user_prompt.replace('VAR_CONTENT_PLACEHOLDER', var_content if var_content else '无')
-        user_prompt = user_prompt.replace('OTHERS_CONTENT_PLACEHOLDER', others_content if others_content else '无')
-        user_prompt = user_prompt.replace('BEHAVIOR_CONTENT_PLACEHOLDER', behavior_content if behavior_content else '无')
-        user_prompt = user_prompt.replace('IMPORT_CONTENT_PLACEHOLDER', import_content if import_content else '无')
-        user_prompt = user_prompt.replace('AVAILABLE_SYMBOLS_PLACEHOLDER', available_symbols_text)
 
         # 调用AI生成半自然语言行为描述代码
         response_content, success = asyncio.run(self.chat_handler.get_role_response(
@@ -492,13 +420,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             print(f"    {Colors.WARNING}警告: AI响应为空{Colors.ENDC}")
             return ""
         
-        # 移除可能的代码块标记
-        lines = response_content.split('\n')
-        if lines and lines[0].strip().startswith('```'):
-            lines = lines[1:]
-        if lines and lines[-1].strip().startswith('```'):
-            lines = lines[:-1]
-        cleaned_content = '\n'.join(lines).strip()
+        # 清理代码块标记
+        cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
         
         return cleaned_content
 
@@ -567,6 +490,137 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             return False
         
         return True
+    
+    def _build_user_prompt_for_ibc_generator(self, file_path: str) -> str:
+        """
+        构建IBC代码生成的用户提示词（role_ibc_gen）
+        
+        从项目数据目录中直接读取所需信息，无需外部参数传递。
+        
+        Args:
+            file_path: 当前处理的文件路径
+        
+        Returns:
+            str: 完整的用户提示词，失败时返回空字符串
+        """
+        # 读取用户原始需求
+        user_data_manager = get_user_data_manager()
+        user_requirements = user_data_manager.get_user_prompt()
+        if not user_requirements:
+            print(f"  {Colors.FAIL}错误: 读取用户需求失败{Colors.ENDC}")
+            return ""
+        
+        # 读取项目结构
+        ibc_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
+        try:
+            with open(ibc_dir_file, 'r', encoding='utf-8') as f:
+                ibc_content = json.load(f)
+            project_structure_json = json.dumps(ibc_content['proj_root'], indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取项目结构失败: {e}{Colors.ENDC}")
+            return ""
+        
+        # 读取文件需求描述
+        staging_dir_path = os.path.join(self.proj_work_dir, 'src_staging')
+        req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
+        try:
+            with open(req_file_path, 'r', encoding='utf-8') as f:
+                file_req_content = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取文件需求描述失败: {e}{Colors.ENDC}")
+            return ""
+        
+        # 构建可用符号文本
+        try:
+            with open(ibc_dir_file, 'r', encoding='utf-8') as f:
+                ibc_content = json.load(f)
+            dependent_relation = ibc_content.get('dependent_relation', {})
+            dependencies = dependent_relation.get(file_path, [])
+            ibc_dir_name = self._get_ibc_directory_name()
+            ibc_root_path = os.path.join(self.proj_work_dir, ibc_dir_name)
+            available_symbols_text = self._build_available_symbols_text(dependencies, ibc_root_path)
+        except Exception as e:
+            print(f"  {Colors.WARNING}警告: 构建可用符号失败: {e}，继续生成{Colors.ENDC}")
+            available_symbols_text = '暂无可用的依赖符号'
+        # 读取文件级实现规划
+        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        implementation_plan_content = ""
+        try:
+            with open(implementation_plan_file, 'r', encoding='utf-8') as f:
+                implementation_plan_content = f.read()
+        except Exception as e:
+            print(f"  {Colors.WARNING}警告: 读取文件级实现规划失败: {e}，将仅使用文件需求描述{Colors.ENDC}")
+        
+        # 提取各个部分的内容
+        class_content = self._extract_section_content(file_req_content, 'class')
+        func_content = self._extract_section_content(file_req_content, 'func')
+        var_content = self._extract_section_content(file_req_content, 'var')
+        others_content = self._extract_section_content(file_req_content, 'others')
+        behavior_content = self._extract_section_content(file_req_content, 'behavior')
+        import_content = self._extract_section_content(file_req_content, 'import')
+        
+        # 读取用户提示词模板
+        app_data_manager = get_app_data_manager()
+        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'intent_code_behavior_gen_user.md')
+        try:
+            with open(user_prompt_file, 'r', encoding='utf-8') as f:
+                user_prompt_template = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+            return ""
+            
+        # 填充占位符
+        user_prompt = user_prompt_template
+        user_prompt = user_prompt.replace('USER_REQUIREMENTS_PLACEHOLDER', user_requirements)
+        user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_content)
+        user_prompt = user_prompt.replace('PROJECT_STRUCTURE_PLACEHOLDER', project_structure_json)
+        user_prompt = user_prompt.replace('CURRENT_FILE_PATH_PLACEHOLDER', file_path)
+        user_prompt = user_prompt.replace('CLASS_CONTENT_PLACEHOLDER', class_content if class_content else '无')
+        user_prompt = user_prompt.replace('FUNC_CONTENT_PLACEHOLDER', func_content if func_content else '无')
+        user_prompt = user_prompt.replace('VAR_CONTENT_PLACEHOLDER', var_content if var_content else '无')
+        user_prompt = user_prompt.replace('OTHERS_CONTENT_PLACEHOLDER', others_content if others_content else '无')
+        user_prompt = user_prompt.replace('BEHAVIOR_CONTENT_PLACEHOLDER', behavior_content if behavior_content else '无')
+        user_prompt = user_prompt.replace('IMPORT_CONTENT_PLACEHOLDER', import_content if import_content else '无')
+        user_prompt = user_prompt.replace('AVAILABLE_SYMBOLS_PLACEHOLDER', available_symbols_text)
+        
+        return user_prompt
+
+    def _build_user_prompt_for_symbol_normalizer(self, file_path: str, symbols: Dict[str, SymbolNode], ibc_code: str) -> str:
+        """
+        构建符号规范化的用户提示词（role_symbol_normalizer）
+        
+        从配置文件中直接读取所需信息，无需外部参数传递。
+        
+        Args:
+            file_path: 当前文件路径
+            symbols: 当前符号字典
+            ibc_code: 当前IBC代码
+        
+        Returns:
+            str: 完整的用户提示词，失败时抛出RuntimeError
+        """
+        # 读取提示词模板
+        app_data_manager = get_app_data_manager()
+        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'symbol_normalizer_user.md')
+        try:
+            with open(user_prompt_file, 'r', encoding='utf-8') as f:
+                user_prompt_template = f.read()
+        except Exception as e:
+            raise RuntimeError(f"读取符号规范化提示词失败: {e}")
+        
+        # 获取目标语言
+        target_language = self._get_target_language()
+        
+        # 格式化符号列表
+        symbols_text = self._format_symbols_for_prompt(symbols)
+        
+        # 填充占位符
+        user_prompt = user_prompt_template.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
+        user_prompt = user_prompt.replace('FILE_PATH_PLACEHOLDER', file_path)
+        user_prompt = user_prompt.replace('CONTEXT_INFO_PLACEHOLDER', ibc_code)
+        user_prompt = user_prompt.replace('AST_SYMBOLS_PLACEHOLDER', symbols_text)
+        
+        return user_prompt
     
     
     # ========== 辅助方法 ==========
@@ -717,29 +771,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     
     def _build_normalize_prompt(self, file_path: str, symbols: Dict[str, SymbolNode], ibc_code: str) -> str:
         """构建符号规范化提示词"""
-        # 读取提示词模板
-        app_data_manager = get_app_data_manager()
-        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'symbol_normalizer_user.md')
-        try:
-            with open(user_prompt_file, 'r', encoding='utf-8') as f:
-                user_prompt_template = f.read()
-        except Exception as e:
-            raise RuntimeError(f"读取符号规范化提示词失败: {e}")
-        
-        # 获取目标语言
-        target_language = self._get_target_language()
-        
-        # 格式化符号列表
-        symbols_text = self._format_symbols_for_prompt(symbols)
-        
-        # 填充占位符
-        user_prompt = user_prompt_template.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
-        user_prompt = user_prompt.replace('FILE_PATH_PLACEHOLDER', file_path)
-        user_prompt = user_prompt.replace('CONTEXT_INFO_PLACEHOLDER', ibc_code)
-        user_prompt = user_prompt.replace('AST_SYMBOLS_PLACEHOLDER', symbols_text)
-        
-        return user_prompt
-    
+        return self._build_user_prompt_for_symbol_normalizer(file_path, symbols, ibc_code)
+
     def _get_target_language(self) -> str:
         """获取目标编程语言"""
         icp_config_file = os.path.join(self.proj_config_data_dir, 'icp_config.json')
@@ -763,16 +796,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     def _parse_symbol_normalizer_response(self, response: str) -> Dict[str, Dict[str, str]]:
         """解析符号规范化AI的响应"""
         try:
-            # 移除可能的代码块标记
-            cleaned_response = response.strip()
-            if cleaned_response.startswith('```json'):
-                cleaned_response = cleaned_response[7:]
-            elif cleaned_response.startswith('```'):
-                cleaned_response = cleaned_response[3:]
-            if cleaned_response.endswith('```'):
-                cleaned_response = cleaned_response[:-3]
-            
-            cleaned_response = cleaned_response.strip()
+            # 清理代码块标记
+            cleaned_response = ICPChatHandler.clean_code_block_markers(response)
             
             # 解析JSON
             result = json.loads(cleaned_response)
