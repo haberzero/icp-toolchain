@@ -127,16 +127,23 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
             
             # 验证响应内容
-            if self._validate_response(cleaned_content):
-                # 保存结果到icp_dir_content.json
-                output_file = os.path.join(self.proj_data_dir, 'icp_dir_content.json')
-                try:
-                    with open(output_file, 'w', encoding='utf-8') as f:
-                        f.write(cleaned_content)
-                    print(f"目录结构生成完成，结果已保存到: {output_file}")
-                except Exception as e:
-                    print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
-                return
+            is_valid = self._validate_response(cleaned_content)
+            if is_valid:
+                break
+
+        if attempt == max_attempts - 1:
+            print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的依赖关系{Colors.ENDC}")
+            return
+        
+        # 保存结果到icp_dir_content.json
+        output_file = os.path.join(self.proj_data_dir, 'icp_dir_content.json')
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(cleaned_content)
+            print(f"目录结构生成完成，结果已保存到: {output_file}")
+        except Exception as e:
+            print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
+        return
         
         # 达到最大尝试次数
         print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的目录结构{Colors.ENDC}")

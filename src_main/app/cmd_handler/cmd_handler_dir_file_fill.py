@@ -41,7 +41,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         # 初始化AI处理器
         self._init_ai_handlers()
 
-    def _validate_response(self, cleaned_content: str, old_json_content: Dict[str, Any]) -> tuple[bool, Dict[str, Any]]:
+    def _validate_response(self, cleaned_content: str, old_json_content: Dict[str, Any]) -> bool:
         """
         验证AI响应内容是否符合要求
         
@@ -58,19 +58,85 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         except json.JSONDecodeError as e:
             print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
             print(f"AI返回内容: {cleaned_content}")
-            return False, {}
+            return False
         
         # 检查新JSON内容结构是否与旧JSON内容结构一致
         if not DirJsonFuncs.compare_structure(old_json_content, new_json_content):
             print(f"{Colors.WARNING}警告: 生成的JSON结构不符合要求，正在重新生成...{Colors.ENDC}")
-            return False, {}
+            return False
             
         # 检查新添加的节点是否都为字符串类型
         if not DirJsonFuncs.check_new_nodes_are_strings(new_json_content):
             print(f"{Colors.WARNING}警告: 生成的JSON包含非字符串类型的叶子节点，正在重新生成...{Colors.ENDC}")
-            return False, {}
+            return False
+
+        # 检查并确保 proj_root 下有主入口文件
+        if not self._ensure_main_entry_file(new_json_content):
+            print(f"{Colors.WARNING}警告: 目录结构中的主入口文件检查/填充未成功，正在重新生成...{Colors.ENDC}")
+            return False
+
+        return True
+
+    def _ensure_main_entry_file(self, json_content: Dict) -> bool:
+        """检查并确保proj_root下有主入口文件"""
+        import re
         
-        return True, new_json_content
+        if "proj_root" not in json_content:
+            return False
+        
+        proj_root = json_content["proj_root"]
+        if not isinstance(proj_root, dict):
+            return False
+        
+        # 常见主入口文件命名模式（不区分大小写）
+        main_patterns = [
+            r'^main$',
+            r'^Main$',
+            r'^app$',
+            r'^App$',
+            r'^index$',
+            r'^Index$',
+            r'^run$',
+            r'^Run$',
+            r'^start$',
+            r'^Start$',
+            r'^launcher$',
+            r'^Launcher$',
+            r'^bootstrap$',
+            r'^Bootstrap$'
+        ]
+        
+        # 检查proj_root直接子节点是否有主入口文件
+        has_main_entry = False
+        for key, value in proj_root.items():
+            # 只检查文件节点（值为字符串的节点）
+            if isinstance(value, str):
+                # 使用正则表达式匹配
+                for pattern in main_patterns:
+                    if re.match(pattern, key, re.IGNORECASE):
+                        has_main_entry = True
+                        print(f"{Colors.OKGREEN}检测到主入口文件: {key}{Colors.ENDC}")
+                        break
+            if has_main_entry:
+                break
+        
+        # 如果没有找到主入口文件，添加一个
+        if not has_main_entry:
+            # 优先使用 'main' 作为主入口文件名
+            main_file_name = 'main'
+            
+            # 如果 'main' 已经被用作目录名，尝试其他名称
+            if main_file_name in proj_root and isinstance(proj_root[main_file_name], dict):
+                for alt_name in ['app', 'index', 'run', 'start', 'launcher']:
+                    if alt_name not in proj_root or not isinstance(proj_root[alt_name], dict):
+                        main_file_name = alt_name
+                        break
+            
+            # 添加主入口文件
+            proj_root[main_file_name] = "主入口程序，执行初始化并启动程序"
+            print(f"{Colors.OKGREEN}未检测到主入口文件，已自动添加: {main_file_name}{Colors.ENDC}")
+        
+        return True
 
     def _build_user_prompt_for_dir_file_filler(self) -> str:
         """
@@ -216,33 +282,63 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             
             # 验证响应内容
             is_valid, new_json_content = self._validate_response(cleaned_content, old_json_content)
-            if not is_valid:
-                continue
+            if is_valid:
+                break
             
-            # 检查并确保 proj_root 下有主入口文件
-            self._ensure_main_entry_file(new_json_content)
             
-            # 保存结果到icp_dir_content_with_files.json
-            output_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_files.json')
-            try:
-                with open(output_file, 'w', encoding='utf-8') as f:
-                    # 保存修改后的JSON内容，而不是原始的cleaned_content
-                    json.dump(new_json_content, f, indent=2, ensure_ascii=False)
-                print(f"目录文件填充完成，结果已保存到: {output_file}")
-            except Exception as e:
-                print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
-                return
-            
-            # 验证成功，跳出循环
-            break
-        else:
-            # 循环正常结束（未 break），说明达到最大尝试次数
+        
+
+        
+        if attempt == max_attempts - 1:
             print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的目录结构{Colors.ENDC}")
             return
+
+            
+        # 保存结果到icp_dir_content_with_files.json
+        output_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_files.json')
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                # 保存修改后的JSON内容，而不是原始的cleaned_content
+                json.dump(new_json_content, f, indent=2, ensure_ascii=False)
+            print(f"目录文件填充完成，结果已保存到: {output_file}")
+        except Exception as e:
+            print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
+            return
+            
         
         # 第一个 handler 成功后，使用第二个 AI handler 生成文件级别的实现规划描述
         print(f"{Colors.OKBLUE}开始生成文件级实现规划...{Colors.ENDC}")
         self._generate_implementation_plan_2()
+
+    
+    def _generate_implementation_plan_2(self) -> None:
+        """生成文件级实现规划描述"""
+        # 构建用户提示词
+        user_prompt = self._build_user_prompt_for_plan_generator()
+        if not user_prompt:
+            return
+        
+        # 调用AI生成实现规划
+        response_content, success = asyncio.run(self.chat_handler.get_role_response(
+            role_name=self.role_name_2,
+            user_prompt=user_prompt
+        ))
+        
+        if not success:
+            print(f"{Colors.WARNING}警告: AI响应失败{Colors.ENDC}")
+            return
+        
+        # 清理代码块标记
+        cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
+        
+        # 保存实现规划
+        output_file_path = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        try:
+            with open(output_file_path, 'w', encoding='utf-8') as f:
+                f.write(cleaned_content)
+            print(f"{Colors.OKGREEN}文件级实现规划已生成并保存到: {output_file_path}{Colors.ENDC}")
+        except Exception as e:
+            print(f"{Colors.FAIL}错误: 保存实现规划失败: {e}{Colors.ENDC}")
 
     def _check_cmd_requirement(self) -> bool:
         """验证目录文件填充命令的前置条件"""
@@ -328,90 +424,3 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         self.chat_handler.load_role_from_file(self.role_name_1, sys_prompt_path_1)
         self.chat_handler.load_role_from_file(self.role_name_2, sys_prompt_path_2)
     
-    def _ensure_main_entry_file(self, json_content: Dict) -> None:
-        """检查并确保proj_root下有主入口文件"""
-        import re
-        
-        if "proj_root" not in json_content:
-            return
-        
-        proj_root = json_content["proj_root"]
-        if not isinstance(proj_root, dict):
-            return
-        
-        # 常见主入口文件命名模式（不区分大小写）
-        main_patterns = [
-            r'^main$',
-            r'^Main$',
-            r'^app$',
-            r'^App$',
-            r'^index$',
-            r'^Index$',
-            r'^run$',
-            r'^Run$',
-            r'^start$',
-            r'^Start$',
-            r'^launcher$',
-            r'^Launcher$',
-            r'^bootstrap$',
-            r'^Bootstrap$'
-        ]
-        
-        # 检查proj_root直接子节点是否有主入口文件
-        has_main_entry = False
-        for key, value in proj_root.items():
-            # 只检查文件节点（值为字符串的节点）
-            if isinstance(value, str):
-                # 使用正则表达式匹配
-                for pattern in main_patterns:
-                    if re.match(pattern, key, re.IGNORECASE):
-                        has_main_entry = True
-                        print(f"{Colors.OKGREEN}检测到主入口文件: {key}{Colors.ENDC}")
-                        break
-            if has_main_entry:
-                break
-        
-        # 如果没有找到主入口文件，添加一个
-        if not has_main_entry:
-            # 优先使用 'main' 作为主入口文件名
-            main_file_name = 'main'
-            
-            # 如果 'main' 已经被用作目录名，尝试其他名称
-            if main_file_name in proj_root and isinstance(proj_root[main_file_name], dict):
-                for alt_name in ['app', 'index', 'run', 'start', 'launcher']:
-                    if alt_name not in proj_root or not isinstance(proj_root[alt_name], dict):
-                        main_file_name = alt_name
-                        break
-            
-            # 添加主入口文件
-            proj_root[main_file_name] = "主入口程序，执行初始化并启动程序"
-            print(f"{Colors.OKGREEN}未检测到主入口文件，已自动添加: {main_file_name}{Colors.ENDC}")
-    
-    def _generate_implementation_plan_2(self) -> None:
-        """生成文件级实现规划描述"""
-        # 构建用户提示词
-        user_prompt = self._build_user_prompt_for_plan_generator()
-        if not user_prompt:
-            return
-        
-        # 调用AI生成实现规划
-        response_content, success = asyncio.run(self.chat_handler.get_role_response(
-            role_name=self.role_name_2,
-            user_prompt=user_prompt
-        ))
-        
-        if not success:
-            print(f"{Colors.WARNING}警告: AI响应失败{Colors.ENDC}")
-            return
-        
-        # 清理代码块标记
-        cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
-        
-        # 保存实现规划
-        output_file_path = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
-        try:
-            with open(output_file_path, 'w', encoding='utf-8') as f:
-                f.write(cleaned_content)
-            print(f"{Colors.OKGREEN}文件级实现规划已生成并保存到: {output_file_path}{Colors.ENDC}")
-        except Exception as e:
-            print(f"{Colors.FAIL}错误: 保存实现规划失败: {e}{Colors.ENDC}")
