@@ -1,7 +1,7 @@
 import sys, os
 import asyncio
 import json
-from typing import List
+from typing import List, Dict, Any
 
 from pydantic import SecretStr
 
@@ -37,6 +37,26 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         self.chat_handler = ICPChatHandler()
         self.role_name = "3_module_to_dir"
         self._init_ai_handlers()
+
+    def _validate_response(self, cleaned_content: str) -> bool:
+        """
+        验证AI响应内容是否符合要求
+        
+        Args:
+            cleaned_content: 清理后的AI响应内容
+            
+        Returns:
+            bool: 是否为有效的JSON
+        """
+        # 验证是否为有效的JSON
+        try:
+            json.loads(cleaned_content)
+        except json.JSONDecodeError as e:
+            print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
+            print(f"AI返回内容: {cleaned_content}")
+            return False
+        
+        return True
 
     def execute(self):
         """执行目录结构生成"""
@@ -91,12 +111,8 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         # 清理代码块标记
         cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
         
-        # 验证是否为有效的JSON
-        try:
-            json.loads(cleaned_content)
-        except json.JSONDecodeError as e:
-            print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
-            print(f"AI返回内容: {cleaned_content}")
+        # 验证响应内容
+        if not self._validate_response(cleaned_content):
             return
         
         # 保存结果到icp_dir_content.json

@@ -43,6 +43,37 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         # 初始化AI处理器
         self._init_ai_handlers()
 
+    def _validate_response(self, cleaned_content: str, old_json_content: Dict[str, Any]) -> tuple[bool, Dict[str, Any]]:
+        """
+        验证AI响应内容是否符合要求
+        
+        Args:
+            cleaned_content: 清理后的AI响应内容
+            old_json_content: 原始JSON内容，用于结构比较
+            
+        Returns:
+            tuple[bool, Dict[str, Any]]: (是否有效, JSON内容字典)
+        """
+        # 验证是否为有效的JSON
+        try:
+            new_json_content = json.loads(cleaned_content)
+        except json.JSONDecodeError as e:
+            print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
+            print(f"AI返回内容: {cleaned_content}")
+            return False, {}
+        
+        # 检查新JSON内容结构是否与旧JSON内容结构一致
+        if not DirJsonFuncs.compare_structure(old_json_content, new_json_content):
+            print(f"{Colors.WARNING}警告: 生成的JSON结构不符合要求，正在重新生成...{Colors.ENDC}")
+            return False, {}
+            
+        # 检查新添加的节点是否都为字符串类型
+        if not DirJsonFuncs.check_new_nodes_are_strings(new_json_content):
+            print(f"{Colors.WARNING}警告: 生成的JSON包含非字符串类型的叶子节点，正在重新生成...{Colors.ENDC}")
+            return False, {}
+        
+        return True, new_json_content
+
     def _build_user_prompt_for_dir_file_filler(self) -> str:
         """
         构建目录文件填充的用户提示词（role_name_1）
@@ -194,22 +225,9 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             # 清理代码块标记
             cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
             
-            # 验证是否为有效的JSON
-            try:
-                new_json_content = json.loads(cleaned_content)
-            except json.JSONDecodeError as e:
-                print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
-                print(f"AI返回内容: {cleaned_content}")
-                continue
-            
-            # 检查新JSON内容结构是否与旧JSON内容结构一致
-            if not DirJsonFuncs.compare_structure(old_json_content, new_json_content):
-                print(f"{Colors.WARNING}警告: 第 {attempt + 1} 次尝试生成的JSON结构不符合要求，正在重新生成...{Colors.ENDC}")
-                continue
-                
-            # 检查新添加的节点是否都为字符串类型
-            if not DirJsonFuncs.check_new_nodes_are_strings(new_json_content):
-                print(f"{Colors.WARNING}警告: 第 {attempt + 1} 次尝试生成的JSON包含非字符串类型的叶子节点，正在重新生成...{Colors.ENDC}")
+            # 验证响应内容
+            is_valid, new_json_content = self._validate_response(cleaned_content, old_json_content)
+            if not is_valid:
                 continue
             
             # 检查并确保proj_root下有主入口文件
