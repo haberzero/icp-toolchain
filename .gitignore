@@ -27,6 +27,7 @@ poetry.lock
 # IDE-specific files
 .vscode/
 .idea/
+.qoder/
 *.swp
 *.swo
 
