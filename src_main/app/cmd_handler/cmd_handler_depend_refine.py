@@ -44,51 +44,71 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         # 初始化AI处理器
         self._init_ai_handlers()
 
-    def _validate_response(self, cleaned_content: str) -> tuple[bool, Dict[str, Any]]:
-        """
-        验证AI响应内容是否符合要求
+    def execute(self):
+        """执行循环依赖解决"""
+        if not self.is_cmd_valid():
+            return
         
-        Args:
-            cleaned_content: 清理后的AI响应内容
+        # 重置实例变量，确保每次execute都是干净的状态
+        self.circular_deps_content = None
+        self.dependency_structure_content = None
+        self.first_circle_flag = True
+        
+        print(f"{Colors.OKBLUE}开始解决循环依赖问题...{Colors.ENDC}")
+        
+        max_attempts = 3
+        new_json_content = {}
+        
+        for attempt in range(max_attempts):
+            print(f"{self.role_name}正在进行第 {attempt + 1} 次尝试...")
             
-        Returns:
-            tuple[bool, Dict[str, Any]]: (是否有效, JSON内容字典)
-        """
-        # 验证是否为有效的JSON
+            # 构建用户提示词（会根据first_circle_flag自动选择数据源）
+            user_prompt = self._build_user_prompt_for_depend_refiner()
+            if not user_prompt:
+                # 如果是第一次且没有循环依赖，直接返回
+                if self.first_circle_flag:
+                    return
+                # 理论上不应出现的情况，抛出错误提示
+                print(f"{Colors.FAIL}错误: 构建用户提示词失败，出现未知错误，请开发人员检查逻辑{Colors.ENDC}")
+                return
+            
+            response_content, success = asyncio.run(self.chat_handler.get_role_response(
+                role_name=self.role_name,
+                user_prompt=user_prompt
+            ))
+            
+            # 如果响应失败，继续下一次尝试
+            if not success:
+                print(f"{Colors.WARNING}警告: AI响应失败，将进行下一次尝试{Colors.ENDC}")
+                continue
+                
+            # 清理代码块标记
+            cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
+            
+            # 验证响应内容（包含所有检查：JSON有效性、结构完整性、循环依赖检测）
+            is_valid, new_json_content = self._validate_response(cleaned_content)
+            if is_valid:
+                # 所有检查都通过，跳出循环
+                break
+        
+        # 清空实例变量，避免干扰下一次运行
+        self.circular_deps_content = None
+        self.dependency_structure_content = None
+        self.first_circle_flag = True
+        
+        # 循环已跳出，检查运行结果并进行相应操作
+        if attempt == max_attempts - 1:
+            print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能成功消除循环依赖{Colors.ENDC}")
+            return
+
+        print(f"{Colors.OKBLUE}循环依赖解决完成，正在保存结果...{Colors.ENDC}")
+        output_file = os.path.join(self.proj_data_dir, 'icp_dir_content_refined.json')
         try:
-            new_json_content = json.loads(cleaned_content)
-        except json.JSONDecodeError as e:
-            print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
-            print(f"AI返回内容: {cleaned_content}")
-            return False, {}
-        
-        # 检查新JSON内容是否包含proj_root和dependent_relation节点
-        if "proj_root" not in new_json_content or "dependent_relation" not in new_json_content:
-            print(f"{Colors.WARNING}警告: 生成的JSON结构不符合要求，缺少必需的根节点{Colors.ENDC}")
-            return False, {}
-        
-        # 确保dependent_relation中包含proj_root下的所有文件路径
-        DirJsonFuncs.ensure_all_files_in_dependent_relation(new_json_content)
-        
-        # 检测循环依赖
-        dependent_relation = new_json_content.get("dependent_relation", {})
-        circular_dependencies = DirJsonFuncs.detect_circular_dependencies(dependent_relation)
-        
-        if circular_dependencies:
-            # 仍然存在循环依赖，将这些循环依赖信息保存到实例变量中
-            print(f"{Colors.WARNING}警告: 仍检测到循环依赖:{Colors.ENDC}")
-            for cycle in circular_dependencies:
-                print(f"  {Colors.WARNING}{cycle}{Colors.ENDC}")
-            
-            # 更新实例变量，用于下一轮提示词构建
-            self.circular_deps_content = '\n'.join(circular_dependencies)
-            self.dependency_structure_content = cleaned_content
-            self.first_circle_flag = False
-            
-            return False, new_json_content
-        
-        # 所有检查都通过
-        return True, new_json_content
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(new_json_content, f, indent=2)
+            print(f"{Colors.OKBLUE}循环依赖解决完成，结果已保存到: {output_file}{Colors.ENDC}")
+        except Exception as e:
+            print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
 
     def _build_user_prompt_for_depend_refiner(self) -> str:
         """
@@ -153,71 +173,55 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         
         return user_prompt
 
-    def execute(self):
-        """执行循环依赖解决"""
-        if not self.is_cmd_valid():
-            return
+    def _validate_response(self, cleaned_content: str) -> tuple[bool, Dict[str, Any]]:
+        """
+        验证AI响应内容是否符合要求
         
-        # 重置实例变量，确保每次execute都是干净的状态
-        self.circular_deps_content = None
-        self.dependency_structure_content = None
-        self.first_circle_flag = True
-        
-        print(f"{Colors.OKBLUE}开始解决循环依赖问题...{Colors.ENDC}")
-        
-        max_attempts = 5
-        new_json_content = {}
-        
-        for attempt in range(max_attempts):
-            print(f"{self.role_name}正在进行第 {attempt + 1} 次尝试...")
+        Args:
+            cleaned_content: 清理后的AI响应内容
             
-            # 构建用户提示词（会根据first_circle_flag自动选择数据源）
-            user_prompt = self._build_user_prompt_for_depend_refiner()
-            if not user_prompt:
-                # 如果是第一次且没有循环依赖，直接返回
-                if self.first_circle_flag:
-                    return
-                # 理论上不应出现的情况，抛出错误提示
-                print(f"{Colors.FAIL}错误: 构建用户提示词失败，出现未知错误，请开发人员检查逻辑{Colors.ENDC}")
-                return
-            
-            response_content, success = asyncio.run(self.chat_handler.get_role_response(
-                role_name=self.role_name,
-                user_prompt=user_prompt
-            ))
-            
-            # 如果响应失败，继续下一次尝试
-            if not success:
-                print(f"{Colors.WARNING}警告: AI响应失败，将进行下一次尝试{Colors.ENDC}")
-                continue
-                
-            # 清理代码块标记
-            cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
-            
-            # 验证响应内容（包含所有检查：JSON有效性、结构完整性、循环依赖检测）
-            is_valid, new_json_content = self._validate_response(cleaned_content)
-            if is_valid:
-                # 所有检查都通过，跳出循环
-                break
-        
-        # 清空实例变量，避免干扰下一次运行
-        self.circular_deps_content = None
-        self.dependency_structure_content = None
-        self.first_circle_flag = True
-        
-        # 循环已跳出，检查运行结果并进行相应操作
-        if attempt == max_attempts - 1:
-            print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能成功消除循环依赖{Colors.ENDC}")
-            return
-
-        print(f"{Colors.OKBLUE}循环依赖解决完成，正在保存结果...{Colors.ENDC}")
-        output_file = os.path.join(self.proj_data_dir, 'icp_dir_content_refined.json')
+        Returns:
+            tuple[bool, Dict[str, Any]]: (是否有效, JSON内容字典)
+        """
+        # 验证是否为有效的JSON
         try:
-            with open(output_file, 'w', encoding='utf-8') as f:
-                json.dump(new_json_content, f, indent=2)
-            print(f"{Colors.OKBLUE}循环依赖解决完成，结果已保存到: {output_file}{Colors.ENDC}")
-        except Exception as e:
-            print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
+            new_json_content = json.loads(cleaned_content)
+        except json.JSONDecodeError as e:
+            print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
+            print(f"AI返回内容: {cleaned_content}")
+            return False, {}
+        
+        # 检查新JSON内容是否包含proj_root和dependent_relation节点
+        if "proj_root" not in new_json_content or "dependent_relation" not in new_json_content:
+            print(f"{Colors.WARNING}警告: 生成的JSON结构不符合要求，缺少必需的根节点{Colors.ENDC}")
+            return False, {}
+        
+        # 确保dependent_relation中包含proj_root下的所有文件路径
+        DirJsonFuncs.ensure_all_files_in_dependent_relation(new_json_content)
+        
+        # 检测循环依赖
+        dependent_relation = new_json_content.get("dependent_relation", {})
+        circular_dependencies = DirJsonFuncs.detect_circular_dependencies(dependent_relation)
+        
+        if circular_dependencies:
+            # 仍然存在循环依赖，将这些循环依赖信息保存到实例变量中
+            print(f"{Colors.WARNING}警告: 仍检测到循环依赖:{Colors.ENDC}")
+            for cycle in circular_dependencies:
+                print(f"  {Colors.WARNING}{cycle}{Colors.ENDC}")
+            
+            # 更新实例变量，用于下一轮提示词构建
+            self.circular_deps_content = '\n'.join(circular_dependencies)
+            self.dependency_structure_content = cleaned_content
+            self.first_circle_flag = False
+            
+            return False, new_json_content
+        
+        # 所有检查都通过
+        return True, new_json_content
+
+    def is_cmd_valid(self):
+        """检查解决循环依赖命令的必要条件是否满足"""
+        return self._check_cmd_requirement() and self._check_ai_handler()
 
     def _check_cmd_requirement(self) -> bool:
         """验证解决循环依赖命令的前置条件"""
@@ -228,7 +232,6 @@ class CmdHandlerDependRefine(BaseCmdHandler):
             return False
         
         return True
-
 
     def _check_ai_handler(self) -> bool:
         """验证AI处理器是否初始化成功"""
@@ -243,10 +246,6 @@ class CmdHandlerDependRefine(BaseCmdHandler):
             return False
             
         return True
-
-    def is_cmd_valid(self):
-        """检查解决循环依赖命令的必要条件是否满足"""
-        return self._check_cmd_requirement() and self._check_ai_handler()
 
     def _init_ai_handlers(self):
         """初始化AI处理器"""

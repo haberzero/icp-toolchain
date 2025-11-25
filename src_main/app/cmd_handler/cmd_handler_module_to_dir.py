@@ -36,25 +36,52 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         self.role_name = "3_module_to_dir"
         self._init_ai_handlers()
 
-    def _validate_response(self, cleaned_content: str) -> bool:
-        """
-        验证AI响应内容是否符合要求
-        
-        Args:
-            cleaned_content: 清理后的AI响应内容
+    def execute(self):
+        """执行目录结构生成"""
+        if not self.is_cmd_valid():
+            return
             
-        Returns:
-            bool: 是否为有效的JSON
-        """
-        # 验证是否为有效的JSON
-        try:
-            json.loads(cleaned_content)
-        except json.JSONDecodeError as e:
-            print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
-            print(f"AI返回内容: {cleaned_content}")
-            return False
+        print(f"{Colors.OKBLUE}开始生成目录结构...{Colors.ENDC}")
         
-        return True
+        # 构建用户提示词
+        user_prompt = self._build_user_prompt_for_module_to_dir()
+        if not user_prompt:
+            return
+        
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            print(f"{self.role_name}正在进行第 {attempt + 1} 次尝试...")
+            response_content, success = asyncio.run(self.chat_handler.get_role_response(
+                role_name=self.role_name,
+                user_prompt=user_prompt
+            ))
+            
+            # 如果响应失败，继续下一次尝试
+            if not success:
+                print(f"{Colors.WARNING}警告: AI响应失败，将进行下一次尝试{Colors.ENDC}")
+                continue
+            
+            # 清理代码块标记
+            cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
+            
+            # 验证响应内容
+            is_valid = self._validate_response(cleaned_content)
+            if is_valid:
+                break
+
+        if attempt == max_attempts - 1:
+            print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的依赖关系{Colors.ENDC}")
+            return
+        
+        # 保存结果到icp_dir_content.json
+        output_file = os.path.join(self.proj_data_dir, 'icp_dir_content.json')
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(cleaned_content)
+            print(f"目录结构生成完成，结果已保存到: {output_file}")
+        except Exception as e:
+            print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
+        return
 
     def _build_user_prompt_for_module_to_dir(self) -> str:
         """构建目录结构生成的用户提示词
@@ -94,59 +121,29 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         
         return filtered_requirement_content
 
-    def execute(self):
-        """执行目录结构生成"""
-        if not self.is_cmd_valid():
-            return
-            
-        print(f"{Colors.OKBLUE}开始生成目录结构...{Colors.ENDC}")
+    def _validate_response(self, cleaned_content: str) -> bool:
+        """
+        验证AI响应内容是否符合要求
         
-        # 构建用户提示词
-        user_prompt = self._build_user_prompt_for_module_to_dir()
-        if not user_prompt:
-            return
-        
-        max_attempts = 5
-        for attempt in range(max_attempts):
-            print(f"{self.role_name}正在进行第 {attempt + 1} 次尝试...")
-            response_content, success = asyncio.run(self.chat_handler.get_role_response(
-                role_name=self.role_name,
-                user_prompt=user_prompt
-            ))
+        Args:
+            cleaned_content: 清理后的AI响应内容
             
-            # 如果响应失败，继续下一次尝试
-            if not success:
-                print(f"{Colors.WARNING}警告: AI响应失败，将进行下一次尝试{Colors.ENDC}")
-                continue
-            
-            if not response_content:
-                print(f"{Colors.WARNING}警告: AI响应为空，将进行下一次尝试{Colors.ENDC}")
-                continue
-                
-            # 清理代码块标记
-            cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
-            
-            # 验证响应内容
-            is_valid = self._validate_response(cleaned_content)
-            if is_valid:
-                break
-
-        if attempt == max_attempts - 1:
-            print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的依赖关系{Colors.ENDC}")
-            return
-        
-        # 保存结果到icp_dir_content.json
-        output_file = os.path.join(self.proj_data_dir, 'icp_dir_content.json')
+        Returns:
+            bool: 是否为有效的JSON
+        """
+        # 验证是否为有效的JSON
         try:
-            with open(output_file, 'w', encoding='utf-8') as f:
-                f.write(cleaned_content)
-            print(f"目录结构生成完成，结果已保存到: {output_file}")
-        except Exception as e:
-            print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
-        return
+            json.loads(cleaned_content)
+        except json.JSONDecodeError as e:
+            print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
+            print(f"AI返回内容: {cleaned_content}")
+            return False
         
-        # 达到最大尝试次数
-        print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的目录结构{Colors.ENDC}")
+        return True
+
+    def is_cmd_valid(self):
+        """检查目录生成命令的必要条件是否满足"""
+        return self._check_cmd_requirement() and self._check_ai_handler()
 
     def _check_cmd_requirement(self) -> bool:
         """验证目录生成命令的前置条件"""
@@ -166,10 +163,6 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: 角色 {self.role_name} 未加载{Colors.ENDC}")
             return False
         return True
-
-    def is_cmd_valid(self):
-        """检查目录生成命令的必要条件是否满足"""
-        return self._check_cmd_requirement() and self._check_ai_handler()
 
     def _init_ai_handlers(self):
         if not os.path.exists(self.icp_api_config_file):

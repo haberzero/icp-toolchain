@@ -9,7 +9,7 @@ from .cmd_handler_module_to_dir import CmdHandlerModuleToDir
 from .cmd_handler_dir_file_fill import CmdHandlerDirFileFill
 from .cmd_handler_depend_analysis import CmdHandlerDependAnalysis
 from .cmd_handler_depend_refine import CmdHandlerDependRefine
-from .cmd_handler_one_file_req_gen import CmdHandlerOneFileReqGen
+from .cmd_handler_one_file_req import CmdHandlerOneFileReq
 from .cmd_handler_ibc_gen import CmdHandlerIbcGen
 from .cmd_handler_code_gen import CmdHandlerCodeGen
 
@@ -92,7 +92,7 @@ class CommandManager:
         commands.append(dependency_refine_cmd)
 
         # 单文件需求描述创建命令
-        one_file_req_cmd = CmdHandlerOneFileReqGen()
+        one_file_req_cmd = CmdHandlerOneFileReq()
         commands.append(one_file_req_cmd)
 
         # 半自然语言行为描述代码生成命令
