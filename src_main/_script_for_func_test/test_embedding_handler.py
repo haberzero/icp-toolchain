@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from pydantic import SecretStr
 from typedef.cmd_data_types import EmbeddingApiConfig
-from libs.ai_interface.embedding_interface import EmbeddingHandler, EmbeddingStatus
+from libs.ai_interface.embedding_interface import EmbeddingInterface, EmbeddingStatus
 from utils.icp_ai_handler.icp_embedding_handler import ICPEmbeddingHandler
 
 
@@ -44,7 +44,7 @@ def test_basic_initialization():
     print(f"模型: {config.model}")
     
     # 创建EmbeddingHandler实例
-    handler = EmbeddingHandler(config, max_retry=3, retry_delay=1.0)
+    handler = EmbeddingInterface(config, max_retry=3, retry_delay=1.0)
     
     if handler.is_initialized:
         print("✓ EmbeddingHandler 初始化成功")
@@ -54,7 +54,7 @@ def test_basic_initialization():
         return None
 
 
-def test_single_text_embedding(handler: EmbeddingHandler):
+def test_single_text_embedding(handler: EmbeddingInterface):
     """测试2：单个文本嵌入"""
     print_section("测试2: 单个文本嵌入")
     
@@ -77,7 +77,7 @@ def test_single_text_embedding(handler: EmbeddingHandler):
         return None
 
 
-def test_batch_embedding(handler: EmbeddingHandler):
+def test_batch_embedding(handler: EmbeddingInterface):
     """测试3：批量文本嵌入"""
     print_section("测试3: 批量文本嵌入")
     
@@ -165,7 +165,7 @@ def test_icp_embedding_handler():
     return handler1
 
 
-def test_vector_similarity(handler: EmbeddingHandler):
+def test_vector_similarity(handler: EmbeddingInterface):
     """测试5：向量相似度计算"""
     print_section("测试5: 向量相似度计算")
     

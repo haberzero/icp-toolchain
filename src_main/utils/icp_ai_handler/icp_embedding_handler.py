@@ -2,21 +2,21 @@
 ICP Embedding Handler - 管理嵌入向量服务的包装器
 
 这个模块提供了一个高层次的接口来管理文本嵌入服务，
-使用单例模式共享EmbeddingHandler实例以避免资源浪费。
+共享 EmbeddingInterfaces 实例以避免资源浪费。
 """
 
 from typing import List, Optional, Tuple
 from pydantic import SecretStr
 
 from typedef.cmd_data_types import EmbeddingApiConfig
-from libs.ai_interface.embedding_interface import EmbeddingHandler, EmbeddingStatus
+from libs.ai_interface.embedding_interface import EmbeddingInterface, EmbeddingStatus
 
 
 class ICPEmbeddingHandler:
     """ICP嵌入处理器，提供文本向量化服务"""
     
-    # 类变量：共享的EmbeddingHandler实例
-    _shared_embedding_handler: Optional[EmbeddingHandler] = None
+    # 类变量：共享的 EmbeddingInterface 实例
+    _shared_embedding_interface: Optional[EmbeddingInterface] = None
     _is_initialized: bool = False
     
     def __init__(self):
@@ -31,7 +31,7 @@ class ICPEmbeddingHandler:
         retry_delay: float = 1.0
     ) -> bool:
         """
-        初始化共享的EmbeddingHandler实例（类方法）
+        初始化共享的 EmbeddingInterface
         
         Args:
             api_config: API配置信息
@@ -41,31 +41,31 @@ class ICPEmbeddingHandler:
         Returns:
             bool: 是否初始化成功
         """
-        if cls._shared_embedding_handler is None:
-            cls._shared_embedding_handler = EmbeddingHandler(api_config, max_retry, retry_delay)
-            cls._is_initialized = cls._shared_embedding_handler.is_initialized
+        if cls._shared_embedding_interface is None:
+            cls._shared_embedding_interface = EmbeddingInterface(api_config, max_retry, retry_delay)
+            cls._is_initialized = cls._shared_embedding_interface.is_initialized
         
         return cls._is_initialized
     
     @classmethod
     def is_initialized(cls) -> bool:
         """
-        检查共享的EmbeddingHandler是否已初始化
+        检查共享的 EmbeddingInterface
         
         Returns:
             bool: 是否已初始化
         """
-        return cls._is_initialized and cls._shared_embedding_handler is not None
+        return cls._is_initialized and cls._shared_embedding_interface is not None
     
     @classmethod
-    def get_shared_handler(cls) -> Optional[EmbeddingHandler]:
+    def get_shared_handler(cls) -> Optional[EmbeddingInterface]:
         """
-        获取共享的EmbeddingHandler实例
+        获取共享的 EmbeddingInterface 实例
         
         Returns:
-            Optional[EmbeddingHandler]: 共享的EmbeddingHandler实例，未初始化时返回None
+            Optional[EmbeddingInterface]: 共享的 EmbeddingInterface 实例，未初始化时返回None
         """
-        return cls._shared_embedding_handler
+        return cls._shared_embedding_interface
     
     def embed_documents(self, texts: List[str]) -> Tuple[List[List[float]], str]:
         """
@@ -83,7 +83,7 @@ class ICPEmbeddingHandler:
         if not self.is_initialized():
             return ([], EmbeddingStatus.INIT_FAILED)
         
-        return self._shared_embedding_handler.embed_documents(texts)
+        return self._shared_embedding_interface.embed_documents(texts)
     
     def embed_query(self, text: str) -> Tuple[List[float], str]:
         """
@@ -101,7 +101,7 @@ class ICPEmbeddingHandler:
         if not self.is_initialized():
             return ([], EmbeddingStatus.INIT_FAILED)
         
-        return self._shared_embedding_handler.embed_query(text)
+        return self._shared_embedding_interface.embed_query(text)
     
     def check_connection(self) -> bool:
         """

@@ -14,7 +14,7 @@ class EmbeddingStatus:
     REQUEST_FAILED = "REQUEST_FAILED"  # 请求失败
 
 
-class EmbeddingHandler:
+class EmbeddingInterface:
     """
     Embedding处理器，提供文本向量化功能
     使用标准 OpenAI API 格式进行调用
