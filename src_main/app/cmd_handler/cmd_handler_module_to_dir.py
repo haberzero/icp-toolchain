@@ -58,13 +58,12 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         
         return True
 
-    def execute(self):
-        """执行目录结构生成"""
-        if not self.is_cmd_valid():
-            return
-            
-        print(f"{Colors.OKBLUE}开始生成目录结构...{Colors.ENDC}")
+    def _build_user_prompt_for_module_to_dir(self) -> str:
+        """构建目录结构生成的用户提示词
         
+        Returns:
+            str: 完整的用户提示词，失败时返回空字符串
+        """
         # 读取需求分析结果
         requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
         try:
@@ -72,11 +71,11 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
                 requirement_content = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取需求分析结果失败: {e}{Colors.ENDC}")
-            return
+            return ""
             
         if not requirement_content:
             print(f"  {Colors.FAIL}错误: 需求分析结果为空{Colors.ENDC}")
-            return
+            return ""
         
         # 过滤掉ExternalLibraryDependencies字段，并移除module_breakdown下各模块的dependencies字段
         try:
@@ -93,36 +92,56 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             filtered_requirement_content = json.dumps(requirement_json, indent=2, ensure_ascii=False)
         except json.JSONDecodeError as e:
             print(f"  {Colors.FAIL}错误: 需求分析结果不是有效的JSON格式: {e}{Colors.ENDC}")
-            return
+            return ""
+        
+        return filtered_requirement_content
 
-        response_content, success = asyncio.run(self.chat_handler.get_role_response(
-            role_name=self.role_name,
-            user_prompt=filtered_requirement_content
-        ))
-        
-        if not success:
-            print(f"{Colors.WARNING}警告: AI响应失败{Colors.ENDC}")
-            return
-        
-        if not response_content:
-            print(f"{Colors.WARNING}警告: AI响应为空{Colors.ENDC}")
+    def execute(self):
+        """执行目录结构生成"""
+        if not self.is_cmd_valid():
             return
             
-        # 清理代码块标记
-        cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
+        print(f"{Colors.OKBLUE}开始生成目录结构...{Colors.ENDC}")
         
-        # 验证响应内容
-        if not self._validate_response(cleaned_content):
+        # 构建用户提示词
+        user_prompt = self._build_user_prompt_for_module_to_dir()
+        if not user_prompt:
             return
         
-        # 保存结果到icp_dir_content.json
-        output_file = os.path.join(self.proj_data_dir, 'icp_dir_content.json')
-        try:
-            with open(output_file, 'w', encoding='utf-8') as f:
-                f.write(cleaned_content)
-            print(f"目录结构生成完成，结果已保存到: {output_file}")
-        except Exception as e:
-            print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            print(f"{self.role_name}正在进行第 {attempt + 1} 次尝试...")
+            response_content, success = asyncio.run(self.chat_handler.get_role_response(
+                role_name=self.role_name,
+                user_prompt=user_prompt
+            ))
+            
+            # 如果响应失败，继续下一次尝试
+            if not success:
+                print(f"{Colors.WARNING}警告: AI响应失败，将进行下一次尝试{Colors.ENDC}")
+                continue
+            
+            if not response_content:
+                print(f"{Colors.WARNING}警告: AI响应为空，将进行下一次尝试{Colors.ENDC}")
+                continue
+                
+            # 清理代码块标记
+            cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
+            
+            # 验证响应内容
+            if self._validate_response(cleaned_content):
+                # 保存结果到icp_dir_content.json
+                output_file = os.path.join(self.proj_data_dir, 'icp_dir_content.json')
+                try:
+                    with open(output_file, 'w', encoding='utf-8') as f:
+                        f.write(cleaned_content)
+                    print(f"目录结构生成完成，结果已保存到: {output_file}")
+                except Exception as e:
+                    print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
+                return
+        
+        # 达到最大尝试次数
+        print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的目录结构{Colors.ENDC}")
 
     def _check_cmd_requirement(self) -> bool:
         """验证目录生成命令的前置条件"""

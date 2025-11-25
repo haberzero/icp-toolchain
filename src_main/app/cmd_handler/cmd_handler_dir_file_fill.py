@@ -185,15 +185,6 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             
         print(f"{Colors.OKBLUE}开始进行目录文件填充...{Colors.ENDC}")
         
-        # 读取需求分析结果，用于后续保存到plan_generator
-        requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
-        try:
-            with open(requirement_analysis_file, 'r', encoding='utf-8') as f:
-                requirement_content = f.read()
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取需求分析结果失败: {e}{Colors.ENDC}")
-            return
-            
         # 读取目录结构用于后续比对
         dir_structure_file = os.path.join(self.proj_data_dir, 'icp_dir_content.json')
         try:
@@ -230,7 +221,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             if not is_valid:
                 continue
             
-            # 检查并确保proj_root下有主入口文件
+            # 检查并确保 proj_root 下有主入口文件
             self._ensure_main_entry_file(new_json_content)
             
             # 保存结果到icp_dir_content_with_files.json
@@ -243,13 +234,17 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             except Exception as e:
                 print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
                 return
-                
-            # 使用第二个AI handler生成文件级别的实现规划描述
-            print(f"{Colors.OKBLUE}开始生成文件级实现规划...{Colors.ENDC}")
-            self._generate_implementation_plan_2()
-            return  # 成功则退出循环
-                
-        print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的目录结构{Colors.ENDC}")
+            
+            # 验证成功，跳出循环
+            break
+        else:
+            # 循环正常结束（未 break），说明达到最大尝试次数
+            print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的目录结构{Colors.ENDC}")
+            return
+        
+        # 第一个 handler 成功后，使用第二个 AI handler 生成文件级别的实现规划描述
+        print(f"{Colors.OKBLUE}开始生成文件级实现规划...{Colors.ENDC}")
+        self._generate_implementation_plan_2()
 
     def _check_cmd_requirement(self) -> bool:
         """验证目录文件填充命令的前置条件"""
