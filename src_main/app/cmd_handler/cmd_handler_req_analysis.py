@@ -3,8 +3,6 @@ import asyncio
 import json
 from typing import List
 
-from pydantic import SecretStr
-
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
 
@@ -118,7 +116,7 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
         
         handler_config = ChatApiConfig(
             base_url=chat_api_config.get('api-url', ''),
-            api_key=SecretStr(chat_api_config.get('api-key', '')),
+            api_key=chat_api_config.get('api-key', ''),
             model=chat_api_config.get('model', '')
         )
         

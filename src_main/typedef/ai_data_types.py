@@ -4,7 +4,6 @@ AI 接口相关的数据类型定义
 """
 
 from dataclasses import dataclass
-from pydantic import SecretStr
 
 
 # ====== Chat 相关类型定义 ======
@@ -21,7 +20,7 @@ class ChatResponseStatus:
 class ChatApiConfig:
     """Chat API 配置"""
     base_url: str
-    api_key: SecretStr
+    api_key: str
     model: str
 
 
@@ -38,5 +37,5 @@ class EmbeddingStatus:
 class EmbeddingApiConfig:
     """Embedding API 配置"""
     base_url: str
-    api_key: SecretStr
+    api_key: str
     model: str

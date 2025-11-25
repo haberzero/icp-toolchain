@@ -2,7 +2,6 @@ import sys, os
 import asyncio
 import json
 from typing import List, Dict
-from pydantic import SecretStr
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig, EmbeddingApiConfig, EmbeddingStatus
@@ -370,7 +369,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         
         handler_config = ChatApiConfig(
             base_url=chat_api_config.get('api-url', ''),
-            api_key=SecretStr(chat_api_config.get('api-key', '')),
+            api_key=chat_api_config.get('api-key', ''),
             model=chat_api_config.get('model', '')
         )
         
@@ -393,7 +392,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         
         embedding_config = EmbeddingApiConfig(
             base_url=embedding_api_config.get('api-url', ''),
-            api_key=SecretStr(embedding_api_config.get('api-key', '')),
+            api_key=embedding_api_config.get('api-key', ''),
             model=embedding_api_config.get('model', '')
         )
         

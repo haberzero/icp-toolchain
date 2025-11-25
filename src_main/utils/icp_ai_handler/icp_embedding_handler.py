@@ -8,7 +8,6 @@ ICP Embedding Handler - 管理嵌入向量服务的包装器
 
 import time
 from typing import List, Optional, Tuple
-from pydantic import SecretStr
 
 from typedef.ai_data_types import EmbeddingApiConfig, EmbeddingStatus
 from libs.ai_interface.embedding_interface import EmbeddingInterface

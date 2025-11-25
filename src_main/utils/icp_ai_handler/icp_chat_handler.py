@@ -10,7 +10,6 @@ import os
 import asyncio
 import time
 from typing import Dict, Optional, Tuple
-from pydantic import SecretStr
 
 from typedef.ai_data_types import ChatApiConfig, ChatResponseStatus
 from typedef.cmd_data_types import Colors

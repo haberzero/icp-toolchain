@@ -4,7 +4,6 @@ import json
 import hashlib
 import re
 from typing import List, Dict, Any, Optional
-from pydantic import SecretStr
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig, EmbeddingApiConfig
@@ -993,7 +992,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         return ChatApiConfig(
             base_url=chat_api_config.get('api-url', ''),
-            api_key=SecretStr(chat_api_config.get('api-key', '')),
+            api_key=chat_api_config.get('api-key', ''),
             model=chat_api_config.get('model', '')
         )
     
@@ -1024,6 +1023,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         return EmbeddingApiConfig(
             base_url=embedding_api_config.get('api-url', ''),
-            api_key=SecretStr(embedding_api_config.get('api-key', '')),
+            api_key=embedding_api_config.get('api-key', ''),
             model=embedding_api_config.get('model', '')
         )
