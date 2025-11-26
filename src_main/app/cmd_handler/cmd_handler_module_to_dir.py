@@ -153,6 +153,22 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
                 print(f"{Colors.FAIL}错误: 存在多余字段: {key}{Colors.ENDC}")
                 return False
         
+        # 检查目录结构中的所有键是否包含'.'（疑似后缀名或非法命名）
+        def _has_dot_in_keys(node, path="proj_root"):
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    current_path = f"{path}/{k}" if path else k
+                    if "." in k:
+                        print(f"{Colors.FAIL}错误: 目录键包含'.'（疑似后缀或非法命名）: {current_path}{Colors.ENDC}")
+                        return True
+                    if isinstance(v, dict):
+                        if _has_dot_in_keys(v, current_path):
+                            return True
+            return False
+        
+        if _has_dot_in_keys(json_content[required_key], "proj_root"):
+            return False
+        
         return True
 
     def is_cmd_valid(self):
