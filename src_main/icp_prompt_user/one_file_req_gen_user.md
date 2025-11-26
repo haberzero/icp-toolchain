@@ -18,7 +18,13 @@ FILE_DESCRIPTION_PLACEHOLDER
 
 **已生成的文件功能描述：**
 
-EXISTING_FILE_DESCRIPTIONS_PLACEHOLDER
+与当前文件有较多关联的文件功能描述如下，需要合理利用：
+RELATED_FILE_DESCRIPTIONS_PLACEHOLDER
+
+与当前文件有较少关联的文件功能描述如下，也可视情况使用：
+UNRELATED_FILE_DESCRIPTIONS_PLACEHOLDER
+
+**允许使用的第三方库：**
 
 仅允许考虑使用以下第三方库：
 EXTERNAL_LIB_ALLOWLIST_PLACEHOLDER
@@ -47,4 +53,4 @@ MODULE_DEPENDENCY_SUGGESTIONS_PLACEHOLDER
 
 请严格按照系统提示词中定义的格式输出结果
 
-禁止添加任何解释性文字。
+禁止添加任何解释性文字
