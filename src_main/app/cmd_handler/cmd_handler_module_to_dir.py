@@ -133,11 +133,25 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         """
         # 验证是否为有效的JSON
         try:
-            json.loads(cleaned_content)
+            json_content = json.loads(cleaned_content)
         except json.JSONDecodeError as e:
             print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
             print(f"AI返回内容: {cleaned_content}")
             return False
+
+        # 检查key的存在性以及key内容的匹配，以及检查是否有其它多余字段
+        required_key = "proj_root"
+        if required_key not in json_content:
+            print(f"{Colors.FAIL}错误: AI返回的内容缺少关键字段: {required_key}{Colors.ENDC}")
+            return False
+        if not isinstance(json_content[required_key], dict):
+            print(f"{Colors.FAIL}错误: 字段 {required_key} 的内容不是字典类型{Colors.ENDC}")
+            return False
+
+        for key in json_content:
+            if key != required_key:
+                print(f"{Colors.FAIL}错误: 存在多余字段: {key}{Colors.ENDC}")
+                return False
         
         return True
 
