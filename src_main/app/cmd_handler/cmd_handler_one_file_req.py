@@ -3,7 +3,6 @@ import asyncio
 import json
 from typing import List, Dict, Any
 
-from src_main._dev_temp.test_chat_handler import ChatHandler
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
 
@@ -203,7 +202,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             ))
             
             # 移除可能的代码块标记
-            response_content = ChatHandler.remove_code_block_markers(response_content)
+            response_content = ICPChatHandler.remove_code_block_markers(response_content)
             
             if success:
                 break
