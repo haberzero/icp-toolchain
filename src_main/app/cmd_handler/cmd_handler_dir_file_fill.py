@@ -195,13 +195,13 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
         try:
             with open(requirement_analysis_file, 'r', encoding='utf-8') as f:
-                requirement_content = f.read()
+                refined_requirement_content = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取需求分析结果失败: {e}{Colors.ENDC}")
             return ""
         
         # 读取目录文件内容
-        dir_file_path = os.path.join(self.proj_data_dir, 'icp_dir_content_filled.json')
+        dir_file_path = os.path.join(self.proj_data_dir, 'icp_dir_content_with_files.json')
         try:
             with open(dir_file_path, 'r', encoding='utf-8') as f:
                 dir_file_content = f.read()
@@ -222,12 +222,12 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         # 填充占位符
         user_prompt = user_prompt_template
         user_prompt = user_prompt.replace('USER_ORIGINAL_REQUIREMENTS_PLACEHOLDER', user_requirements)
-        user_prompt = user_prompt.replace('REFINED_REQUIREMENTS_PLACEHOLDER', requirement_content)
+        user_prompt = user_prompt.replace('REFINED_REQUIREMENTS_PLACEHOLDER', refined_requirement_content)
         user_prompt = user_prompt.replace('DIR_FILE_CONTENT_PLACEHOLDER', dir_file_content)
         
         return user_prompt
 
-    def _validate_dir_fill_response(self, cleaned_content: str, old_json_content: Dict[str, Any]) -> bool:
+    def _validate_dir_fill_response(self, cleaned_content: str, old_json_content: Dict[str, Any]) -> tuple:
         """
         验证AI响应内容是否符合要求
         
@@ -244,24 +244,24 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         except json.JSONDecodeError as e:
             print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
             print(f"AI返回内容: {cleaned_content}")
-            return False
+            return False, {}
         
         # 检查新JSON内容结构是否与旧JSON内容结构一致
         if not DirJsonFuncs.compare_structure(old_json_content, new_json_content):
             print(f"{Colors.WARNING}警告: 生成的JSON结构不符合要求，正在重新生成...{Colors.ENDC}")
-            return False
+            return False, {}
             
         # 检查新添加的节点是否都为字符串类型
         if not DirJsonFuncs.check_new_nodes_are_strings(new_json_content):
             print(f"{Colors.WARNING}警告: 生成的JSON包含非字符串类型的叶子节点，正在重新生成...{Colors.ENDC}")
-            return False
+            return False, {}
 
         # 检查并确保 proj_root 下有主入口文件
         if not self._ensure_main_entry_file(new_json_content):
             print(f"{Colors.WARNING}警告: 目录结构中的主入口文件检查/填充未成功，正在重新生成...{Colors.ENDC}")
-            return False
+            return False, {}
 
-        return True
+        return True, new_json_content
 
     def _ensure_main_entry_file(self, json_content: Dict) -> bool:
         """检查并确保proj_root下有主入口文件"""
