@@ -16,7 +16,7 @@ from libs.dir_json_funcs import DirJsonFuncs
 
 
 class CmdHandlerOneFileReq(BaseCmdHandler):
-    """IBC目录结构下创建单文件需求描述"""
+    """IBC目录结构下创建单文件需求描述并生成最新依赖关系"""
     
     def __init__(self):
         super().__init__()
@@ -34,9 +34,11 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
 
         self.chat_handler = ICPChatHandler()
         self.role_one_file_req = "7_one_file_req_gen"
+        self.role_one_file_req_depend = "7_one_file_req_depend_analyzer"
         self._init_ai_handlers()
 
         self.accumulated_file_str_content: List[tuple[str, str]] = []  # File path and its content
+        self.new_dependent_relation: Dict[str, List[str]] = {}  # 新生成的依赖关系字典
 
     def execute(self):
         """执行IBC目录结构创建"""
@@ -64,10 +66,24 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
                 print(f"{Colors.FAIL}单文件需求描述生成失败，终止执行{Colors.ENDC}")
                 return
 
-        # 使用前序依赖分析的结果，生成最终的目录内容文件
+        # 倒序处理文件（从抽象层级最高的文件开始）
+        for file_path in reversed(self.file_creation_order_list):
+            success = self._create_file_depend_analyze(file_path)
+            if not success:
+                print(f"{Colors.FAIL}依赖关系分析失败，终止执行{Colors.ENDC}")
+                return
+
+        # 检测循环依赖
+        cycle_detected = DirJsonFuncs.detect_circular_dependencies(self.new_dependent_relation)
+        if cycle_detected:
+            print(f"  {Colors.FAIL}错误: 检测到循环依赖: {cycle_detected}{Colors.ENDC}")
+            return
+        print(f"  {Colors.OKGREEN}循环依赖检测通过{Colors.ENDC}")
+
+        # 生成dir_content.json文件
         dir_content = {
             "proj_root": self.final_dir_json_content['proj_root'],
-            "dependent_relation": self.dependent_relation_dict
+            "dependent_relation": self.new_dependent_relation
         }
         
         dir_content_file = os.path.join(self.proj_data_dir, "icp_dir_content_final.json")
@@ -234,22 +250,11 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: 无法获取文件描述: {file_path}{Colors.ENDC}")
             return ""
         
-        # 遍历读取已生成的累积描述，仅获取当前文件依赖的文件的描述
-        # 根据前序依赖分析的结果，只包含当前文件直接依赖的文件
-        if self.dependent_relation_dict and isinstance(self.dependent_relation_dict, dict):
-            current_file_dependencies = self.dependent_relation_dict.get(file_path, [])
-            # 调试信息：显示当前文件的依赖内容
-            print(f"  {Colors.OKGREEN}当前文件依赖: {current_file_dependencies}{Colors.ENDC}")
-        else:
-            print(f"  {Colors.FAIL}错误: 无法获取当前文件依赖: {file_path}{Colors.ENDC}")
-            return ""
+        # 遍历读取已生成的累积描述，获取其中对外可见的描述。
+        # 依赖字典中存在/不存在的文件有不同的提示词结构
         accumulated_related_desc = []
-        
+        accumulated_unrelated_desc = []
         for _file_path, file_str_content in self.accumulated_file_str_content:
-            # 只包含当前文件依赖的文件
-            if _file_path not in current_file_dependencies:
-                continue
-                
             extracted_desc = self._extract_section_content(file_str_content, 'description')
             extracted_func = self._extract_section_content(file_str_content, 'function')
             extracted_class = self._extract_section_content(file_str_content, 'class')
@@ -264,7 +269,11 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             if extracted_desc:
                 formatted += f"描述信息:\n{extracted_desc}"
             
-            accumulated_related_desc.append(formatted)
+            # 使用在依赖列表中的文件（因为create_order的排序，前序文件内容必然在accumulated_file_str_content）
+            if _file_path in self.dependent_relation_dict:
+                accumulated_related_desc.append(formatted)
+            else:
+                accumulated_unrelated_desc.append(formatted)
 
         # 读取用户提示词模板
         app_data_manager = get_app_data_manager()
@@ -282,13 +291,212 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', self.implementation_plan_content)
         user_prompt = user_prompt.replace('FILE_DESCRIPTION_PLACEHOLDER', file_description)
         user_prompt = user_prompt.replace('RELATED_FILE_DESCRIPTIONS_PLACEHOLDER', 
-                                        '\n\n'.join(accumulated_related_desc) if accumulated_related_desc else '暂无依赖的文件需求描述')
+                                        '\n\n'.join(accumulated_related_desc) if accumulated_related_desc else '暂无相关文件需求描述')
+        user_prompt = user_prompt.replace('UNRELATED_FILE_DESCRIPTIONS_PLACEHOLDER', 
+                                        '\n\n'.join(accumulated_unrelated_desc) if accumulated_unrelated_desc else '暂无相关文件需求描述')
         
         # 填充与第三方库相关的占位符
         user_prompt = user_prompt.replace('EXTERNAL_LIB_ALLOWLIST_PLACEHOLDER', self.allowed_libs_text)
         user_prompt = user_prompt.replace('MODULE_DEPENDENCY_SUGGESTIONS_PLACEHOLDER', self.module_suggestions_text)
         
         return user_prompt
+
+    def _create_file_depend_analyze(self, file_path: str) -> bool:
+        """为每个文件生成依赖关系"""
+        max_attempts = 3
+        dependency_list = None
+        
+        for attempt in range(max_attempts):
+            print(f"{self.role_one_file_req_depend}正在分析 {file_path} 的依赖关系，第 {attempt + 1} 次尝试...")
+            
+            # 构建用户提示词
+            user_prompt = self._build_user_prompt_for_file_depend_analyzer(file_path)
+            if not user_prompt:
+                print(f"  {Colors.FAIL}错误: 无法构建用户提示词: {file_path}{Colors.ENDC}")
+                return False
+
+            # 获取模型输出
+            response_content, success = asyncio.run(self.chat_handler.get_role_response(
+                role_name=self.role_one_file_req_depend,
+                user_prompt=user_prompt
+            ))
+            
+            # 如果响应失败，继续下一次尝试
+            if not success:
+                print(f"  {Colors.WARNING}警告: AI响应失败，将进行下一次尝试{Colors.ENDC}")
+                continue
+            
+            # 清理代码块标记
+            cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
+            
+            # 验证响应内容（包含JSON有效性、结构完整性检查）
+            is_valid, dependency_list = self._validate_dependency_response(cleaned_content, file_path)
+            if is_valid:
+                break
+        
+        # 检查是否成功
+        if attempt == max_attempts - 1:
+            print(f"{Colors.FAIL}错误: 达到最大尝试次数，生成文件依赖关系失败: {file_path}{Colors.ENDC}")
+            # 即使失败，也添加空依赖列表
+            self.new_dependent_relation[file_path] = []
+            return False
+        
+        # 处理验证通过的响应
+        self.new_dependent_relation[file_path] = dependency_list
+        print(f"  {Colors.OKGREEN}成功分析文件依赖关系: {file_path} -> {dependency_list}{Colors.ENDC}")
+        return True
+
+    def _validate_dependency_response(self, cleaned_content: str, file_path: str) -> tuple[bool, List[str]]:
+        """
+        验证AI依赖关系响应内容是否符合要求
+        
+        Args:
+            cleaned_content: 清理后的AI响应内容
+            file_path: 当前分析的文件路径
+            
+        Returns:
+            tuple[bool, List[str]]: (是否有效, 依赖列表)
+        """
+        # 验证是否为有效的JSON
+        try:
+            dependencies_data = json.loads(cleaned_content)
+        except json.JSONDecodeError as e:
+            print(f"  {Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
+            print(f"  AI返回内容: {cleaned_content}")
+            return False, []
+        
+        # 验证返回的数据格式
+        if not isinstance(dependencies_data, dict):
+            print(f"  {Colors.WARNING}警告: AI返回的依赖关系不是字典格式{Colors.ENDC}")
+            return False, []
+        
+        # 获取依赖列表
+        dependency_list = dependencies_data.get('dependencies', [])
+        if not isinstance(dependency_list, list):
+            print(f"  {Colors.WARNING}警告: dependencies字段不是列表格式{Colors.ENDC}")
+            return False, []
+        
+        # 所有检查都通过
+        return True, dependency_list
+
+    def _build_user_prompt_for_file_depend_analyzer(self, file_path: str) -> str:
+        """
+        构建文件依赖关系分析的用户提示词
+        
+        从项目数据目录中直接读取所需信息，无需外部参数传递。
+        
+        Args:
+            file_path: 当前文件路径
+        
+        Returns:
+            str: 完整的用户提示词，失败时返回空字符串
+        """
+        # 读取当前文件的需求描述
+        staging_dir_path = os.path.join(self.proj_work_dir, 'src_staging')
+        req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
+        try:
+            with open(req_file_path, 'r', encoding='utf-8') as f:
+                file_requirement_content = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取文件需求描述失败: {e}{Colors.ENDC}")
+            return ""
+        
+        # 构建可用模块列表（需要剔除直接或间接依赖当前文件的模块）
+        available_modules_text = self._build_available_modules_for_dependency_analysis(file_path)
+
+        # 读取用户提示词模板
+        app_data_manager = get_app_data_manager()
+        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'one_file_req_depend_analyzer_user.md')
+        try:
+            with open(user_prompt_file, 'r', encoding='utf-8') as f:
+                user_prompt_template = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+            return ""
+
+        # 填充占位符
+        user_prompt = user_prompt_template
+        user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', self.implementation_plan_content)
+        user_prompt = user_prompt.replace('CURRENT_FILE_REQUIREMENT_PLACEHOLDER', file_requirement_content)
+        user_prompt = user_prompt.replace('CURRENT_FILE_PATH_PLACEHOLDER', file_path)
+        user_prompt = user_prompt.replace('AVAILABLE_MODULES_PLACEHOLDER', available_modules_text if available_modules_text else '暂无其他模块')
+
+        return user_prompt
+
+    def _build_available_modules_for_dependency_analysis(self, current_file_path: str) -> str:
+        """
+        为依赖关系分析构建可用模块列表
+        需要剔除直接或间接依赖当前文件的模块，以避免循环依赖
+        
+        Args:
+            current_file_path: 当前正在分析依赖关系的文件路径
+        
+        Returns:
+            str: 格式化的可用模块描述文本
+        """
+        # 获取当前文件在creation_order中的索引
+        try:
+            _ = self.file_creation_order_list.index(current_file_path)
+        except ValueError:
+            print(f"  {Colors.WARNING}警告: 当前文件不在创建顺序列表中: {current_file_path}{Colors.ENDC}")
+            return ""
+        
+        # 找出所有依赖于当前文件的文件（直接或间接）
+        dependent_files = self._find_all_dependents(current_file_path)
+        
+        # 构建可用模块列表：排除当前文件本身以及依赖于当前文件的所有文件
+        available_modules = []
+        for _file_path, file_str_content in self.accumulated_file_str_content:
+            # 跳过当前文件本身
+            if _file_path == current_file_path:
+                continue
+            
+            # 跳过依赖于当前文件的文件
+            if _file_path in dependent_files:
+                continue
+            
+            # 提取文件的可见信息并格式化
+            extracted_desc = self._extract_section_content(file_str_content, 'description')
+            extracted_func = self._extract_section_content(file_str_content, 'function')
+            extracted_class = self._extract_section_content(file_str_content, 'class')
+
+            normed_file_path = os.path.normpath(_file_path)
+            formatted = f"文件 {normed_file_path} 的接口描述:\n"
+            if extracted_class:
+                formatted += f"类信息:\n{extracted_class}\n\n"
+            if extracted_func:
+                formatted += f"函数信息:\n{extracted_func}\n\n"
+            if extracted_desc:
+                formatted += f"描述信息:\n{extracted_desc}"
+            
+            available_modules.append(formatted)
+        
+        return '\n\n'.join(available_modules) if available_modules else ''
+
+    def _find_all_dependents(self, file_path: str) -> set:
+        """
+        查找所有直接或间接依赖于指定文件的文件
+        使用最新生成的依赖关系（new_dependent_relation）
+        
+        Args:
+            file_path: 目标文件路径
+        
+        Returns:
+            set: 所有依赖于该文件的文件路径集合
+        """
+        dependents = set()
+        to_check = [file_path]
+        
+        while to_check:
+            current = to_check.pop()
+            
+            # 在新生成的依赖关系中查找依赖于current的文件
+            for f, deps in self.new_dependent_relation.items():
+                if current in deps and f not in dependents:
+                    dependents.add(f)
+                    to_check.append(f)
+        
+        return dependents
 
     def _extract_section_content(self, content: str, section_name: str) -> str:
         """从文件内容中提取指定section部分
@@ -381,6 +589,9 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         if not self.chat_handler.has_role(self.role_one_file_req):
             print(f"  {Colors.FAIL}错误: 角色 {self.role_one_file_req} 未加载{Colors.ENDC}")
             return False
+        if not self.chat_handler.has_role(self.role_one_file_req_depend):
+            print(f"  {Colors.FAIL}错误: 角色 {self.role_one_file_req_depend} 未加载{Colors.ENDC}")
+            return False
         return True
     
     def _init_ai_handlers(self):
@@ -415,6 +626,8 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         
         app_data_manager = get_app_data_manager()
         prompt_dir = app_data_manager.get_prompt_dir()
-        sys_prompt_path = os.path.join(prompt_dir, self.role_one_file_req + ".md")
+        sys_prompt_path_1 = os.path.join(prompt_dir, self.role_one_file_req + ".md")
+        sys_prompt_path_2 = os.path.join(prompt_dir, self.role_one_file_req_depend + ".md")
         
-        self.chat_handler.load_role_from_file(self.role_one_file_req, sys_prompt_path)
+        self.chat_handler.load_role_from_file(self.role_one_file_req, sys_prompt_path_1)
+        self.chat_handler.load_role_from_file(self.role_one_file_req_depend, sys_prompt_path_2)
