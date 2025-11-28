@@ -93,62 +93,62 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
         try:
             with open(requirement_analysis_file, 'r', encoding='utf-8') as f:
-                requirement_content = f.read()
+                requirement_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取需求分析结果失败: {e}{Colors.ENDC}")
             return ""
             
-        if not requirement_content:
+        if not requirement_str:
             print(f"  {Colors.FAIL}错误: 需求分析结果为空{Colors.ENDC}")
             return ""
         
         # 过滤掉ExternalLibraryDependencies字段，并移除module_breakdown下各模块的dependencies字段
         try:
-            requirement_json = json.loads(requirement_content)
+            requirement_json_dict = json.loads(requirement_str)
             # 移除ExternalLibraryDependencies字段，因为module_to_dir只关注模块结构，不关注外部库
-            if 'ExternalLibraryDependencies' in requirement_json:
-                del requirement_json['ExternalLibraryDependencies']
+            if 'ExternalLibraryDependencies' in requirement_json_dict:
+                del requirement_json_dict['ExternalLibraryDependencies']
             # 移除module_breakdown中各子模块的dependencies字段，避免干扰目录结构生成判断
-            if 'module_breakdown' in requirement_json and isinstance(requirement_json['module_breakdown'], dict):
-                for module in requirement_json['module_breakdown'].values():
+            if 'module_breakdown' in requirement_json_dict and isinstance(requirement_json_dict['module_breakdown'], dict):
+                for module in requirement_json_dict['module_breakdown'].values():
                     if isinstance(module, dict) and 'dependencies' in module:
                         del module['dependencies']
             # 将过滤后的内容转换回JSON字符串
-            filtered_requirement_content = json.dumps(requirement_json, indent=2, ensure_ascii=False)
+            filtered_requirement_str = json.dumps(requirement_json_dict, indent=2, ensure_ascii=False)
         except json.JSONDecodeError as e:
             print(f"  {Colors.FAIL}错误: 需求分析结果不是有效的JSON格式: {e}{Colors.ENDC}")
             return ""
         
-        return filtered_requirement_content
+        return filtered_requirement_str
 
-    def _validate_response(self, cleaned_content: str) -> bool:
+    def _validate_response(self, cleaned_json_str: str) -> bool:
         """
         验证AI响应内容是否符合要求
         
         Args:
-            cleaned_content: 清理后的AI响应内容
+            cleaned_json_str: 清理后的AI响应内容
             
         Returns:
             bool: 是否为有效的JSON
         """
         # 验证是否为有效的JSON
         try:
-            json_content = json.loads(cleaned_content)
+            json_dict = json.loads(cleaned_json_str)
         except json.JSONDecodeError as e:
             print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
-            print(f"AI返回内容: {cleaned_content}")
+            print(f"AI返回内容: {cleaned_json_str}")
             return False
 
         # 检查key的存在性以及key内容的匹配，以及检查是否有其它多余字段
         required_key = "proj_root"
-        if required_key not in json_content:
+        if required_key not in json_dict:
             print(f"{Colors.FAIL}错误: AI返回的内容缺少关键字段: {required_key}{Colors.ENDC}")
             return False
-        if not isinstance(json_content[required_key], dict):
+        if not isinstance(json_dict[required_key], dict):
             print(f"{Colors.FAIL}错误: 字段 {required_key} 的内容不是字典类型{Colors.ENDC}")
             return False
 
-        for key in json_content:
+        for key in json_dict:
             if key != required_key:
                 print(f"{Colors.FAIL}错误: 存在多余字段: {key}{Colors.ENDC}")
                 return False
@@ -166,7 +166,7 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
                             return True
             return False
         
-        if _has_dot_in_keys(json_content[required_key], "proj_root"):
+        if _has_dot_in_keys(json_dict[required_key], "proj_root"):
             return False
         
         return True
@@ -200,21 +200,21 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             return
         try:
             with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+                config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
             return
-        if 'dir_generate_handler' in config:
-            chat_api_config = config['dir_generate_handler']
-        elif 'coder_handler' in config:
-            chat_api_config = config['coder_handler']
+        if 'dir_generate_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['dir_generate_handler']
+        elif 'coder_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['coder_handler']
         else:
             print("错误: 配置文件缺少配置")
             return
         handler_config = ChatApiConfig(
-            base_url=chat_api_config.get('api-url', ''),
-            api_key=chat_api_config.get('api-key', ''),
-            model=chat_api_config.get('model', '')
+            base_url=chat_api_config_dict.get('api-url', ''),
+            api_key=chat_api_config_dict.get('api-key', ''),
+            model=chat_api_config_dict.get('model', '')
         )
         if not ICPChatHandler.is_initialized():
             ICPChatHandler.initialize_chat_interface(handler_config)

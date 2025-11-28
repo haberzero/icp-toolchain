@@ -101,23 +101,23 @@ class CmdHandlerParaExtract(BaseCmdHandler):
         
         try:
             with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+                config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
             return
         
-        if 'para_extract_handler' in config:
-            chat_api_config = config['para_extract_handler']
-        elif 'coder_handler' in config:
-            chat_api_config = config['coder_handler']
+        if 'para_extract_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['para_extract_handler']
+        elif 'coder_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['coder_handler']
         else:
             print("错误: 配置文件缺少para_extract_handler或coder_handler配置")
             return
         
         handler_config = ChatApiConfig(
-            base_url=chat_api_config.get('api-url', ''),
-            api_key=chat_api_config.get('api-key', ''),
-            model=chat_api_config.get('model', '')
+            base_url=chat_api_config_dict.get('api-url', ''),
+            api_key=chat_api_config_dict.get('api-key', ''),
+            model=chat_api_config_dict.get('model', '')
         )
         
         if not ICPChatHandler.is_initialized():

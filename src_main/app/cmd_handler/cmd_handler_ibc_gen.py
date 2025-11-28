@@ -52,6 +52,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self.proj_work_dir = proj_cfg_manager.get_work_dir()
         self.proj_data_dir = os.path.join(self.proj_work_dir, 'icp_proj_data')
         self.proj_config_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_config')
+        self.icp_api_config_file = os.path.join(self.proj_config_data_dir, 'icp_api_config.json')
+        self.icp_config_file = os.path.join(self.proj_config_data_dir, 'icp_config.json')
+
         
         # AI角色名称
         self.role_ibc_gen = "8_intent_behavior_code_gen"
@@ -110,26 +113,27 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     def _build_pre_execution_variables(self):
         """准备命令正式开始执行之前所需的变量内容"""
         # 读取IBC目录结构
-        ibc_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
+        final_dir_content_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
         try:
-            with open(ibc_dir_file, 'r', encoding='utf-8') as f:
-                ibc_content = json.load(f)
+            with open(final_dir_content_file, 'r', encoding='utf-8') as f:
+                final_dir_structure_str = f.read()
         except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取IBC目录结构失败: {e}{Colors.ENDC}")
-            return
+            print(f"  {Colors.FAIL}错误: 读取目录结构失败: {e}{Colors.ENDC}")
+            return ""
         
-        if not ibc_content:
+        if not final_dir_structure_str:
             print(f"  {Colors.FAIL}错误: IBC目录结构内容为空{Colors.ENDC}")
             return
         
-        if "proj_root" not in ibc_content or "dependent_relation" not in ibc_content:
+        final_dir_json_dict = json.loads(final_dir_structure_str)
+        if "proj_root" not in final_dir_json_dict or "dependent_relation" not in final_dir_json_dict:
             print(f"  {Colors.FAIL}错误: IBC目录结构缺少必要的节点(proj_root或dependent_relation){Colors.ENDC}")
             return
         
         # 读取用户需求
         user_data_manager = get_user_data_manager()
-        user_requirements = user_data_manager.get_user_prompt()
-        if not user_requirements:
+        user_requirements_str = user_data_manager.get_user_prompt()
+        if not user_requirements_str:
             print(f"  {Colors.FAIL}错误: 未找到用户原始需求{Colors.ENDC}")
             return
         
@@ -139,13 +143,25 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: src_staging目录不存在，请先执行one_file_req_gen命令{Colors.ENDC}")
             return
         
-        # 准备IBC目录
-        ibc_dir_name = self._get_ibc_directory_name()
-        ibc_root_path = os.path.join(self.proj_work_dir, ibc_dir_name)
+        # 读取项目配置
+        try:
+            with open(self.icp_config_file, 'r', encoding='utf-8') as f:
+                icp_config_json_dict = json.load(f)
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取ICP配置文件失败: {e}{Colors.ENDC}")
+            return
+
+        # 获取文件夹名称配置并创建对应文件夹
+        if "file_system_mapping" in icp_config_json_dict:
+            ibc_dir_name = icp_config_json_dict["file_system_mapping"].get("ibc_dir_name", "src_ibc")
+        if ibc_dir_name is not None:
+            ibc_root_path = os.path.join(self.proj_work_dir, ibc_dir_name)
+        else:
+            ibc_root_path = os.path.join(self.proj_work_dir, "src_ibc")
         os.makedirs(ibc_root_path, exist_ok=True)
         
         # 获取文件创建顺序
-        dependent_relation = ibc_content['dependent_relation']
+        dependent_relation = final_dir_json_dict['dependent_relation']
         file_creation_order_list = DirJsonFuncs.build_file_creation_order(dependent_relation)
         
         # 初始化更新状态
@@ -156,14 +172,14 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         )
         
         # 存储实例变量供后续使用
-        self.proj_root = ibc_content['proj_root']
+        self.dir_json_dict = final_dir_json_dict
+        self.proj_root_json_str = json.dumps(final_dir_json_dict['proj_root'], indent=2, ensure_ascii=False)
         self.dependent_relation = dependent_relation
-        self.user_requirements = user_requirements
+        self.file_creation_order_list = file_creation_order_list
+        self.user_requirements_str = user_requirements_str
         self.staging_dir_path = staging_dir_path
         self.ibc_root_path = ibc_root_path
-        self.file_creation_order_list = file_creation_order_list
         self.update_status = update_status
-        self.project_structure_json = json.dumps(ibc_content['proj_root'], indent=2, ensure_ascii=False)
     
     
     # ========== 单文件处理方法 ==========
@@ -429,21 +445,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         except Exception as e:
             print(f"    {Colors.FAIL}错误: 向量化失败: {e}{Colors.ENDC}")
     
-    def _get_ibc_directory_name(self) -> str:
-        icp_config_file = os.path.join(self.proj_config_data_dir, 'icp_config.json')
-        try:
-            with open(icp_config_file, 'r', encoding='utf-8') as f:
-                icp_config = json.load(f)
-            
-            # 尝试获取behavioral_layer_dir
-            behavioral_layer_dir = icp_config["file_system_mapping"].get("behavioral_layer_dir")
-            if behavioral_layer_dir:
-                return behavioral_layer_dir
-            else:
-                return "src_ibc"
-        except:
-            return "src_ibc"
-
     def _extract_section_content(self, content: str, section_name: str) -> str:
         """从文件内容中提取指定部分的内容"""
         lines = content.split('\n')
@@ -533,7 +534,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         req_file_path = os.path.join(self.staging_dir_path, f"{file_path}_one_file_req.txt")
         try:
             with open(req_file_path, 'r', encoding='utf-8') as f:
-                file_req_content = f.read()
+                file_req_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取文件需求描述失败: {e}{Colors.ENDC}")
             return ""
@@ -548,46 +549,46 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         # 读取文件级实现规划
         implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
-        implementation_plan_content = ""
+        implementation_plan_str = ""
         try:
             with open(implementation_plan_file, 'r', encoding='utf-8') as f:
-                implementation_plan_content = f.read()
+                implementation_plan_str = f.read()
         except Exception as e:
             print(f"  {Colors.WARNING}警告: 读取文件级实现规划失败: {e}，将仅使用文件需求描述{Colors.ENDC}")
         
         # 提取各个部分的内容
-        class_content = self._extract_section_content(file_req_content, 'class')
-        func_content = self._extract_section_content(file_req_content, 'func')
-        var_content = self._extract_section_content(file_req_content, 'var')
-        others_content = self._extract_section_content(file_req_content, 'others')
-        behavior_content = self._extract_section_content(file_req_content, 'behavior')
-        import_content = self._extract_section_content(file_req_content, 'import')
+        class_content = self._extract_section_content(file_req_str, 'class')
+        func_content = self._extract_section_content(file_req_str, 'func')
+        var_content = self._extract_section_content(file_req_str, 'var')
+        others_content = self._extract_section_content(file_req_str, 'others')
+        behavior_content = self._extract_section_content(file_req_str, 'behavior')
+        import_content = self._extract_section_content(file_req_str, 'import')
         
         # 读取用户提示词模板
         app_data_manager = get_app_data_manager()
         user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'intent_code_behavior_gen_user.md')
         try:
             with open(user_prompt_file, 'r', encoding='utf-8') as f:
-                user_prompt_template = f.read()
+                user_prompt_template_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
             return ""
             
         # 填充占位符
-        user_prompt = user_prompt_template
-        user_prompt = user_prompt.replace('USER_REQUIREMENTS_PLACEHOLDER', self.user_requirements)
-        user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_content)
-        user_prompt = user_prompt.replace('PROJECT_STRUCTURE_PLACEHOLDER', self.project_structure_json)
-        user_prompt = user_prompt.replace('CURRENT_FILE_PATH_PLACEHOLDER', file_path)
-        user_prompt = user_prompt.replace('CLASS_CONTENT_PLACEHOLDER', class_content if class_content else '无')
-        user_prompt = user_prompt.replace('FUNC_CONTENT_PLACEHOLDER', func_content if func_content else '无')
-        user_prompt = user_prompt.replace('VAR_CONTENT_PLACEHOLDER', var_content if var_content else '无')
-        user_prompt = user_prompt.replace('OTHERS_CONTENT_PLACEHOLDER', others_content if others_content else '无')
-        user_prompt = user_prompt.replace('BEHAVIOR_CONTENT_PLACEHOLDER', behavior_content if behavior_content else '无')
-        user_prompt = user_prompt.replace('IMPORT_CONTENT_PLACEHOLDER', import_content if import_content else '无')
-        user_prompt = user_prompt.replace('AVAILABLE_SYMBOLS_PLACEHOLDER', available_symbols_text)
+        user_prompt_str = user_prompt_template_str
+        user_prompt_str = user_prompt_str.replace('USER_REQUIREMENTS_PLACEHOLDER', self.user_requirements_str)
+        user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_str)
+        user_prompt_str = user_prompt_str.replace('PROJECT_STRUCTURE_PLACEHOLDER', self.proj_root_json_str)
+        user_prompt_str = user_prompt_str.replace('CURRENT_FILE_PATH_PLACEHOLDER', file_path)
+        user_prompt_str = user_prompt_str.replace('CLASS_CONTENT_PLACEHOLDER', class_content if class_content else '无')
+        user_prompt_str = user_prompt_str.replace('FUNC_CONTENT_PLACEHOLDER', func_content if func_content else '无')
+        user_prompt_str = user_prompt_str.replace('VAR_CONTENT_PLACEHOLDER', var_content if var_content else '无')
+        user_prompt_str = user_prompt_str.replace('OTHERS_CONTENT_PLACEHOLDER', others_content if others_content else '无')
+        user_prompt_str = user_prompt_str.replace('BEHAVIOR_CONTENT_PLACEHOLDER', behavior_content if behavior_content else '无')
+        user_prompt_str = user_prompt_str.replace('IMPORT_CONTENT_PLACEHOLDER', import_content if import_content else '无')
+        user_prompt_str = user_prompt_str.replace('AVAILABLE_SYMBOLS_PLACEHOLDER', available_symbols_text)
         
-        return user_prompt
+        return user_prompt_str
 
     def _build_user_prompt_for_symbol_normalizer(self, file_path: str, symbols: Dict[str, SymbolNode], ibc_code: str) -> str:
         """
@@ -608,7 +609,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'symbol_normalizer_user.md')
         try:
             with open(user_prompt_file, 'r', encoding='utf-8') as f:
-                user_prompt_template = f.read()
+                user_prompt_template_str = f.read()
         except Exception as e:
             raise RuntimeError(f"读取符号规范化提示词失败: {e}")
         
@@ -619,12 +620,12 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         symbols_text = self._format_symbols_for_prompt(symbols)
         
         # 填充占位符
-        user_prompt = user_prompt_template.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
-        user_prompt = user_prompt.replace('FILE_PATH_PLACEHOLDER', file_path)
-        user_prompt = user_prompt.replace('CONTEXT_INFO_PLACEHOLDER', ibc_code)
-        user_prompt = user_prompt.replace('AST_SYMBOLS_PLACEHOLDER', symbols_text)
+        user_prompt_str = user_prompt_template_str.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
+        user_prompt_str = user_prompt_str.replace('FILE_PATH_PLACEHOLDER', file_path)
+        user_prompt_str = user_prompt_str.replace('CONTEXT_INFO_PLACEHOLDER', ibc_code)
+        user_prompt_str = user_prompt_str.replace('AST_SYMBOLS_PLACEHOLDER', symbols_text)
         
-        return user_prompt
+        return user_prompt_str
     
     
     
@@ -738,8 +739,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         icp_config_file = os.path.join(self.proj_config_data_dir, 'icp_config.json')
         try:
             with open(icp_config_file, 'r', encoding='utf-8') as f:
-                icp_config_json = json.load(f)
-            return icp_config_json.get('target_language', 'python')
+                icp_config_json_dict = json.load(f)
+            return icp_config_json_dict.get('target_language', 'python')
         except Exception as e:
             print(f"{Colors.WARNING}警告: 读取配置文件失败: {e}，使用默认语言python{Colors.ENDC}")
             return 'python'
@@ -951,20 +952,19 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     
     def _init_ai_handlers(self):
         """初始化AI处理器"""
-        icp_api_config_file = os.path.join(self.proj_config_data_dir, 'icp_api_config.json')
-        if not os.path.exists(icp_api_config_file):
-            print(f"错误: 配置文件 {icp_api_config_file} 不存在")
+        if not os.path.exists(self.icp_api_config_file):
+            print(f"错误: 配置文件 {self.icp_api_config_file} 不存在")
             return
         
         try:
-            with open(icp_api_config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+            with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
+                config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
             return
         
         # 初始化Chat处理器
-        chat_config = self._get_chat_config(config)
+        chat_config = self._get_chat_config(config_json_dict)
         if chat_config and not ICPChatHandler.is_initialized():
             ICPChatHandler.initialize_chat_interface(chat_config)
         
@@ -972,25 +972,25 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self._load_chat_roles()
         
         # 初始化Embedding处理器
-        embedding_config = self._get_embedding_config(config)
+        embedding_config = self._get_embedding_config(config_json_dict)
         if embedding_config and not ICPEmbeddingHandler.is_initialized():
             ICPEmbeddingHandler.initialize_embedding_handler(embedding_config)
     
-    def _get_chat_config(self, config: Dict[str, Any]) -> Optional[ChatApiConfig]:
+    def _get_chat_config(self, config_json_dict: Dict[str, Any]) -> Optional[ChatApiConfig]:
         """获取Chat API配置"""
-        chat_api_config = None
-        if 'intent_behavior_code_gen_handler' in config:
-            chat_api_config = config['intent_behavior_code_gen_handler']
-        elif 'coder_handler' in config:
-            chat_api_config = config['coder_handler']
+        chat_api_config_dict = None
+        if 'intent_behavior_code_gen_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['intent_behavior_code_gen_handler']
+        elif 'coder_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['coder_handler']
         else:
             print("错误: 配置文件缺少intent_behavior_code_gen_handler或coder_handler配置")
             return None
         
         return ChatApiConfig(
-            base_url=chat_api_config.get('api-url', ''),
-            api_key=chat_api_config.get('api-key', ''),
-            model=chat_api_config.get('model', '')
+            base_url=chat_api_config_dict.get('api-url', ''),
+            api_key=chat_api_config_dict.get('api-key', ''),
+            model=chat_api_config_dict.get('model', '')
         )
     
     def _load_chat_roles(self):

@@ -43,7 +43,7 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         self.no_circular_dependency = False  # 标记是否无循环依赖（正常退出）
         
         # 预处理变量
-        self.original_json_content = None  # 原始的JSON内容
+        self.original_json_dict = None  # 原始的JSON内容
         
         # 初始化AI处理器
         self._init_ai_handlers()
@@ -58,7 +58,7 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         self.dependency_structure_content = None
         self.first_circle_flag = True
         self.no_circular_dependency = False
-        self.original_json_content = None
+        self.original_json_dict = None
         
         print(f"{Colors.OKBLUE}开始解决循环依赖问题...{Colors.ENDC}")
         
@@ -70,11 +70,11 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         # 如果没有循环依赖，直接保存原始内容
         if self.no_circular_dependency:
             print(f"{Colors.OKBLUE}未检测到循环依赖，直接保存原有依赖结构...{Colors.ENDC}")
-            self._save_result(self.original_json_content)
+            self._save_result(self.original_json_dict)
             return
         
         max_attempts = 3
-        new_json_content = {}
+        new_json_dict = {}
         
         for attempt in range(max_attempts):
             print(f"{self.role_name}正在进行第 {attempt + 1} 次尝试...")
@@ -99,7 +99,7 @@ class CmdHandlerDependRefine(BaseCmdHandler):
             cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
             
             # 验证响应内容（包含所有检查：JSON有效性、结构完整性、循环依赖检测）
-            is_valid, new_json_content = self._validate_response(cleaned_content)
+            is_valid, new_json_dict = self._validate_response(cleaned_content)
             if is_valid:
                 # 所有检查都通过，跳出循环
                 break
@@ -108,7 +108,7 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         self.circular_deps_content = None
         self.dependency_structure_content = None
         self.first_circle_flag = True
-        self.original_json_content = None
+        self.original_json_dict = None
         
         # 循环已跳出，检查运行结果并进行相应操作
         if attempt == max_attempts - 1:
@@ -116,7 +116,7 @@ class CmdHandlerDependRefine(BaseCmdHandler):
             return
 
         print(f"{Colors.OKBLUE}循环依赖解决完成，正在保存结果...{Colors.ENDC}")
-        self._save_result(new_json_content)
+        self._save_result(new_json_dict)
 
     def _build_pre_execution_variables(self) -> bool:
         """
@@ -129,24 +129,24 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         depend_analysis_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_depend.json')
         try:
             with open(depend_analysis_file, 'r', encoding='utf-8') as f:
-                depend_content = f.read()
+                depend_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取依赖分析结果失败: {e}{Colors.ENDC}")
             return False
             
-        if not depend_content:
+        if not depend_str:
             print(f"  {Colors.FAIL}错误: 依赖分析结果为空{Colors.ENDC}")
             return False
 
         # 解析JSON内容
         try:
-            self.original_json_content = json.loads(depend_content)
+            self.original_json_dict = json.loads(depend_str)
         except json.JSONDecodeError as e:
             print(f"  {Colors.FAIL}错误: 依赖分析结果不是有效的JSON格式: {e}{Colors.ENDC}")
             return False
 
         # 检测循环依赖
-        dependent_relation = self.original_json_content.get("dependent_relation", {})
+        dependent_relation = self.original_json_dict.get("dependent_relation", {})
         circular_dependencies = DirJsonFuncs.detect_circular_dependencies(dependent_relation)
         
         if not circular_dependencies:
@@ -162,21 +162,21 @@ class CmdHandlerDependRefine(BaseCmdHandler):
 
         # 保存循环依赖信息，用于构建用户提示词
         self.circular_deps_content = '\n'.join(circular_dependencies)
-        self.dependency_structure_content = depend_content
+        self.dependency_structure_content = depend_str
         
         return True
 
-    def _save_result(self, json_content: Dict[str, Any]):
+    def _save_result(self, json_dict: Dict[str, Any]):
         """
         保存结果到文件
         
         Args:
-            json_content: 要保存的JSON内容
+            json_dict: 要保存的JSON内容
         """
         output_file = os.path.join(self.proj_data_dir, 'icp_dir_content_refined.json')
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
-                json.dump(json_content, f, indent=2, ensure_ascii=False)
+                json.dump(json_dict, f, indent=2, ensure_ascii=False)
             print(f"{Colors.OKBLUE}结果已保存到: {output_file}{Colors.ENDC}")
         except Exception as e:
             print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
@@ -197,7 +197,7 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'depend_refine_user.md')
         try:
             with open(user_prompt_file, 'r', encoding='utf-8') as f:
-                user_prompt_template = f.read()
+                user_prompt_template_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
             return ""
@@ -205,48 +205,48 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         # 根据是否是第一次运行，选择不同的数据源
         if self.first_circle_flag:
             # 第一次运行，使用预处理阶段读取的数据
-            circular_deps_content = self.circular_deps_content
-            depend_content = self.dependency_structure_content
+            circular_deps_str = self.circular_deps_content
+            depend_str = self.dependency_structure_content
         else:
             # 不是第一次运行，使用上一轮验证后更新的信息
-            circular_deps_content = self.circular_deps_content
-            depend_content = self.dependency_structure_content
+            circular_deps_str = self.circular_deps_content
+            depend_str = self.dependency_structure_content
         
         # 填充占位符
-        user_prompt = user_prompt_template
-        user_prompt = user_prompt.replace('CIRCULAR_DEPENDENCIES_PLACEHOLDER', circular_deps_content)
-        user_prompt = user_prompt.replace('DEPENDENCY_STRUCTURE_PLACEHOLDER', depend_content)
+        user_prompt_str = user_prompt_template_str
+        user_prompt_str = user_prompt_str.replace('CIRCULAR_DEPENDENCIES_PLACEHOLDER', circular_deps_str)
+        user_prompt_str = user_prompt_str.replace('DEPENDENCY_STRUCTURE_PLACEHOLDER', depend_str)
         
-        return user_prompt
+        return user_prompt_str
 
-    def _validate_response(self, cleaned_content: str) -> tuple[bool, Dict[str, Any]]:
+    def _validate_response(self, cleaned_json_str: str) -> tuple[bool, Dict[str, Any]]:
         """
         验证AI响应内容是否符合要求
         
         Args:
-            cleaned_content: 清理后的AI响应内容
+            cleaned_json_str: 清理后的AI响应内容
             
         Returns:
             tuple[bool, Dict[str, Any]]: (是否有效, JSON内容字典)
         """
         # 验证是否为有效的JSON
         try:
-            new_json_content = json.loads(cleaned_content)
+            new_json_dict = json.loads(cleaned_json_str)
         except json.JSONDecodeError as e:
             print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
-            print(f"AI返回内容: {cleaned_content}")
+            print(f"AI返回内容: {cleaned_json_str}")
             return False, {}
         
         # 检查新JSON内容是否包含proj_root和dependent_relation节点
-        if "proj_root" not in new_json_content or "dependent_relation" not in new_json_content:
+        if "proj_root" not in new_json_dict or "dependent_relation" not in new_json_dict:
             print(f"{Colors.WARNING}警告: 生成的JSON结构不符合要求，缺少必需的根节点{Colors.ENDC}")
             return False, {}
         
         # 确保dependent_relation中包含proj_root下的所有文件路径
-        DirJsonFuncs.ensure_all_files_in_dependent_relation(new_json_content)
+        DirJsonFuncs.ensure_all_files_in_dependent_relation(new_json_dict)
         
         # 检测循环依赖
-        dependent_relation = new_json_content.get("dependent_relation", {})
+        dependent_relation = new_json_dict.get("dependent_relation", {})
         circular_dependencies = DirJsonFuncs.detect_circular_dependencies(dependent_relation)
         
         if circular_dependencies:
@@ -257,13 +257,13 @@ class CmdHandlerDependRefine(BaseCmdHandler):
             
             # 更新实例变量，用于下一轮提示词构建
             self.circular_deps_content = '\n'.join(circular_dependencies)
-            self.dependency_structure_content = cleaned_content
+            self.dependency_structure_content = cleaned_json_str
             self.first_circle_flag = False
             
-            return False, new_json_content
+            return False, new_json_dict
         
         # 所有检查都通过
-        return True, new_json_content
+        return True, new_json_dict
 
     def is_cmd_valid(self):
         """检查解决循环依赖命令的必要条件是否满足"""
@@ -302,29 +302,29 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         
         try:
             with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+                config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
             return
         
         # 优先检查是否有dependency_refine_handler配置
-        if 'dependency_refine_handler' in config:
-            chat_api_config = config['dependency_refine_handler']
-        elif 'coder_handler' in config:
-            chat_api_config = config['coder_handler']
+        if 'dependency_refine_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['dependency_refine_handler']
+        elif 'coder_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['coder_handler']
         else:
             print("错误: 配置文件缺少dependency_refine_handler或coder_handler配置")
             return
         
-        handler_config = ChatApiConfig(
-            base_url=chat_api_config.get('api-url', ''),
-            api_key=chat_api_config.get('api-key', ''),
-            model=chat_api_config.get('model', '')
+        chat_handler_config = ChatApiConfig(
+            base_url=chat_api_config_dict.get('api-url', ''),
+            api_key=chat_api_config_dict.get('api-key', ''),
+            model=chat_api_config_dict.get('model', '')
         )
         
         # 初始化共享的ChatInterface（只初始化一次）
         if not ICPChatHandler.is_initialized():
-            ICPChatHandler.initialize_chat_interface(handler_config)
+            ICPChatHandler.initialize_chat_interface(chat_handler_config)
         
         # 加载角色的系统提示词
         app_data_manager = get_app_data_manager()

@@ -61,17 +61,17 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         ibc_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
         try:
             with open(ibc_dir_file, 'r', encoding='utf-8') as f:
-                ibc_content = json.load(f)
+                ibc_content_json_dict = json.load(f)
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取IBC目录结构失败: {e}{Colors.ENDC}")
             return
         
-        if not ibc_content or "dependent_relation" not in ibc_content:
+        if not ibc_content_json_dict or "dependent_relation" not in ibc_content_json_dict:
             print(f"  {Colors.FAIL}错误: IBC目录结构缺少必要的节点{Colors.ENDC}")
             return
 
         # 从dependent_relation中获取文件创建顺序
-        dependent_relation = ibc_content["dependent_relation"]
+        dependent_relation = ibc_content_json_dict["dependent_relation"]
         file_creation_order_list = DirJsonFuncs.build_file_creation_order(dependent_relation)
         
         # 获取目录配置
@@ -91,14 +91,14 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         
         # 读取用户原始需求
         user_data_manager = get_user_data_manager()
-        user_requirements = user_data_manager.get_user_prompt()
+        user_requirements_str = user_data_manager.get_user_prompt()
         
         # 读取文件级实现规划
         implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
-        implementation_plan_content = ""
+        implementation_plan_str = ""
         try:
             with open(implementation_plan_file, 'r', encoding='utf-8') as f:
-                implementation_plan_content = f.read()
+                implementation_plan_str = f.read()
         except Exception as e:
             print(f"  {Colors.WARNING}警告: 读取文件级实现规划失败: {e}{Colors.ENDC}")
         
@@ -152,9 +152,9 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             
             # 5. 调用AI生成目标代码
             print(f"    正在生成目标语言代码...")
-            target_code = self._generate_target_code(file_path)
+            target_code_str = self._generate_target_code(file_path)
             
-            if not target_code:
+            if not target_code_str:
                 print(f"    {Colors.FAIL}错误: 目标代码生成失败{Colors.ENDC}")
                 continue
             
@@ -163,7 +163,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             try:
                 os.makedirs(os.path.dirname(target_file_path), exist_ok=True)
                 with open(target_file_path, 'w', encoding='utf-8') as f:
-                    f.write(target_code)
+                    f.write(target_code_str)
                 print(f"  {Colors.OKGREEN}目标代码已生成: {target_file_path}{Colors.ENDC}")
             except Exception as e:
                 print(f"  {Colors.FAIL}错误: 保存目标代码失败: {e}{Colors.ENDC}")
@@ -185,17 +185,17 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         """
         # 读取用户原始需求
         user_data_manager = get_user_data_manager()
-        user_requirements = user_data_manager.get_user_prompt()
-        if not user_requirements:
+        user_requirements_str = user_data_manager.get_user_prompt()
+        if not user_requirements_str:
             print(f"  {Colors.FAIL}错误: 读取用户需求失败{Colors.ENDC}")
             return ""
         
         # 读取文件级实现规划
         implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
-        implementation_plan = ""
+        implementation_plan_str = ""
         try:
             with open(implementation_plan_file, 'r', encoding='utf-8') as f:
-                implementation_plan = f.read()
+                implementation_plan_str = f.read()
         except Exception as e:
             print(f"  {Colors.WARNING}警告: 读取文件级实现规划失败: {e}{Colors.ENDC}")
         
@@ -208,7 +208,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         normalized_ibc_file = os.path.join(ibc_root_path, f"{file_path}_normalized.ibc")
         try:
             with open(normalized_ibc_file, 'r', encoding='utf-8') as f:
-                ibc_code = f.read()
+                ibc_code_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取规范化IBC代码失败: {e}{Colors.ENDC}")
             return ""
@@ -218,20 +218,20 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         
         try:
             with open(user_prompt_file, 'r', encoding='utf-8') as f:
-                user_prompt_template = f.read()
+                user_prompt_template_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
             return ""
         
         # 填充模板
-        user_prompt = user_prompt_template
-        user_prompt = user_prompt.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
-        user_prompt = user_prompt.replace('CURRENT_FILE_PATH_PLACEHOLDER', file_path)
-        user_prompt = user_prompt.replace('USER_REQUIREMENTS_PLACEHOLDER', user_requirements)
-        user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan)
-        user_prompt = user_prompt.replace('IBC_CODE_PLACEHOLDER', ibc_code)
+        user_prompt_str = user_prompt_template_str
+        user_prompt_str = user_prompt_str.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
+        user_prompt_str = user_prompt_str.replace('CURRENT_FILE_PATH_PLACEHOLDER', file_path)
+        user_prompt_str = user_prompt_str.replace('USER_REQUIREMENTS_PLACEHOLDER', user_requirements_str)
+        user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_str)
+        user_prompt_str = user_prompt_str.replace('IBC_CODE_PLACEHOLDER', ibc_code_str)
         
-        return user_prompt
+        return user_prompt_str
 
     def _generate_target_code(self, file_path: str) -> str:
         """
@@ -244,28 +244,28 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             str: 生成的目标代码
         """
         # 构建用户提示词
-        user_prompt = self._build_user_prompt_for_target_code_gen(file_path)
-        if not user_prompt:
+        user_prompt_str = self._build_user_prompt_for_target_code_gen(file_path)
+        if not user_prompt_str:
             return ""
         
         # 调用AI生成目标代码
-        response_content, success = asyncio.run(self.chat_handler.get_role_response(
+        response_str, success = asyncio.run(self.chat_handler.get_role_response(
             role_name=self.role_name,
-            user_prompt=user_prompt
+            user_prompt=user_prompt_str
         ))
         
         if not success:
             print(f"    {Colors.WARNING}警告: AI响应失败{Colors.ENDC}")
             return ""
         
-        if not response_content:
+        if not response_str:
             print(f"    {Colors.WARNING}警告: AI响应为空{Colors.ENDC}")
             return ""
         
         # 清理代码块标记
-        cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
+        cleaned_code_str = ICPChatHandler.clean_code_block_markers(response_str)
         
-        return cleaned_content
+        return cleaned_code_str
 
     def _get_ast_file_path(self, ibc_root_path: str, file_path: str) -> str:
         """获取AST文件路径"""
@@ -276,8 +276,8 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         icp_config_file = os.path.join(self.proj_config_data_dir, 'icp_config.json')
         try:
             with open(icp_config_file, 'r', encoding='utf-8') as f:
-                icp_config = json.load(f)
-            return icp_config["file_system_mapping"].get("behavioral_layer_dir", "src_ibc")
+                icp_config_json_dict = json.load(f)
+            return icp_config_json_dict["file_system_mapping"].get("behavioral_layer_dir", "src_ibc")
         except:
             return "src_ibc"
 
@@ -286,8 +286,8 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         icp_config_file = os.path.join(self.proj_config_data_dir, 'icp_config.json')
         try:
             with open(icp_config_file, 'r', encoding='utf-8') as f:
-                icp_config = json.load(f)
-            return icp_config["file_system_mapping"].get("target_layer_dir", "src_main")
+                icp_config_json_dict = json.load(f)
+            return icp_config_json_dict["file_system_mapping"].get("target_layer_dir", "src_main")
         except:
             return "src_main"
 
@@ -296,8 +296,8 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         icp_config_file = os.path.join(self.proj_config_data_dir, 'icp_config.json')
         try:
             with open(icp_config_file, 'r', encoding='utf-8') as f:
-                icp_config = json.load(f)
-            return icp_config.get("target_suffix", ".py")
+                icp_config_json_dict = json.load(f)
+            return icp_config_json_dict.get("target_suffix", ".py")
         except:
             return ".py"
 
@@ -306,8 +306,8 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         icp_config_file = os.path.join(self.proj_config_data_dir, 'icp_config.json')
         try:
             with open(icp_config_file, 'r', encoding='utf-8') as f:
-                icp_config = json.load(f)
-            return icp_config.get("target_language", "Python")
+                icp_config_json_dict = json.load(f)
+            return icp_config_json_dict.get("target_language", "Python")
         except:
             return "Python"
 
@@ -355,27 +355,27 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         
         try:
             with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+                config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
             return
         
         # Chat处理器配置
-        if 'coder_handler' in config:
-            chat_api_config = config['coder_handler']
+        if 'coder_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['coder_handler']
         else:
             print("错误: 配置文件缺少coder_handler配置")
             return
         
-        handler_config = ChatApiConfig(
-            base_url=chat_api_config.get('api-url', ''),
-            api_key=chat_api_config.get('api-key', ''),
-            model=chat_api_config.get('model', '')
+        chat_handler_config = ChatApiConfig(
+            base_url=chat_api_config_dict.get('api-url', ''),
+            api_key=chat_api_config_dict.get('api-key', ''),
+            model=chat_api_config_dict.get('model', '')
         )
         
         # 初始化共享的ChatInterface（只初始化一次）
         if not ICPChatHandler.is_initialized():
-            ICPChatHandler.initialize_chat_interface(handler_config)
+            ICPChatHandler.initialize_chat_interface(chat_handler_config)
         
         # 加载角色
         app_data_manager = get_app_data_manager()
@@ -384,18 +384,18 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         self.chat_handler.load_role_from_file(self.role_name, sys_prompt_path)
         
         # Embedding处理器配置
-        if 'embedding_handler' in config:
-            embedding_api_config = config['embedding_handler']
+        if 'embedding_handler' in config_json_dict:
+            embedding_api_config_dict = config_json_dict['embedding_handler']
         else:
             print("警告: 配置文件缺少embedding_handler配置，使用coder_handler配置")
-            embedding_api_config = chat_api_config
+            embedding_api_config_dict = chat_api_config_dict
         
-        embedding_config = EmbeddingApiConfig(
-            base_url=embedding_api_config.get('api-url', ''),
-            api_key=embedding_api_config.get('api-key', ''),
-            model=embedding_api_config.get('model', '')
+        embedding_handler_config = EmbeddingApiConfig(
+            base_url=embedding_api_config_dict.get('api-url', ''),
+            api_key=embedding_api_config_dict.get('api-key', ''),
+            model=embedding_api_config_dict.get('model', '')
         )
         
         # 初始化共享的EmbeddingHandler（只初始化一次）
         if not ICPEmbeddingHandler.is_initialized():
-            ICPEmbeddingHandler.initialize_embedding_handler(embedding_config)
+            ICPEmbeddingHandler.initialize_embedding_handler(embedding_handler_config)

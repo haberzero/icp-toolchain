@@ -66,10 +66,10 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
                 continue
                 
             # 清理代码块标记
-            cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
+            cleaned_json_str = ICPChatHandler.clean_code_block_markers(response_content)
             
             # 验证响应内容
-            is_valid = self._validate_response(cleaned_content)
+            is_valid = self._validate_response(cleaned_json_str)
             if is_valid:
                 break
         
@@ -81,7 +81,7 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         output_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_depend.json')
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
-                f.write(cleaned_content)
+                f.write(cleaned_json_str)
             print(f"{Colors.OKBLUE}依赖分析完成，结果已保存到: {output_file}{Colors.ENDC}")
         except Exception as e:
             print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
@@ -100,12 +100,12 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
         try:
             with open(implementation_plan_file, 'r', encoding='utf-8') as f:
-                implementation_plan_content = f.read()
+                implementation_plan_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取文件级实现规划失败: {e}{Colors.ENDC}")
             return ""
             
-        if not implementation_plan_content:
+        if not implementation_plan_str:
             print(f"  {Colors.FAIL}错误: 文件级实现规划内容为空{Colors.ENDC}")
             return ""
             
@@ -113,18 +113,18 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         dir_with_files_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_files.json')
         try:
             with open(dir_with_files_file, 'r', encoding='utf-8') as f:
-                dir_with_files_content = f.read()
+                dir_with_files_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取带文件描述的目录结构失败: {e}{Colors.ENDC}")
             return ""
             
-        if not dir_with_files_content:
+        if not dir_with_files_str:
             print(f"  {Colors.FAIL}错误: 带文件描述的目录结构内容为空{Colors.ENDC}")
             return ""
-        self.old_json_content = json.loads(dir_with_files_content)
+        self.old_json_dict = json.loads(dir_with_files_str)
         
         # 生成完整路径列表
-        file_paths = DirJsonFuncs.get_all_file_paths(self.old_json_content.get("proj_root", {}))
+        file_paths = DirJsonFuncs.get_all_file_paths(self.old_json_dict.get("proj_root", {}))
         file_paths_text = "\n".join(file_paths)
 
         # 读取用户提示词模板
@@ -132,53 +132,53 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'depend_analysis_user.md')
         try:
             with open(user_prompt_file, 'r', encoding='utf-8') as f:
-                user_prompt_template = f.read()
+                user_prompt_template_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
             return ""
         
-        if not user_prompt_template:
+        if not user_prompt_template_str:
             print(f"  {Colors.FAIL}错误: 用户提示词模板内容为空{Colors.ENDC}")
             return ""
             
         # 填充占位符
-        user_prompt = user_prompt_template
-        user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_content)
-        user_prompt = user_prompt.replace('JSON_STRUCTURE_PLACEHOLDER', dir_with_files_content)
-        user_prompt = user_prompt.replace('FILE_PATHS_PLACEHOLDER', file_paths_text)
+        user_prompt_str = user_prompt_template_str
+        user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_str)
+        user_prompt_str = user_prompt_str.replace('JSON_STRUCTURE_PLACEHOLDER', dir_with_files_str)
+        user_prompt_str = user_prompt_str.replace('FILE_PATHS_PLACEHOLDER', file_paths_text)
         
-        return user_prompt
+        return user_prompt_str
 
-    def _validate_response(self, cleaned_content: str) -> tuple[bool, Dict[str, Any]]:
+    def _validate_response(self, cleaned_json_str: str) -> tuple[bool, Dict[str, Any]]:
         """
         验证AI响应内容是否符合要求
         
         Args:
-            cleaned_content: 清理后的AI响应内容
+            cleaned_json_str: 清理后的AI响应内容
             
         Returns:
             tuple[bool, Dict[str, Any]]: (是否有效, JSON内容字典)
         """
         # 验证是否为有效的JSON
         try:
-            new_json_content = json.loads(cleaned_content)
+            new_json_dict = json.loads(cleaned_json_str)
         except json.JSONDecodeError as e:
             print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
-            print(f"AI返回内容: {cleaned_content}")
+            print(f"AI返回内容: {cleaned_json_str}")
             return False
         
         # 检查新JSON内容是否包含必需的根节点
-        if "proj_root" not in new_json_content or "dependent_relation" not in new_json_content:
+        if "proj_root" not in new_json_dict or "dependent_relation" not in new_json_dict:
             print(f"{Colors.WARNING}警告: 生成的JSON缺少必需的根节点 proj_root 或 dependent_relation{Colors.ENDC}")
             return False
         
         # 检查proj_root结构是否与原始结构一致
-        if not DirJsonFuncs.compare_structure(self.old_json_content["proj_root"], new_json_content["proj_root"]):
+        if not DirJsonFuncs.compare_structure(self.old_json_dict["proj_root"], new_json_dict["proj_root"]):
             print(f"{Colors.WARNING}警告: proj_root结构与原始结构不一致{Colors.ENDC}")
             return False
             
         # 检查dependent_relation中的依赖路径是否都存在于proj_root中
-        is_valid, validation_errors = DirJsonFuncs.validate_dependent_paths(new_json_content["dependent_relation"], new_json_content["proj_root"])
+        is_valid, validation_errors = DirJsonFuncs.validate_dependent_paths(new_json_dict["dependent_relation"], new_json_dict["proj_root"])
         if not is_valid:
             print(f"{Colors.WARNING}警告: 生成的 dependent_relation 出现了 proj_root 下不存在的路径{Colors.ENDC}")
             print(f"{Colors.WARNING}具体错误如下:{Colors.ENDC}")
@@ -231,29 +231,29 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         
         try:
             with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+                config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
             return
         
         # 优先检查是否有depend_analysis_handler配置
-        if 'depend_analysis_handler' in config:
-            chat_api_config = config['depend_analysis_handler']
-        elif 'coder_handler' in config:
-            chat_api_config = config['coder_handler']
+        if 'depend_analysis_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['depend_analysis_handler']
+        elif 'coder_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['coder_handler']
         else:
             print("错误: 配置文件缺少depend_analysis_handler或coder_handler配置")
             return
         
-        handler_config = ChatApiConfig(
-            base_url=chat_api_config.get('api-url', ''),
-            api_key=chat_api_config.get('api-key', ''),
-            model=chat_api_config.get('model', '')
+        chat_handler_config = ChatApiConfig(
+            base_url=chat_api_config_dict.get('api-url', ''),
+            api_key=chat_api_config_dict.get('api-key', ''),
+            model=chat_api_config_dict.get('model', '')
         )
         
         # 初始化共享的ChatInterface（只初始化一次）
         if not ICPChatHandler.is_initialized():
-            ICPChatHandler.initialize_chat_interface(handler_config)
+            ICPChatHandler.initialize_chat_interface(chat_handler_config)
         
         # 加载角色的系统提示词
         app_data_manager = get_app_data_manager()

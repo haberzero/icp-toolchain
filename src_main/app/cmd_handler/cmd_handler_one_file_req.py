@@ -36,7 +36,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         self.role_one_file_req = "7_one_file_req_gen"
         self._init_ai_handlers()
 
-        self.accumulated_file_str_content: List[tuple[str, str]] = []  # File path and its content
+        self.accumulated_file_str_list: List[tuple[str, str]] = []  # File path and its content
 
     def execute(self):
         """执行IBC目录结构创建"""
@@ -65,15 +65,15 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
                 return
 
         # 使用前序依赖分析的结果，生成最终的目录内容文件
-        dir_content = {
-            "proj_root": self.final_dir_json_content['proj_root'],
+        dir_content_dict = {
+            "proj_root": self.final_dir_json_dict['proj_root'],
             "dependent_relation": self.dependent_relation_dict
         }
         
         dir_content_file = os.path.join(self.proj_data_dir, "icp_dir_content_final.json")
         try:
             with open(dir_content_file, 'w', encoding='utf-8') as f:
-                json.dump(dir_content, f, indent=2, ensure_ascii=False)
+                json.dump(dir_content_dict, f, indent=2, ensure_ascii=False)
             print(f"  {Colors.OKGREEN}目录内容文件已保存: {dir_content_file}{Colors.ENDC}")
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 保存目录内容文件失败 {dir_content_file}: {e}{Colors.ENDC}")
@@ -85,8 +85,8 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         """准备命令正式开始执行之前所需的变量内容"""
         # 读取用户原始需求
         user_data_manager = get_user_data_manager()
-        user_requirements = user_data_manager.get_user_prompt()
-        if not user_requirements:
+        user_requirements_str = user_data_manager.get_user_prompt()
+        if not user_requirements_str:
             print(f"  {Colors.FAIL}错误: 读取用户需求失败{Colors.ENDC}")
             return ""
         
@@ -94,29 +94,29 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         final_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_refined.json')
         try:
             with open(final_dir_file, 'r', encoding='utf-8') as f:
-                final_dir_json_content = json.load(f)
+                final_dir_json_dict = json.load(f)
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取最终目录结构失败: {e}{Colors.ENDC}")
             return
         
-        if not final_dir_json_content:
+        if not final_dir_json_dict:
             print(f"  {Colors.FAIL}错误: 最终目录结构内容为空{Colors.ENDC}")
             return
 
         # 检查是否包含必要的节点
-        if "proj_root" not in final_dir_json_content or "dependent_relation" not in final_dir_json_content:
+        if "proj_root" not in final_dir_json_dict or "dependent_relation" not in final_dir_json_dict:
             print(f"  {Colors.FAIL}错误: 最终目录结构缺少必要的节点(proj_root或dependent_relation){Colors.ENDC}")
             return
         
         # 从dependent_relation中获取文件创建顺序, 可以认为列表中靠近 index=0 的文件其层级低且被其它文件依赖
-        dependent_relation_dict = final_dir_json_content["dependent_relation"]
+        dependent_relation_dict = final_dir_json_dict["dependent_relation"]
         file_creation_order_list = DirJsonFuncs.build_file_creation_order(dependent_relation_dict)
         
         # 读取文件级实现规划
         implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
         try:
             with open(implementation_plan_file, 'r', encoding='utf-8') as f:
-                implementation_plan_content = f.read()
+                implementation_plan_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取文件级实现规划失败: {e}{Colors.ENDC}")
             return
@@ -154,11 +154,11 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
 
 
         # 存储后续代码执行需要的实例变量
-        self.user_requirements = user_requirements
-        self.final_dir_json_content = final_dir_json_content
+        self.user_requirements_str = user_requirements_str
+        self.final_dir_json_dict = final_dir_json_dict
         self.dependent_relation_dict = dependent_relation_dict
         self.file_creation_order_list = file_creation_order_list
-        self.implementation_plan_content = implementation_plan_content
+        self.implementation_plan_str = implementation_plan_str
         self.allowed_libs_text = allowed_libs_text
         self.module_suggestions_text = module_suggestions_text
 
@@ -200,7 +200,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             return False
 
         # 累计保存目前已经生成的文件的路径以及其单文件编程需求描述
-        self.accumulated_file_str_content.append((file_path, response_content))
+        self.accumulated_file_str_list.append((file_path, response_content))
 
         # 保存需求描述至具体文件
         staging_dir_path = os.path.join(self.proj_work_dir, 'src_staging')
@@ -229,7 +229,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             str: 完整的用户提示词，失败时返回空字符串
         """
         # 获取dir_json中的文件描述
-        file_description = DirJsonFuncs.get_file_description(self.final_dir_json_content['proj_root'], file_path)
+        file_description = DirJsonFuncs.get_file_description(self.final_dir_json_dict['proj_root'], file_path)
         if not file_description:
             print(f"  {Colors.FAIL}错误: 无法获取文件描述: {file_path}{Colors.ENDC}")
             return ""
@@ -243,14 +243,14 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             return ""
         accumulated_related_desc = []
         
-        for _file_path, file_str_content in self.accumulated_file_str_content:
+        for _file_path, file_str in self.accumulated_file_str_list:
             # 只包含当前文件依赖的文件
             if _file_path not in current_file_dependencies:
                 continue
                 
-            extracted_desc = self._extract_section_content(file_str_content, 'description')
-            extracted_func = self._extract_section_content(file_str_content, 'function')
-            extracted_class = self._extract_section_content(file_str_content, 'class')
+            extracted_desc = self._extract_section_content(file_str, 'description')
+            extracted_func = self._extract_section_content(file_str, 'function')
+            extracted_class = self._extract_section_content(file_str, 'class')
 
             cleaned_file_path = _file_path.replace("_one_file_req.txt", "")
             normed_file_path = os.path.normpath(cleaned_file_path)
@@ -269,24 +269,24 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'one_file_req_gen_user.md')
         try:
             with open(user_prompt_file, 'r', encoding='utf-8') as f:
-                user_prompt_template = f.read()
+                user_prompt_template_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
             return ""
         
         # 填充与文件描述相关的占位符
-        user_prompt = user_prompt_template
-        user_prompt = user_prompt.replace('USER_REQUIREMENTS_PLACEHOLDER', self.user_requirements)
-        user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', self.implementation_plan_content)
-        user_prompt = user_prompt.replace('FILE_DESCRIPTION_PLACEHOLDER', file_description)
-        user_prompt = user_prompt.replace('RELATED_FILE_DESCRIPTIONS_PLACEHOLDER', 
+        user_prompt_str = user_prompt_template_str
+        user_prompt_str = user_prompt_str.replace('USER_REQUIREMENTS_PLACEHOLDER', self.user_requirements_str)
+        user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', self.implementation_plan_str)
+        user_prompt_str = user_prompt_str.replace('FILE_DESCRIPTION_PLACEHOLDER', file_description)
+        user_prompt_str = user_prompt_str.replace('RELATED_FILE_DESCRIPTIONS_PLACEHOLDER', 
                                         '\n\n'.join(accumulated_related_desc) if accumulated_related_desc else '暂无依赖的文件需求描述')
         
         # 填充与第三方库相关的占位符
-        user_prompt = user_prompt.replace('EXTERNAL_LIB_ALLOWLIST_PLACEHOLDER', self.allowed_libs_text)
-        user_prompt = user_prompt.replace('MODULE_DEPENDENCY_SUGGESTIONS_PLACEHOLDER', self.module_suggestions_text)
+        user_prompt_str = user_prompt_str.replace('EXTERNAL_LIB_ALLOWLIST_PLACEHOLDER', self.allowed_libs_text)
+        user_prompt_str = user_prompt_str.replace('MODULE_DEPENDENCY_SUGGESTIONS_PLACEHOLDER', self.module_suggestions_text)
         
-        return user_prompt
+        return user_prompt_str
 
     def _extract_section_content(self, content: str, section_name: str) -> str:
         """从文件内容中提取指定section部分
@@ -358,8 +358,8 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         
         # 检查用户原始需求是否存在
         user_data_manager = get_user_data_manager()
-        user_requirements = user_data_manager.get_user_prompt()
-        if not user_requirements:
+        user_requirements_str = user_data_manager.get_user_prompt()
+        if not user_requirements_str:
             print(f"  {Colors.WARNING}警告: 用户原始需求不存在，请先加载用户需求{Colors.ENDC}")
             return False
         
@@ -389,23 +389,23 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         
         try:
             with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+                config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
             return
         
-        if 'dependency_refine_handler' in config:
-            chat_api_config = config['dependency_refine_handler']
-        elif 'coder_handler' in config:
-            chat_api_config = config['coder_handler']
+        if 'dependency_refine_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['dependency_refine_handler']
+        elif 'coder_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['coder_handler']
         else:
             print("错误: 配置文件缺少配置")
             return
         
         handler_config = ChatApiConfig(
-            base_url=chat_api_config.get('api-url', ''),
-            api_key=chat_api_config.get('api-key', ''),
-            model=chat_api_config.get('model', '')
+            base_url=chat_api_config_dict.get('api-url', ''),
+            api_key=chat_api_config_dict.get('api-key', ''),
+            model=chat_api_config_dict.get('model', '')
         )
         
         if not ICPChatHandler.is_initialized():

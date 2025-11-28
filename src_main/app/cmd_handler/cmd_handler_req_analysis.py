@@ -80,22 +80,22 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
             print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
             return
 
-    def _validate_response(self, cleaned_content: str) -> bool:
+    def _validate_response(self, cleaned_json_str: str) -> bool:
         """
         验证AI响应内容是否符合要求
         
         Args:
-            cleaned_content: 清理后的AI响应内容
+            cleaned_json_str: 清理后的AI响应内容
             
         Returns:
             bool: 是否有效
         """
         # 验证是否为有效的JSON
         try:
-            json_content = json.loads(cleaned_content)
+            json_dict = json.loads(cleaned_json_str)
         except json.JSONDecodeError as e:
             print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
-            print(f"AI返回内容: {cleaned_content[:200]}...")  # 只显示前200个字符
+            print(f"AI返回内容: {cleaned_json_str[:200]}...")  # 只显示前200个字符
             return False
         
         # 检查必需字段是否存在
@@ -193,23 +193,23 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
         
         try:
             with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+                config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
             return
         
-        if 'req_analysis_handler' in config:
-            chat_api_config = config['req_analysis_handler']
-        elif 'coder_handler' in config:
-            chat_api_config = config['coder_handler']
+        if 'req_analysis_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['req_analysis_handler']
+        elif 'coder_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['coder_handler']
         else:
             print("错误: 配置文件缺少req_analysis_handler或coder_handler配置")
             return
         
         handler_config = ChatApiConfig(
-            base_url=chat_api_config.get('api-url', ''),
-            api_key=chat_api_config.get('api-key', ''),
-            model=chat_api_config.get('model', '')
+            base_url=chat_api_config_dict.get('api-url', ''),
+            api_key=chat_api_config_dict.get('api-key', ''),
+            model=chat_api_config_dict.get('model', '')
         )
         
         if not ICPChatHandler.is_initialized():

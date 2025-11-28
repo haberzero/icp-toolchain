@@ -70,7 +70,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
             
             # 验证响应内容
-            is_valid, new_json_content = self._validate_dir_fill_response(cleaned_content, self.old_json_content)
+            is_valid, new_json_dict = self._validate_dir_fill_response(cleaned_content, self.old_json_dict)
             if is_valid:
                 break
         
@@ -83,7 +83,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
                 # 保存修改后的JSON内容，而不是原始的cleaned_content
-                json.dump(new_json_content, f, indent=2, ensure_ascii=False)
+                json.dump(new_json_dict, f, indent=2, ensure_ascii=False)
             print(f"目录文件填充完成，结果已保存到: {output_file}")
         except Exception as e:
             print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
@@ -135,12 +135,12 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
         try:
             with open(requirement_analysis_file, 'r', encoding='utf-8') as f:
-                requirement_content = f.read()
+                requirement_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取需求分析结果失败: {e}{Colors.ENDC}")
             return ""
             
-        if not requirement_content:
+        if not requirement_str:
             print(f"  {Colors.FAIL}错误: 需求分析结果为空{Colors.ENDC}")
             return ""
             
@@ -148,32 +148,32 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         dir_structure_file = os.path.join(self.proj_data_dir, 'icp_dir_content.json')
         try:
             with open(dir_structure_file, 'r', encoding='utf-8') as f:
-                dir_structure_content = f.read()
+                dir_structure_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取目录结构失败: {e}{Colors.ENDC}")
             return ""
             
-        if not dir_structure_content:
+        if not dir_structure_str:
             print(f"  {Colors.FAIL}错误: 目录结构内容为空{Colors.ENDC}")
             return ""
-        self.old_json_content = json.loads(dir_structure_content)
+        self.old_json_dict = json.loads(dir_structure_str)
 
         # 读取用户提示词模板
         app_data_manager = get_app_data_manager()
         user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'dir_file_fill_user.md')
         try:
             with open(user_prompt_file, 'r', encoding='utf-8') as f:
-                user_prompt_template = f.read()
+                user_prompt_template_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
             return ""
             
         # 填充占位符
-        user_prompt = user_prompt_template
-        user_prompt = user_prompt.replace('PROGRAMMING_REQUIREMENT_PLACEHOLDER', requirement_content)
-        user_prompt = user_prompt.replace('JSON_STRUCTURE_PLACEHOLDER', dir_structure_content)
+        user_prompt_str = user_prompt_template_str
+        user_prompt_str = user_prompt_str.replace('PROGRAMMING_REQUIREMENT_PLACEHOLDER', requirement_str)
+        user_prompt_str = user_prompt_str.replace('JSON_STRUCTURE_PLACEHOLDER', dir_structure_str)
         
-        return user_prompt
+        return user_prompt_str
 
     def _build_user_prompt_for_plan_generator(self) -> str:
         """
@@ -186,8 +186,8 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         """
         # 读取用户原始需求
         user_data_manager = get_user_data_manager()
-        user_requirements = user_data_manager.get_user_prompt()
-        if not user_requirements:
+        user_requirements_str = user_data_manager.get_user_prompt()
+        if not user_requirements_str:
             print(f"  {Colors.FAIL}错误: 未找到用户原始需求{Colors.ENDC}")
             return ""
         
@@ -195,7 +195,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
         try:
             with open(requirement_analysis_file, 'r', encoding='utf-8') as f:
-                refined_requirement_content = f.read()
+                refined_requirement_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取需求分析结果失败: {e}{Colors.ENDC}")
             return ""
@@ -204,7 +204,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         dir_file_path = os.path.join(self.proj_data_dir, 'icp_dir_content_with_files.json')
         try:
             with open(dir_file_path, 'r', encoding='utf-8') as f:
-                dir_file_content = f.read()
+                dir_file_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取目录文件内容失败: {e}{Colors.ENDC}")
             return ""
@@ -214,63 +214,63 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'dir_file_fill_plan_gen_user.md')
         try:
             with open(user_prompt_file, 'r', encoding='utf-8') as f:
-                user_prompt_template = f.read()
+                user_prompt_template_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
             return ""
         
         # 填充占位符
-        user_prompt = user_prompt_template
-        user_prompt = user_prompt.replace('USER_ORIGINAL_REQUIREMENTS_PLACEHOLDER', user_requirements)
-        user_prompt = user_prompt.replace('REFINED_REQUIREMENTS_PLACEHOLDER', refined_requirement_content)
-        user_prompt = user_prompt.replace('DIR_FILE_CONTENT_PLACEHOLDER', dir_file_content)
+        user_prompt_str = user_prompt_template_str
+        user_prompt_str = user_prompt_str.replace('USER_ORIGINAL_REQUIREMENTS_PLACEHOLDER', user_requirements_str)
+        user_prompt_str = user_prompt_str.replace('REFINED_REQUIREMENTS_PLACEHOLDER', refined_requirement_str)
+        user_prompt_str = user_prompt_str.replace('DIR_FILE_CONTENT_PLACEHOLDER', dir_file_str)
         
-        return user_prompt
+        return user_prompt_str
 
-    def _validate_dir_fill_response(self, cleaned_content: str, old_json_content: Dict[str, Any]) -> tuple:
+    def _validate_dir_fill_response(self, cleaned_json_str: str, old_json_dict: Dict[str, Any]) -> tuple:
         """
         验证AI响应内容是否符合要求
         
         Args:
-            cleaned_content: 清理后的AI响应内容
-            old_json_content: 原始JSON内容，用于结构比较
+            cleaned_json_str: 清理后的AI响应内容
+            old_json_dict: 原始JSON内容，用于结构比较
             
         Returns:
             tuple[bool, Dict[str, Any]]: (是否有效, JSON内容字典)
         """
         # 验证是否为有效的JSON
         try:
-            new_json_content = json.loads(cleaned_content)
+            new_json_dict = json.loads(cleaned_json_str)
         except json.JSONDecodeError as e:
             print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
-            print(f"AI返回内容: {cleaned_content}")
+            print(f"AI返回内容: {cleaned_json_str}")
             return False, {}
         
         # 检查新JSON内容结构是否与旧JSON内容结构一致
-        if not DirJsonFuncs.compare_structure(old_json_content, new_json_content):
+        if not DirJsonFuncs.compare_structure(old_json_dict, new_json_dict):
             print(f"{Colors.WARNING}警告: 生成的JSON结构不符合要求，正在重新生成...{Colors.ENDC}")
             return False, {}
             
         # 检查新添加的节点是否都为字符串类型
-        if not DirJsonFuncs.check_new_nodes_are_strings(new_json_content):
+        if not DirJsonFuncs.check_new_nodes_are_strings(new_json_dict):
             print(f"{Colors.WARNING}警告: 生成的JSON包含非字符串类型的叶子节点，正在重新生成...{Colors.ENDC}")
             return False, {}
 
         # 检查并确保 proj_root 下有主入口文件
-        if not self._ensure_main_entry_file(new_json_content):
+        if not self._ensure_main_entry_file(new_json_dict):
             print(f"{Colors.WARNING}警告: 目录结构中的主入口文件检查/填充未成功，正在重新生成...{Colors.ENDC}")
             return False, {}
 
-        return True, new_json_content
+        return True, new_json_dict
 
-    def _ensure_main_entry_file(self, json_content: Dict) -> bool:
+    def _ensure_main_entry_file(self, json_dict: Dict) -> bool:
         """检查并确保proj_root下有主入口文件"""
         import re
         
-        if "proj_root" not in json_content:
+        if "proj_root" not in json_dict:
             return False
         
-        proj_root = json_content["proj_root"]
+        proj_root = json_dict["proj_root"]
         if not isinstance(proj_root, dict):
             return False
         
@@ -372,29 +372,29 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         
         try:
             with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+                config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
             return
         
         # 优先检查是否有dir_file_fill_handler配置
-        if 'dir_file_fill_handler' in config:
-            chat_api_config = config['dir_file_fill_handler']
-        elif 'coder_handler' in config:
-            chat_api_config = config['coder_handler']
+        if 'dir_file_fill_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['dir_file_fill_handler']
+        elif 'coder_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['coder_handler']
         else:
             print("错误: 配置文件缺少dir_file_fill_handler或coder_handler配置")
             return
         
-        handler_config = ChatApiConfig(
-            base_url=chat_api_config.get('api-url', ''),
-            api_key=chat_api_config.get('api-key', ''),
-            model=chat_api_config.get('model', '')
+        chat_handler_config = ChatApiConfig(
+            base_url=chat_api_config_dict.get('api-url', ''),
+            api_key=chat_api_config_dict.get('api-key', ''),
+            model=chat_api_config_dict.get('model', '')
         )
         
         # 初始化共享的ChatInterface（只初始化一次）
         if not ICPChatHandler.is_initialized():
-            ICPChatHandler.initialize_chat_interface(handler_config)
+            ICPChatHandler.initialize_chat_interface(chat_handler_config)
         
         # 加载两个角色的系统提示词
         app_data_manager = get_app_data_manager()
