@@ -26,7 +26,15 @@ from libs.symbol_vector_db_manager import SymbolVectorDBManager
 
 
 class CmdHandlerIbcGen(BaseCmdHandler):
-    """将单文件需求描述转换为半自然语言行为描述代码"""
+    """将单文件需求描述转换为半自然语言行为描述代码
+    
+    设计结构：
+    1. 变量预准备：_build_pre_execution_variables() - 集中加载所需数据
+    2. 文件遍历：按依赖顺序遍历文件列表
+    3. 单文件处理：_create_single_ibc_file() - 包含重试逻辑的主流程
+    4. 提示词构建：_build_user_prompt_for_xxx() - 为不同角色构建提示词
+    5. 输出处理：验证、保存、解析、规范化、向量化
+    """
     
     MAX_RETRY_COUNT = 3
     
@@ -57,6 +65,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 初始化AI处理器
         self._init_ai_handlers()
 
+    # ========== 核心流程方法 ==========
+    
     def execute(self):
         """执行半自然语言行为描述代码生成"""
         if not self.is_cmd_valid():
@@ -66,15 +76,18 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         # 初始化向量数据库
         if not self._init_vector_database():
-            print(f"{Colors.WARNING}警告: 将继续执行但不进行符号向量化{Colors.ENDC}")
-        
-        # 加载项目数据
-        project_data = self._load_project_data()
-        if not project_data:
+            print(f"{Colors.FAIL}错误: 向量数据库初始化失败{Colors.ENDC}")
             return
         
-        # 按依赖顺序处理每个文件
-        self._process_all_files(project_data)
+        # 准备执行前所需的变量
+        self._build_pre_execution_variables()
+        
+        # 按依赖顺序遍历并处理每个文件
+        for file_path in self.file_creation_order_list:
+            success = self._create_single_ibc_file(file_path)
+            if not success:
+                print(f"{Colors.FAIL}文件 {file_path} 处理失败，退出运行{Colors.ENDC}")
+                return
         
         print(f"{Colors.OKGREEN}半自然语言行为描述代码生成完毕!{Colors.ENDC}")
 
@@ -91,8 +104,11 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             self.vector_db_manager = None
             return False
     
-    def _load_project_data(self) -> Optional[Dict[str, Any]]:
-        """加载项目数据，包括目录结构和用户需求"""
+    
+    # ========== 变量准备方法 ==========
+    
+    def _build_pre_execution_variables(self):
+        """准备命令正式开始执行之前所需的变量内容"""
         # 读取IBC目录结构
         ibc_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
         try:
@@ -100,54 +116,37 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 ibc_content = json.load(f)
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取IBC目录结构失败: {e}{Colors.ENDC}")
-            return None
+            return
         
         if not ibc_content:
             print(f"  {Colors.FAIL}错误: IBC目录结构内容为空{Colors.ENDC}")
-            return None
+            return
         
         if "proj_root" not in ibc_content or "dependent_relation" not in ibc_content:
             print(f"  {Colors.FAIL}错误: IBC目录结构缺少必要的节点(proj_root或dependent_relation){Colors.ENDC}")
-            return None
+            return
         
         # 读取用户需求
         user_data_manager = get_user_data_manager()
         user_requirements = user_data_manager.get_user_prompt()
         if not user_requirements:
-            print(f"  {Colors.FAIL}错误: 未找到用户原始需求，请确认需求已正确加载{Colors.ENDC}")
-            return None
+            print(f"  {Colors.FAIL}错误: 未找到用户原始需求{Colors.ENDC}")
+            return
         
         # 检查目录
         staging_dir_path = os.path.join(self.proj_work_dir, 'src_staging')
         if not os.path.exists(staging_dir_path):
-            print(f"  {Colors.FAIL}错误: src_staging目录不存在，请先执行one_file_req_gen命令创建目录结构{Colors.ENDC}")
-            return None
+            print(f"  {Colors.FAIL}错误: src_staging目录不存在，请先执行one_file_req_gen命令{Colors.ENDC}")
+            return
         
-        # 返回项目数据
-        return {
-            'proj_root': ibc_content['proj_root'],
-            'dependent_relation': ibc_content['dependent_relation'],
-            'user_requirements': user_requirements,
-            'staging_dir_path': staging_dir_path
-        }
-    
-    def _process_all_files(self, project_data: Dict[str, Any]):
-        """处理所有文件"""
-        proj_root = project_data['proj_root']
-        dependent_relation = project_data['dependent_relation']
-        user_requirements = project_data['user_requirements']
-        staging_dir_path = project_data['staging_dir_path']
-        
-        # 获取文件创建顺序
-        file_creation_order_list = DirJsonFuncs.build_file_creation_order(dependent_relation)
-        
-        # 准备目录
+        # 准备IBC目录
         ibc_dir_name = self._get_ibc_directory_name()
         ibc_root_path = os.path.join(self.proj_work_dir, ibc_dir_name)
         os.makedirs(ibc_root_path, exist_ok=True)
         
-        # 准备项目结构JSON
-        project_structure_json = json.dumps(proj_root, indent=2, ensure_ascii=False)
+        # 获取文件创建顺序
+        dependent_relation = ibc_content['dependent_relation']
+        file_creation_order_list = DirJsonFuncs.build_file_creation_order(dependent_relation)
         
         # 初始化更新状态
         update_status = self._initialize_update_status(
@@ -156,141 +155,242 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             ibc_root_path
         )
         
-        # 处理每个文件
-        for file_path in file_creation_order_list:
-            self._process_single_file(
-                file_path=file_path,
-                dependent_relation=dependent_relation,
-                update_status=update_status,
-                staging_dir_path=staging_dir_path,
-                ibc_root_path=ibc_root_path
-            )
+        # 存储实例变量供后续使用
+        self.proj_root = ibc_content['proj_root']
+        self.dependent_relation = dependent_relation
+        self.user_requirements = user_requirements
+        self.staging_dir_path = staging_dir_path
+        self.ibc_root_path = ibc_root_path
+        self.file_creation_order_list = file_creation_order_list
+        self.update_status = update_status
+        self.project_structure_json = json.dumps(ibc_content['proj_root'], indent=2, ensure_ascii=False)
     
-    def _process_single_file(
-        self,
-        file_path: str,
-        dependent_relation: Dict[str, List[str]],
-        update_status: Dict[str, bool],
-        staging_dir_path: str,
-        ibc_root_path: str
-    ):
-        """处理单个文件"""
+    
+    # ========== 单文件处理方法 ==========
+    
+    def _create_single_ibc_file(self, file_path: str) -> bool:
+        """为单个文件生成IBC代码（包含重试机制）
+        
+        Args:
+            file_path: 文件路径
+            
+        Returns:
+            bool: 是否成功生成
+        """
         print(f"  {Colors.OKBLUE}正在处理文件: {file_path}{Colors.ENDC}")
         
         # 检查是否需要更新
-        if not self._should_update_file(file_path, dependent_relation, update_status):
+        if not self._should_update_file(file_path):
             print(f"    {Colors.WARNING}文件及其依赖均未变化，跳过生成: {file_path}{Colors.ENDC}")
-            return
+            return True
         
-        # 生成并保存IBC代码（带重试）
-        success = self._generate_and_save_ibc_with_retry(
-            file_path=file_path,
-            staging_dir_path=staging_dir_path,
-            ibc_root_path=ibc_root_path
-        )
-        
-        if success:
-            print(f"  {Colors.OKGREEN}文件处理完成: {file_path}{Colors.ENDC}")
-        else:
-            print(f"  {Colors.WARNING}跳过文件: {file_path}{Colors.ENDC}")
-
-    def _should_update_file(
-        self,
-        file_path: str,
-        dependent_relation: Dict[str, List[str]],
-        update_status: Dict[str, bool]
-    ) -> bool:
-        """检查文件是否需要更新"""
-        # 检查依赖文件是否有更新
-        current_file_dependencies = dependent_relation.get(file_path, [])
-        if self._check_dependency_updated(current_file_dependencies, update_status):
-            update_status[file_path] = True
-            print(f"    {Colors.OKBLUE}检测到依赖文件已更新，当前文件需要重新生成{Colors.ENDC}")
-        
-        return update_status.get(file_path, True)
-    
-    def _read_file_requirements(self, file_path: str, staging_dir_path: str) -> Optional[str]:
-        """读取文件需求描述"""
-        req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
-        try:
-            with open(req_file_path, 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取文件需求描述失败 {req_file_path}: {e}{Colors.ENDC}")
-            return None
-    
-    def _generate_and_save_ibc_with_retry(
-        self,
-        file_path: str,
-        staging_dir_path: str,
-        ibc_root_path: str
-    ) -> bool:
-        """生成并保存IBC代码（带重试机制）"""
-        for retry_count in range(self.MAX_RETRY_COUNT):
-            if retry_count > 0:
-                print(f"    {Colors.OKBLUE}正在重试生成IBC代码... (尝试 {retry_count + 1}/{self.MAX_RETRY_COUNT}){Colors.ENDC}")
+        # 带重试的生成逻辑
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            if attempt > 0:
+                print(f"    {Colors.OKBLUE}正在重试... (尝试 {attempt + 1}/{max_attempts}){Colors.ENDC}")
             else:
                 print(f"    正在生成IBC代码...")
             
             try:
-                # 生成IBC代码
-                ibc_code = self._generate_ibc_code(file_path)
-                if not ibc_code:
-                    print(f"    {Colors.WARNING}警告: AI响应为空{Colors.ENDC}")
+                # 构建用户提示词
+                user_prompt = self._build_user_prompt_for_ibc_generator(file_path)
+                if not user_prompt:
+                    print(f"    {Colors.FAIL}错误: 构建用户提示词失败{Colors.ENDC}")
                     continue
                 
-                # 保存IBC代码
-                ibc_file_path = os.path.join(ibc_root_path, f"{file_path}.ibc")
-                self._save_ibc_code(ibc_file_path, ibc_code)
+                # 调用AI生成IBC代码
+                response_content, success = asyncio.run(self.chat_handler.get_role_response(
+                    role_name=self.role_ibc_gen,
+                    user_prompt=user_prompt
+                ))
                 
-                # 解析IBC代码
-                print(f"    正在分析IBC代码生成AST...")
-                ast_dict, symbol_table = analyze_ibc_code(ibc_code)
+                if not success or not response_content:
+                    print(f"    {Colors.WARNING}警告: AI响应失败或为空{Colors.ENDC}")
+                    continue
                 
-                # 保存AST
-                ast_file_path = self._get_ast_file_path(ibc_file_path)
-                self._save_ast(ast_dict, ast_file_path)
+                # 清理代码块标记
+                ibc_code = ICPChatHandler.clean_code_block_markers(response_content)
                 
-                # 符号规范化
-                print(f"    正在进行符号规范化...")
-                normalized_symbols_dict = self._normalize_symbols(file_path, symbol_table, ibc_code)
+                # 验证并保存IBC代码（同时解析AST）
+                symbol_table = self._validate_and_save_ibc(file_path, ibc_code)
+                if not symbol_table:
+                    print(f"    {Colors.WARNING}警告: IBC代码验证或保存失败{Colors.ENDC}")
+                    continue
                 
-                # 更新符号表
-                self._update_symbol_table(symbol_table, normalized_symbols_dict)
+                # 创建规范化符号（带重试）
+                normalized_symbols_dict = self._create_normalized_symbols(file_path, symbol_table, ibc_code)
+                if not normalized_symbols_dict:
+                    print(f"    {Colors.WARNING}警告: 符号规范化失败{Colors.ENDC}")
+                    continue
                 
-                # 保存符号表
-                req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
-                if self._save_symbol_table(symbol_table, req_file_path, ibc_root_path, file_path):
-                    # 向量化符号
-                    self._vectorize_symbols(file_path, symbol_table)
-                    print(f"    {Colors.OKGREEN}IBC代码生成成功{Colors.ENDC}")
+                # 更新符号表并保存+向量化
+                if self._save_and_vectorize_symbols(file_path, symbol_table, normalized_symbols_dict):
+                    print(f"  {Colors.OKGREEN}文件处理完成: {file_path}{Colors.ENDC}")
                     return True
                 
             except IbcAnalyzerError as e:
-                print(f"  {Colors.FAIL}错误: IBC代码分析失败 {file_path}: {e}{Colors.ENDC}")
-            except RuntimeError as e:
-                print(f"  {Colors.FAIL}错误: {e}{Colors.ENDC}")
+                print(f"  {Colors.FAIL}错误: IBC代码分析失败: {e}{Colors.ENDC}")
             except Exception as e:
-                print(f"  {Colors.FAIL}错误: 处理失败 {file_path}: {e}{Colors.ENDC}")
+                print(f"  {Colors.FAIL}错误: 处理失败: {e}{Colors.ENDC}")
             
-            if retry_count < self.MAX_RETRY_COUNT - 1:
+            if attempt < max_attempts - 1:
                 print(f"  {Colors.WARNING}将重新生成IBC代码...{Colors.ENDC}")
-            else:
-                print(f"  {Colors.FAIL}已达到最大重试次数({self.MAX_RETRY_COUNT})，跳过该文件{Colors.ENDC}")
         
+        # 达到最大重试次数
+        print(f"  {Colors.FAIL}已达到最大重试次数({max_attempts})，跳过该文件{Colors.ENDC}")
         return False
     
-    def _save_ast(self, ast_dict: Dict[int, IbcBaseAstNode], ast_file_path: str):
-        """保存AST到文件"""
-        print(f"    正在保存AST到文件...")
-        ibc_data_manager = get_ibc_data_manager()
-        if ibc_data_manager.save_ast_to_file(ast_dict, ast_file_path):
-            print(f"    {Colors.OKGREEN}AST已保存: {ast_file_path}{Colors.ENDC}")
-        else:
-            print(f"    {Colors.WARNING}警告: AST保存失败{Colors.ENDC}")
+    def _should_update_file(self, file_path: str) -> bool:
+        """检查文件是否需要更新
+        
+        Args:
+            file_path: 文件路径
+            
+        Returns:
+            bool: 是否需要更新
+        """
+        # 检查依赖文件是否有更新
+        current_file_dependencies = self.dependent_relation.get(file_path, [])
+        if self._check_dependency_updated(current_file_dependencies, self.update_status):
+            self.update_status[file_path] = True
+            print(f"    {Colors.OKBLUE}检测到依赖文件已更新，当前文件需要重新生成{Colors.ENDC}")
+        
+        return self.update_status.get(file_path, True)
+
+
     
-    def _update_symbol_table(self, symbol_table: FileSymbolTable, normalized_symbols_dict: Dict[str, Dict[str, str]]):
-        """更新符号表中的规范化信息"""
+
+    
+    
+    # ========== 输出验证与保存方法 ==========
+    
+    def _validate_and_save_ibc(self, file_path: str, ibc_code: str) -> Optional[FileSymbolTable]:
+        """验证并保存IBC代码，同时解析生成AST和符号表
+        
+        Args:
+            file_path: 文件路径
+            ibc_code: IBC代码内容
+            
+        Returns:
+            Optional[FileSymbolTable]: 成功时返回符号表，失败时返回None
+        """
+        try:
+            # 保存IBC代码
+            ibc_file_path = os.path.join(self.ibc_root_path, f"{file_path}.ibc")
+            os.makedirs(os.path.dirname(ibc_file_path), exist_ok=True)
+            with open(ibc_file_path, 'w', encoding='utf-8') as f:
+                f.write(ibc_code)
+            print(f"    {Colors.OKGREEN}IBC代码已保存: {ibc_file_path}{Colors.ENDC}")
+            
+            # 解析IBC代码生成AST
+            print(f"    正在分析IBC代码生成AST...")
+            ast_dict, symbol_table = analyze_ibc_code(ibc_code)
+            
+            # 保存AST
+            ast_file_path = self._get_ast_file_path(ibc_file_path)
+            ibc_data_manager = get_ibc_data_manager()
+            if ibc_data_manager.save_ast_to_file(ast_dict, ast_file_path):
+                print(f"    {Colors.OKGREEN}AST已保存: {ast_file_path}{Colors.ENDC}")
+            else:
+                print(f"    {Colors.WARNING}警告: AST保存失败{Colors.ENDC}")
+            
+            return symbol_table
+            
+        except IbcAnalyzerError as e:
+            print(f"    {Colors.FAIL}错误: IBC代码分析失败: {e}{Colors.ENDC}")
+            return None
+        except Exception as e:
+            print(f"    {Colors.FAIL}错误: 保存IBC代码失败: {e}{Colors.ENDC}")
+            return None
+    
+    
+    # ========== 符号规范化方法 ==========
+    
+    def _create_normalized_symbols(
+        self, 
+        file_path: str, 
+        symbol_table: FileSymbolTable,
+        ibc_code: str
+    ) -> Optional[Dict[str, Dict[str, str]]]:
+        """创建规范化符号（带重试机制）
+        
+        Args:
+            file_path: 文件路径
+            symbol_table: 符号表
+            ibc_code: IBC代码
+            
+        Returns:
+            Optional[Dict[str, Dict[str, str]]]: 成功时返回规范化符号字典，失败时返回None
+        """
+        print(f"    正在进行符号规范化...")
+        
+        symbols = symbol_table.get_all_symbols()
+        if not symbols:
+            print(f"    {Colors.WARNING}警告: 未从符号表中提取到符号{Colors.ENDC}")
+            return {}
+        
+        # 检查AI处理器
+        if not self.chat_handler.has_role(self.role_symbol_normalizer):
+            print(f"    {Colors.FAIL}错误: 符号规范化AI处理器未初始化{Colors.ENDC}")
+            return None
+        
+        # 带重试的规范化调用
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                if attempt > 0:
+                    print(f"    正在重试符号规范化... (尝试 {attempt + 1}/{max_attempts})")
+                
+                # 构建提示词
+                user_prompt = self._build_user_prompt_for_symbol_normalizer(file_path, symbols, ibc_code)
+                
+                # 调用AI进行规范化
+                response_content, success = asyncio.run(self.chat_handler.get_role_response(
+                    role_name=self.role_symbol_normalizer,
+                    user_prompt=user_prompt
+                ))
+                
+                if not success:
+                    print(f"    {Colors.WARNING}警告: AI响应失败{Colors.ENDC}")
+                    continue
+                
+                # 解析响应
+                normalized_symbols = self._parse_symbol_normalizer_response(response_content)
+                if normalized_symbols:
+                    return normalized_symbols
+                
+                print(f"    {Colors.WARNING}警告: AI返回的符号规范化结果为空{Colors.ENDC}")
+                
+            except Exception as e:
+                print(f"    {Colors.FAIL}错误: AI调用失败: {e}{Colors.ENDC}")
+            
+            if attempt < max_attempts - 1:
+                print(f"    {Colors.OKBLUE}准备重试...{Colors.ENDC}")
+        
+        # 达到最大重试次数
+        print(f"    {Colors.FAIL}符号规范化失败：AI未能返回有效结果（已重试{max_attempts}次）{Colors.ENDC}")
+        return None
+    
+    def _save_and_vectorize_symbols(
+        self,
+        file_path: str,
+        symbol_table: FileSymbolTable,
+        normalized_symbols_dict: Dict[str, Dict[str, str]]
+    ) -> bool:
+        """更新、保存符号表并进行向量化
+        
+        Args:
+            file_path: 文件路径
+            symbol_table: 符号表
+            normalized_symbols_dict: 规范化符号字典
+            
+        Returns:
+            bool: 是否成功
+        """
+        print(f"    正在更新符号表...")
+        
+        # 更新符号表中的规范化信息
         for symbol_name, norm_info in normalized_symbols_dict.items():
             symbol = symbol_table.get_symbol(symbol_name)
             if symbol:
@@ -298,33 +398,29 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                     norm_info['normalized_name'],
                     norm_info['visibility']
                 )
-    
-    def _save_symbol_table(
-        self,
-        symbol_table: FileSymbolTable,
-        req_file_path: str,
-        ibc_root_path: str,
-        file_path: str
-    ) -> bool:
-        """保存符号表"""
-        print(f"    正在保存符号表...")
         
-        # 保存MD5
+        # 计算并保存MD5
+        req_file_path = os.path.join(self.staging_dir_path, f"{file_path}_one_file_req.txt")
         current_md5 = self._calculate_file_md5(req_file_path)
         symbol_table.file_md5 = current_md5
         
         # 保存符号表
+        print(f"    正在保存符号表...")
         ibc_data_manager = get_ibc_data_manager()
-        if ibc_data_manager.save_file_symbols(ibc_root_path, file_path, symbol_table):
-            return True
-        else:
-            print(f"  {Colors.WARNING}警告: 符号表保存失败: {file_path}{Colors.ENDC}")
+        if not ibc_data_manager.save_file_symbols(self.ibc_root_path, file_path, symbol_table):
+            print(f"    {Colors.WARNING}警告: 符号表保存失败{Colors.ENDC}")
             return False
+        
+        # 向量化符号
+        self._vectorize_symbols(file_path, symbol_table)
+        
+        return True
+    
+
     
     def _vectorize_symbols(self, file_path: str, symbol_table: FileSymbolTable):
         """将符号添加到向量数据库"""
         if not self.vector_db_manager:
-            print(f"    {Colors.WARNING}警告: 向量数据库管理器未初始化，跳过向量化{Colors.ENDC}")
             return
         
         print(f"    正在将符号添加到向量数据库...")
@@ -332,9 +428,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             self.vector_db_manager.add_file_symbols(file_path, symbol_table)
         except Exception as e:
             print(f"    {Colors.FAIL}错误: 向量化失败: {e}{Colors.ENDC}")
-            import traceback
-            print(f"    {Colors.FAIL}错误详情: {traceback.format_exc()}{Colors.ENDC}")
-        """获取IBC目录名称，优先从配置文件读取behavioral_layer_dir，失败则使用默认值"""
+    
+    def _get_ibc_directory_name(self) -> str:
         icp_config_file = os.path.join(self.proj_config_data_dir, 'icp_config.json')
         try:
             with open(icp_config_file, 'r', encoding='utf-8') as f:
@@ -389,51 +484,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         return '\n'.join(section_lines)
 
-    def _generate_ibc_code(self, file_path: str) -> str:
-        """
-        生成IBC代码
-        
-        Args:
-            file_path: 文件路径
-            
-        Returns:
-            str: 生成的IBC代码
-        """
-        # 构建用户提示词
-        user_prompt = self._build_user_prompt_for_ibc_generator(file_path)
-        if not user_prompt:
-            return ""
 
-        # 调用AI生成半自然语言行为描述代码
-        response_content, success = asyncio.run(self.chat_handler.get_role_response(
-            role_name=self.role_ibc_gen,
-            user_prompt=user_prompt
-        ))
-                        
-        if not success:
-            print(f"    {Colors.WARNING}警告: AI响应失败{Colors.ENDC}")
-            return ""
-        
-        # 如果响应为空，说明AI调用失败
-        if not response_content:
-            print(f"    {Colors.WARNING}警告: AI响应为空{Colors.ENDC}")
-            return ""
-        
-        # 清理代码块标记
-        cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
-        
-        return cleaned_content
 
-    def _save_ibc_code(self, ibc_file_path: str, content: str):
-        """保存IBC代码到文件"""
-        try:
-            # 确保目标目录存在
-            os.makedirs(os.path.dirname(ibc_file_path), exist_ok=True)
-            with open(ibc_file_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            print(f"    {Colors.OKGREEN}IBC代码已保存: {ibc_file_path}{Colors.ENDC}")
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 保存IBC代码失败 {ibc_file_path}: {e}{Colors.ENDC}")
+
     
     def _get_ast_file_path(self, ibc_file_path: str) -> str:
         """根据ibc文件路径生成AST文件路径
@@ -460,35 +513,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 返回完整路径
         return os.path.join(dir_path, ast_file_name)
 
-    def _check_cmd_requirement(self) -> bool:
-        """验证命令的前置条件"""
-        # 检查IBC目录结构文件是否存在
-        ibc_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
-        if not os.path.exists(ibc_dir_file):
-            print(f"  {Colors.WARNING}警告: IBC目录结构文件不存在，请先执行one_file_req_gen命令{Colors.ENDC}")
-            return False
-        
-        # 检查文件级实现规划文件是否存在
-        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
-        if not os.path.exists(implementation_plan_file):
-            print(f"  {Colors.WARNING}警告: 文件级实现规划文件不存在，请先执行目录文件填充命令{Colors.ENDC}")
-            return False
-        
-        return True
     
-    def _check_ai_handler(self) -> bool:
-        """验证AI处理器是否初始化成功"""
-        if not ICPChatHandler.is_initialized():
-            return False
-        
-        if not self.chat_handler.has_role(self.role_ibc_gen):
-            return False
-        
-        if not ICPEmbeddingHandler.is_initialized():
-            print(f"  {Colors.WARNING}警告: Embedding处理器未初始化{Colors.ENDC}")
-            return False
-        
-        return True
+    
+    # ========== 用户提示词构建方法 ==========
     
     def _build_user_prompt_for_ibc_generator(self, file_path: str) -> str:
         """
@@ -502,26 +529,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         Returns:
             str: 完整的用户提示词，失败时返回空字符串
         """
-        # 读取用户原始需求
-        user_data_manager = get_user_data_manager()
-        user_requirements = user_data_manager.get_user_prompt()
-        if not user_requirements:
-            print(f"  {Colors.FAIL}错误: 读取用户需求失败{Colors.ENDC}")
-            return ""
-        
-        # 读取项目结构
-        ibc_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
-        try:
-            with open(ibc_dir_file, 'r', encoding='utf-8') as f:
-                ibc_content = json.load(f)
-            project_structure_json = json.dumps(ibc_content['proj_root'], indent=2, ensure_ascii=False)
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取项目结构失败: {e}{Colors.ENDC}")
-            return ""
-        
         # 读取文件需求描述
-        staging_dir_path = os.path.join(self.proj_work_dir, 'src_staging')
-        req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
+        req_file_path = os.path.join(self.staging_dir_path, f"{file_path}_one_file_req.txt")
         try:
             with open(req_file_path, 'r', encoding='utf-8') as f:
                 file_req_content = f.read()
@@ -531,16 +540,12 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         # 构建可用符号文本
         try:
-            with open(ibc_dir_file, 'r', encoding='utf-8') as f:
-                ibc_content = json.load(f)
-            dependent_relation = ibc_content.get('dependent_relation', {})
-            dependencies = dependent_relation.get(file_path, [])
-            ibc_dir_name = self._get_ibc_directory_name()
-            ibc_root_path = os.path.join(self.proj_work_dir, ibc_dir_name)
-            available_symbols_text = self._build_available_symbols_text(dependencies, ibc_root_path)
+            dependencies = self.dependent_relation.get(file_path, [])
+            available_symbols_text = self._build_available_symbols_text(dependencies, self.ibc_root_path)
         except Exception as e:
             print(f"  {Colors.WARNING}警告: 构建可用符号失败: {e}，继续生成{Colors.ENDC}")
             available_symbols_text = '暂无可用的依赖符号'
+        
         # 读取文件级实现规划
         implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
         implementation_plan_content = ""
@@ -570,9 +575,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
         # 填充占位符
         user_prompt = user_prompt_template
-        user_prompt = user_prompt.replace('USER_REQUIREMENTS_PLACEHOLDER', user_requirements)
+        user_prompt = user_prompt.replace('USER_REQUIREMENTS_PLACEHOLDER', self.user_requirements)
         user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_content)
-        user_prompt = user_prompt.replace('PROJECT_STRUCTURE_PLACEHOLDER', project_structure_json)
+        user_prompt = user_prompt.replace('PROJECT_STRUCTURE_PLACEHOLDER', self.project_structure_json)
         user_prompt = user_prompt.replace('CURRENT_FILE_PATH_PLACEHOLDER', file_path)
         user_prompt = user_prompt.replace('CLASS_CONTENT_PLACEHOLDER', class_content if class_content else '无')
         user_prompt = user_prompt.replace('FUNC_CONTENT_PLACEHOLDER', func_content if func_content else '无')
@@ -620,6 +625,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt = user_prompt.replace('AST_SYMBOLS_PLACEHOLDER', symbols_text)
         
         return user_prompt
+    
     
     
     # ========== 辅助方法 ==========
@@ -723,54 +729,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             print(f"  {Colors.WARNING}警告: 计算文件MD5失败 {file_path}: {e}{Colors.ENDC}")
             return ""
     
-    def _normalize_symbols(
-        self, 
-        file_path: str, 
-        file_symbol_table: FileSymbolTable,
-        ibc_code: str
-    ) -> Dict[str, Dict[str, str]]:
-        """对符号进行规范化处理"""
-        symbols = file_symbol_table.get_all_symbols()
-        if not symbols:
-            print(f"    {Colors.WARNING}警告: 未从符号表中提取到符号: {file_path}{Colors.ENDC}")
-            return {}
-        
-        # 检查AI处理器
-        if not self.chat_handler.has_role(self.role_symbol_normalizer):
-            raise RuntimeError("符号规范化AI处理器未初始化，请检查配置文件")
-        
-        # 构建提示词
-        user_prompt = self._build_normalize_prompt(file_path, symbols, ibc_code)
-        
-        # 调用AI进行规范化（带重试）
-        for attempt in range(self.MAX_RETRY_COUNT):
-            try:
-                print(f"    正在调用AI进行符号规范化（尝试 {attempt + 1}/{self.MAX_RETRY_COUNT}）...")
-                response_content, success = asyncio.run(self.chat_handler.get_role_response(
-                    role_name=self.role_symbol_normalizer,
-                    user_prompt=user_prompt
-                ))
-                
-                if not success:
-                    print(f"    {Colors.WARNING}警告: AI响应失败{Colors.ENDC}")
-                    continue
-                
-                normalized_symbols = self._parse_symbol_normalizer_response(response_content)
-                if normalized_symbols:
-                    return normalized_symbols
-                
-                print(f"    {Colors.WARNING}警告: AI返回的符号规范化结果为空{Colors.ENDC}")
-            except Exception as e:
-                print(f"    {Colors.FAIL}错误: AI调用失败: {e}{Colors.ENDC}")
-            
-            if attempt < self.MAX_RETRY_COUNT - 1:
-                print(f"    {Colors.OKBLUE}准备重试...{Colors.ENDC}")
-        
-        raise RuntimeError(f"符号规范化失败：AI未能返回有效结果（已重试{self.MAX_RETRY_COUNT}次）")
+
     
-    def _build_normalize_prompt(self, file_path: str, symbols: Dict[str, SymbolNode], ibc_code: str) -> str:
-        """构建符号规范化提示词"""
-        return self._build_user_prompt_for_symbol_normalizer(file_path, symbols, ibc_code)
+
 
     def _get_target_language(self) -> str:
         """获取目标编程语言"""
@@ -839,7 +800,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         return re.match(pattern, identifier) is not None
     
 
-    # ========== 符号信息构建 ==========
+    
+    # ========== 符号信息构建方法 ==========
     
     def _build_available_symbols_text(
         self, 
@@ -950,7 +912,42 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         return '\n'.join(lines) if len(lines) > 2 else '暂无可用的依赖符号'
     
-    # ========== 修改的方法：AI处理器初始化 ==========
+    # ========== 命令可用性状态检查 ==========
+    
+    def is_cmd_valid(self):
+        return self._check_cmd_requirement() and self._check_ai_handler()
+
+    def _check_cmd_requirement(self) -> bool:
+        """验证命令的前置条件"""
+        # 检查IBC目录结构文件是否存在
+        ibc_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
+        if not os.path.exists(ibc_dir_file):
+            print(f"  {Colors.WARNING}警告: IBC目录结构文件不存在，请先执行one_file_req_gen命令{Colors.ENDC}")
+            return False
+        
+        # 检查文件级实现规划文件是否存在
+        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        if not os.path.exists(implementation_plan_file):
+            print(f"  {Colors.WARNING}警告: 文件级实现规划文件不存在，请先执行目录文件填充命令{Colors.ENDC}")
+            return False
+        
+        return True
+    
+    def _check_ai_handler(self) -> bool:
+        """验证AI处理器是否初始化成功"""
+        if not ICPChatHandler.is_initialized():
+            return False
+        
+        if not self.chat_handler.has_role(self.role_ibc_gen):
+            return False
+        
+        if not ICPEmbeddingHandler.is_initialized():
+            print(f"  {Colors.WARNING}警告: Embedding处理器未初始化{Colors.ENDC}")
+            return False
+        
+        return True
+
+    # ========== AI处理器初始化方法 ==========
     
     def _init_ai_handlers(self):
         """初始化AI处理器"""
