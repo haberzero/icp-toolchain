@@ -43,7 +43,7 @@ def main():
             root.destroy()
             return
 
-    if not proj_cfg_manager.set_work_dir(work_dir):
+    if not proj_cfg_manager.set_work_dir_path(work_dir):
         print(f"错误: 无法设置工作目录为 {work_dir}")
         if root:
             root.destroy()

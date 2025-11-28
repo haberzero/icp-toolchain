@@ -27,7 +27,7 @@ class CmdHandlerParaExtract(BaseCmdHandler):
             help_text="对用户需求进行解析，并且从中提取出关键的参数，供后续步骤使用",
         )
         proj_cfg_manager = get_proj_cfg_manager()
-        self.work_dir_path = proj_cfg_manager.get_work_dir()
+        self.work_dir_path = proj_cfg_manager.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')

@@ -27,7 +27,7 @@ class CmdHandlerDependRefine(BaseCmdHandler):
             help_text="根据检测到的循环依赖信息，重构依赖结构以解决循环依赖问题",
         )
         proj_cfg_manager = get_proj_cfg_manager()
-        self.work_dir_path = proj_cfg_manager.get_work_dir()
+        self.work_dir_path = proj_cfg_manager.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')

@@ -169,7 +169,7 @@ class MainWindow:
             self.tree.delete(item)
 
         # 获取项目根路径
-        root_path = self.proj_cfg_manager.get_work_dir()
+        root_path = self.proj_cfg_manager.get_work_dir_path()
         if not root_path or not os.path.exists(root_path):
             return
 

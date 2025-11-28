@@ -27,7 +27,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             help_text="根据已有的dir_content.json文件的内容在src_staging目录结构下创建单文件的编程需求描述, 为IBC的生成做准备",
         )
         proj_cfg_manager = get_proj_cfg_manager()
-        self.work_dir_path = proj_cfg_manager.get_work_dir()
+        self.work_dir_path = proj_cfg_manager.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')

@@ -33,7 +33,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             help_text="读取IBC代码和AST，进行符号规范化替换，生成目标语言代码",
         )
         proj_cfg_manager = get_proj_cfg_manager()
-        self.work_dir_path = proj_cfg_manager.get_work_dir()
+        self.work_dir_path = proj_cfg_manager.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
