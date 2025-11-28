@@ -11,7 +11,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code
-from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
+from data_store.ibc_data_manager import get_instance as get_ibc_data_manager
 
 
 def example_save_and_load_ast():

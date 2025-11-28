@@ -6,9 +6,9 @@ from typing import List, Dict, Any
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
 
-from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
-from data_exchange.app_data_manager import get_instance as get_app_data_manager
-from data_exchange.user_data_manager import get_instance as get_user_data_manager
+from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
+from data_store.app_data_manager import get_instance as get_app_data_manager
+from data_store.user_data_manager import get_instance as get_user_data_manager
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
@@ -26,8 +26,8 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             description="根据需求分析结果生成项目目录结构",
             help_text="基于需求分析生成标准化的项目目录结构",
         )
-        proj_cfg_manager = get_proj_cfg_manager()
-        self.work_dir_path = proj_cfg_manager.get_work_dir_path()
+        proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
+        self.work_dir_path = proj_run_time_cfg_manager.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')

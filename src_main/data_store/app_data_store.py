@@ -4,12 +4,12 @@ import os
 # 对 icp_toolchain app 相关的持久性常用内容进行管理
 # 包括上一次运行的配置信息； toolchain app 中常用路径的管理比如系统提示词的存取
 
-class AppDataManager:
+class AppDataStore:
     _instance = None
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = super(AppDataManager, cls).__new__(cls)
+            cls._instance = super(AppDataStore, cls).__new__(cls)
         return cls._instance
 
     def __init__(self):
@@ -54,7 +54,7 @@ class AppDataManager:
         return self.user_prompt_dir
 
 
-_instance = AppDataManager()
+_instance = AppDataStore()
 
 
 def get_instance():

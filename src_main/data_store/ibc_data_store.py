@@ -16,14 +16,14 @@ from typedef.ibc_data_types import (
 from typedef.cmd_data_types import Colors
 
 
-class IbcDataManager:
+class IbcDataStore:
     """IBC数据管理器，负责AST和符号表的持久化存储和加载"""
     
     _instance = None
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = super(IbcDataManager, cls).__new__(cls)
+            cls._instance = super(IbcDataStore, cls).__new__(cls)
         return cls._instance
 
     def __init__(self):
@@ -272,13 +272,13 @@ class IbcDataManager:
 
 
 # 单例实例
-_instance = IbcDataManager()
+_instance = IbcDataStore()
 
 
-def get_instance() -> IbcDataManager:
+def get_instance() -> IbcDataStore:
     """获取IbcDataManager单例实例"""
     return _instance
 
 
 # 兼容旧的ibc_data_manager接口
-AstDataManager = IbcDataManager
+AstDataManager = IbcDataStore

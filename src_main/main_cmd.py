@@ -5,9 +5,9 @@ import argparse
 import tkinter as tk
 from ui.path_selector import PathSelector
 
-from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
-from data_exchange.app_data_manager import get_instance as get_app_data_manager
-from data_exchange.user_data_manager import get_instance as get_user_data_manager
+from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
+from data_store.app_data_manager import get_instance as get_app_data_manager
+from data_store.user_data_manager import get_instance as get_user_data_manager
 from app.icp_cmd_cli import IcpCmdCli
 
 
@@ -19,7 +19,7 @@ def main():
     args = parser.parse_args()
     
     app_data_manager = get_app_data_manager()
-    proj_cfg_manager = get_proj_cfg_manager()
+    proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
     user_data_manager = get_user_data_manager()
     
     root = None
@@ -43,7 +43,7 @@ def main():
             root.destroy()
             return
 
-    if not proj_cfg_manager.set_work_dir_path(work_dir):
+    if not proj_run_time_cfg_manager.set_work_dir_path(work_dir):
         print(f"错误: 无法设置工作目录为 {work_dir}")
         if root:
             root.destroy()

@@ -6,12 +6,12 @@ import json
 # 这个类本身不应该涉及对持久性文件的存取
 # 后续这个类应该会大量涉及到和命令行配置/ui界面交互等相关的 工程相关的配置
 
-class ProjCfgManager:
+class ProjRunTimeCfg:
     _instance = None
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = super(ProjCfgManager, cls).__new__(cls)
+            cls._instance = super(ProjRunTimeCfg, cls).__new__(cls)
         return cls._instance
 
     def __init__(self):
@@ -29,7 +29,7 @@ class ProjCfgManager:
         return self.proj_work_dir_path
 
 
-_instance = ProjCfgManager()
+_instance = ProjRunTimeCfg()
 
 
 def get_instance():

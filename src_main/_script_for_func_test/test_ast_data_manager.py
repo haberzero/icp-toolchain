@@ -8,7 +8,7 @@ from typedef.ibc_data_types import (
     IbcBaseAstNode, AstNodeType, ModuleNode, ClassNode, 
     FunctionNode, VariableNode, BehaviorStepNode
 )
-from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
+from data_store.ibc_data_manager import get_instance as get_ibc_data_manager
 
 
 def test_ast_persistence():
