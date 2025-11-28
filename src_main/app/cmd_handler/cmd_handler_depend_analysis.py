@@ -122,6 +122,10 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: 带文件描述的目录结构内容为空{Colors.ENDC}")
             return ""
         self.old_json_content = json.loads(dir_with_files_content)
+        
+        # 生成完整路径列表
+        file_paths = DirJsonFuncs.get_all_file_paths(self.old_json_content.get("proj_root", {}))
+        file_paths_text = "\n".join(file_paths)
 
         # 读取用户提示词模板
         app_data_manager = get_app_data_manager()
@@ -141,6 +145,7 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         user_prompt = user_prompt_template
         user_prompt = user_prompt.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_content)
         user_prompt = user_prompt.replace('JSON_STRUCTURE_PLACEHOLDER', dir_with_files_content)
+        user_prompt = user_prompt.replace('FILE_PATHS_PLACEHOLDER', file_paths_text)
         
         return user_prompt
 

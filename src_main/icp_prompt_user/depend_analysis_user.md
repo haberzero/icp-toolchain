@@ -12,6 +12,12 @@ IMPLEMENTATION_PLAN_PLACEHOLDER
 JSON_STRUCTURE_PLACEHOLDER
 ```
 
+**完整路径列表：**
+
+```
+FILE_PATHS_PLACEHOLDER
+```
+
 请你根据文件级实现规划中描述的：
 1. 程序初始化流程
 2. 文件调用顺序和层级关系
@@ -24,4 +30,4 @@ JSON_STRUCTURE_PLACEHOLDER
 - 基础层文件（被其他文件依赖）的 dependent_relation 应该为空列表 []
 - 业务层和应用层文件应该依赖基础层文件
 - 依赖方向从上层指向下层，确保单向依赖，避免循环依赖
-- 所有依赖路径必须在工程文件夹结构中真实存在
+- 所有依赖路径必须在工程文件夹结构中真实存在，你可以参考上面的完整路径列表

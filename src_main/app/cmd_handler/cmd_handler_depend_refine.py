@@ -40,6 +40,10 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         self.circular_deps_content = None  # 循环依赖信息字符串
         self.dependency_structure_content = None  # 依赖结构内容
         self.first_circle_flag = True  # 是否是第一次运行的标志
+        self.no_circular_dependency = False  # 标记是否无循环依赖（正常退出）
+        
+        # 预处理变量
+        self.original_json_content = None  # 原始的JSON内容
         
         # 初始化AI处理器
         self._init_ai_handlers()
@@ -53,8 +57,21 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         self.circular_deps_content = None
         self.dependency_structure_content = None
         self.first_circle_flag = True
+        self.no_circular_dependency = False
+        self.original_json_content = None
         
         print(f"{Colors.OKBLUE}开始解决循环依赖问题...{Colors.ENDC}")
+        
+        # 预处理：读取原始依赖分析结果并检测循环依赖
+        if not self._build_pre_execution_variables():
+            # 预处理失败，直接返回
+            return
+        
+        # 如果没有循环依赖，直接保存原始内容
+        if self.no_circular_dependency:
+            print(f"{Colors.OKBLUE}未检测到循环依赖，直接保存原有依赖结构...{Colors.ENDC}")
+            self._save_result(self.original_json_content)
+            return
         
         max_attempts = 3
         new_json_content = {}
@@ -62,14 +79,10 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         for attempt in range(max_attempts):
             print(f"{self.role_name}正在进行第 {attempt + 1} 次尝试...")
             
-            # 构建用户提示词（会根据first_circle_flag自动选择数据源）
+            # 构建用户提示词
             user_prompt = self._build_user_prompt_for_depend_refiner()
             if not user_prompt:
-                # 如果是第一次且没有循环依赖，直接返回
-                if self.first_circle_flag:
-                    return
-                # 理论上不应出现的情况，抛出错误提示
-                print(f"{Colors.FAIL}错误: 构建用户提示词失败，出现未知错误，请开发人员检查逻辑{Colors.ENDC}")
+                print(f"{Colors.FAIL}错误: 构建用户提示词失败{Colors.ENDC}")
                 return
             
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
@@ -95,6 +108,7 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         self.circular_deps_content = None
         self.dependency_structure_content = None
         self.first_circle_flag = True
+        self.original_json_content = None
         
         # 循环已跳出，检查运行结果并进行相应操作
         if attempt == max_attempts - 1:
@@ -102,11 +116,68 @@ class CmdHandlerDependRefine(BaseCmdHandler):
             return
 
         print(f"{Colors.OKBLUE}循环依赖解决完成，正在保存结果...{Colors.ENDC}")
+        self._save_result(new_json_content)
+
+    def _build_pre_execution_variables(self) -> bool:
+        """
+        预处理：读取原始依赖分析结果并检测循环依赖
+        
+        Returns:
+            bool: 预处理是否成功
+        """
+        # 读取依赖分析结果
+        depend_analysis_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_depend.json')
+        try:
+            with open(depend_analysis_file, 'r', encoding='utf-8') as f:
+                depend_content = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取依赖分析结果失败: {e}{Colors.ENDC}")
+            return False
+            
+        if not depend_content:
+            print(f"  {Colors.FAIL}错误: 依赖分析结果为空{Colors.ENDC}")
+            return False
+
+        # 解析JSON内容
+        try:
+            self.original_json_content = json.loads(depend_content)
+        except json.JSONDecodeError as e:
+            print(f"  {Colors.FAIL}错误: 依赖分析结果不是有效的JSON格式: {e}{Colors.ENDC}")
+            return False
+
+        # 检测循环依赖
+        dependent_relation = self.original_json_content.get("dependent_relation", {})
+        circular_dependencies = DirJsonFuncs.detect_circular_dependencies(dependent_relation)
+        
+        if not circular_dependencies:
+            # 没有循环依赖，这是正常情况
+            print(f"{Colors.OKBLUE}信息: 未检测到循环依赖，无需执行修复{Colors.ENDC}")
+            self.no_circular_dependency = True
+            return True
+        
+        # 输出检测到的循环依赖
+        print(f"{Colors.WARNING}检测到以下循环依赖:{Colors.ENDC}")
+        for cycle in circular_dependencies:
+            print(f"  {Colors.WARNING}{cycle}{Colors.ENDC}")
+
+        # 保存循环依赖信息，用于构建用户提示词
+        self.circular_deps_content = '\n'.join(circular_dependencies)
+        self.dependency_structure_content = depend_content
+        
+        return True
+
+    def _save_result(self, json_content: Dict[str, Any]):
+        """
+        保存结果到文件
+        
+        Args:
+            json_content: 要保存的JSON内容
+        """
         output_file = os.path.join(self.proj_data_dir, 'icp_dir_content_refined.json')
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
-                json.dump(new_json_content, f, indent=2)
-            print(f"{Colors.OKBLUE}循环依赖解决完成，结果已保存到: {output_file}{Colors.ENDC}")
+                json.dump(json_content, f, indent=2, ensure_ascii=False)
+            print(f"{Colors.OKBLUE}结果已保存到: {output_file}{Colors.ENDC}")
         except Exception as e:
             print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
 
@@ -114,9 +185,9 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         """
         构建依赖修复的用户提示词
         
-        从项目数据目录和实例变量中获取所需信息，无需外部参数传递。
-        如果是第一次运行（first_circle_flag=True），从文件读取并检测循环依赖；
-        如果不是第一次运行，则使用实例变量中保存的最新循环依赖信息。
+        根据是否是第一次运行，选择不同的数据源：
+        - 第一次：使用预处理阶段读取的原始数据
+        - 后续次：使用上一轮验证后更新的数据
         
         Returns:
             str: 完整的用户提示词，失败时返回空字符串
@@ -133,36 +204,11 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         
         # 根据是否是第一次运行，选择不同的数据源
         if self.first_circle_flag:
-            # 第一次运行，从文件读取依赖分析结果
-            depend_analysis_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_depend.json')
-            try:
-                with open(depend_analysis_file, 'r', encoding='utf-8') as f:
-                    depend_content = f.read()
-            except Exception as e:
-                print(f"  {Colors.FAIL}错误: 读取依赖分析结果失败: {e}{Colors.ENDC}")
-                return ""
-                
-            if not depend_content:
-                print(f"  {Colors.FAIL}错误: 依赖分析结果为空{Colors.ENDC}")
-                return ""
-
-            # 检测循环依赖
-            dependent_relation = json.loads(depend_content)["dependent_relation"]
-            circular_dependencies = DirJsonFuncs.detect_circular_dependencies(dependent_relation)
-            
-            if not circular_dependencies:
-                print(f"{Colors.OKBLUE}信息: 未检测到循环依赖，无需执行修复{Colors.ENDC}")
-                return ""
-            
-            # 输出检测到的循环依赖
-            print(f"{Colors.WARNING}检测到以下循环依赖:{Colors.ENDC}")
-            for cycle in circular_dependencies:
-                print(f"  {Colors.WARNING}{cycle}{Colors.ENDC}")
-
-            # 使用检测到的循环依赖信息
-            circular_deps_content = '\n'.join(circular_dependencies)
+            # 第一次运行，使用预处理阶段读取的数据
+            circular_deps_content = self.circular_deps_content
+            depend_content = self.dependency_structure_content
         else:
-            # 不是第一次运行，使用实例变量中的最新信息
+            # 不是第一次运行，使用上一轮验证后更新的信息
             circular_deps_content = self.circular_deps_content
             depend_content = self.dependency_structure_content
         

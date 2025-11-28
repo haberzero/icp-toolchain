@@ -138,6 +138,7 @@
         "proj_root": {
           "pipeline": {
             "ingest": {
+              "ingest": "数据源读取主模块",
               "reader": "数据源读取",
               "validator": "原始数据校验"
             },
@@ -146,7 +147,7 @@
               "aggregator": "汇总与聚合"
             },
             "export": {
-              "writer": "结果输出至目标存储"
+              "export": "结果输出至目标存储"
             }
           },
           "main": "主入口程序，负责流程调度与启动"
@@ -161,6 +162,7 @@
         "proj_root": {
           "pipeline": {
             "ingest": {
+              "ingest": "数据源读取主模块",
               "reader": "数据源读取",
               "validator": "原始数据校验"
             },
@@ -169,16 +171,20 @@
               "aggregator": "汇总与聚合"
             },
             "export": {
-              "writer": "结果输出至目标存储"
+              "export": "结果输出至目标存储"
             }
           },
           "main": "主入口程序，负责流程调度与启动"
         },
         "dependent_relation": {
           "main": [
-            "pipeline/ingest/reader",
+            "pipeline/ingest/ingest",
             "pipeline/process/transformer",
-            "pipeline/export/writer"
+            "pipeline/export/export"
+          ],
+          "pipeline/ingest/ingest": [
+            "pipeline/ingest/reader",
+            "pipeline/ingest/validator"
           ],
           "pipeline/ingest/reader": [
             "pipeline/ingest/validator"
@@ -188,7 +194,7 @@
             "pipeline/process/aggregator"
           ],
           "pipeline/process/aggregator": [],
-          "pipeline/export/writer": []
+          "pipeline/export/export": []
         }
       }
       ```
