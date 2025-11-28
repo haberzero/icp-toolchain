@@ -33,10 +33,10 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             help_text="读取IBC代码和AST，进行符号规范化替换，生成目标语言代码",
         )
         proj_cfg_manager = get_proj_cfg_manager()
-        self.proj_work_dir = proj_cfg_manager.get_work_dir()
-        self.proj_data_dir = os.path.join(self.proj_work_dir, 'icp_proj_data')
-        self.proj_config_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_config')
-        self.icp_api_config_file = os.path.join(self.proj_config_data_dir, 'icp_api_config.json')
+        self.work_dir_path = proj_cfg_manager.get_work_dir()
+        self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
+        self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
+        self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
         
         self.role_name = "9_target_code_gen"
         
@@ -58,7 +58,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         print(f"{Colors.OKBLUE}开始生成目标语言代码...{Colors.ENDC}")
 
         # 读取IBC目录结构
-        ibc_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
+        ibc_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_final.json')
         try:
             with open(ibc_dir_file, 'r', encoding='utf-8') as f:
                 ibc_content_json_dict = json.load(f)
@@ -79,14 +79,14 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         target_dir_name = self._get_target_directory_name()
         target_suffix = self._get_target_suffix()
         
-        ibc_root_path = os.path.join(self.proj_work_dir, ibc_dir_name)
-        target_root_path = os.path.join(self.proj_work_dir, target_dir_name)
+        work_ibc_dir_path = os.path.join(self.work_dir_path, ibc_dir_name)
+        work_target_dir_path = os.path.join(self.work_dir_path, target_dir_name)
         
         # 确保目标目录存在
-        os.makedirs(target_root_path, exist_ok=True)
+        os.makedirs(work_target_dir_path, exist_ok=True)
         
         # 初始化符号向量数据库
-        vector_db_path = os.path.join(self.proj_data_dir, 'symbol_vector_db')
+        vector_db_path = os.path.join(self.work_data_dir_path, 'symbol_vector_db')
         self.vector_db_manager = SymbolVectorDBManager(vector_db_path, self.embedding_handler)
         
         # 读取用户原始需求
@@ -94,7 +94,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         user_requirements_str = user_data_manager.get_user_prompt()
         
         # 读取文件级实现规划
-        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        implementation_plan_file = os.path.join(self.work_data_dir_path, 'icp_implementation_plan.txt')
         implementation_plan_str = ""
         try:
             with open(implementation_plan_file, 'r', encoding='utf-8') as f:
@@ -106,11 +106,11 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         target_language = self._get_target_language()
         
         # 按照依赖顺序处理每个文件
-        for file_path in file_creation_order_list:
-            print(f"\n  {Colors.OKBLUE}正在处理文件: {file_path}{Colors.ENDC}")
+        for icp_json_file_path in file_creation_order_list:
+            print(f"\n  {Colors.OKBLUE}正在处理文件: {icp_json_file_path}{Colors.ENDC}")
             
             # 1. 加载AST
-            ast_file_path = self._get_ast_file_path(ibc_root_path, file_path)
+            ast_file_path = self._get_ast_file_path(work_ibc_dir_path, icp_json_file_path)
             if not os.path.exists(ast_file_path):
                 print(f"    {Colors.WARNING}警告: AST文件不存在，跳过: {ast_file_path}{Colors.ENDC}")
                 continue
@@ -125,7 +125,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             
             # 2. 加载符号表
             print(f"    正在加载符号表...")
-            symbol_table = ibc_data_manager.load_file_symbols(ibc_root_path, file_path)
+            symbol_table = ibc_data_manager.load_file_symbols(work_ibc_dir_path, icp_json_file_path)
             
             if not symbol_table or not symbol_table.symbols:
                 print(f"    {Colors.WARNING}警告: 符号表为空{Colors.ENDC}")
@@ -141,7 +141,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             normalized_ibc_code = code_reconstructor.reconstruct()
             
             # 保存规范化后的IBC代码（可选，用于调试）
-            normalized_ibc_file = os.path.join(ibc_root_path, f"{file_path}_normalized.ibc")
+            normalized_ibc_file = os.path.join(work_ibc_dir_path, f"{icp_json_file_path}_normalized.ibc")
             try:
                 os.makedirs(os.path.dirname(normalized_ibc_file), exist_ok=True)
                 with open(normalized_ibc_file, 'w', encoding='utf-8') as f:
@@ -152,14 +152,14 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             
             # 5. 调用AI生成目标代码
             print(f"    正在生成目标语言代码...")
-            target_code_str = self._generate_target_code(file_path)
+            target_code_str = self._generate_target_code(icp_json_file_path)
             
             if not target_code_str:
                 print(f"    {Colors.FAIL}错误: 目标代码生成失败{Colors.ENDC}")
                 continue
             
             # 6. 保存目标代码
-            target_file_path = os.path.join(target_root_path, f"{file_path}{target_suffix}")
+            target_file_path = os.path.join(work_target_dir_path, f"{icp_json_file_path}{target_suffix}")
             try:
                 os.makedirs(os.path.dirname(target_file_path), exist_ok=True)
                 with open(target_file_path, 'w', encoding='utf-8') as f:
@@ -171,14 +171,14 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         
         print(f"\n{Colors.OKGREEN}目标语言代码生成完毕!{Colors.ENDC}")
 
-    def _build_user_prompt_for_target_code_gen(self, file_path: str) -> str:
+    def _build_user_prompt_for_target_code_gen(self, icp_json_file_path: str) -> str:
         """
         构建目标代码生成的用户提示词
         
         从项目数据目录中直接读取所需信息，无需外部参数传递。
         
         Args:
-            file_path: 当前处理的文件路径
+            icp_json_file_path: 当前处理的文件路径
         
         Returns:
             str: 完整的用户提示词，失败时返回空字符串
@@ -191,7 +191,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             return ""
         
         # 读取文件级实现规划
-        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        implementation_plan_file = os.path.join(self.work_data_dir_path, 'icp_implementation_plan.txt')
         implementation_plan_str = ""
         try:
             with open(implementation_plan_file, 'r', encoding='utf-8') as f:
@@ -204,8 +204,8 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         
         # 读取规范化后的IBC代码
         ibc_dir_name = self._get_ibc_directory_name()
-        ibc_root_path = os.path.join(self.proj_work_dir, ibc_dir_name)
-        normalized_ibc_file = os.path.join(ibc_root_path, f"{file_path}_normalized.ibc")
+        work_ibc_dir_path = os.path.join(self.work_dir_path, ibc_dir_name)
+        normalized_ibc_file = os.path.join(work_ibc_dir_path, f"{icp_json_file_path}_normalized.ibc")
         try:
             with open(normalized_ibc_file, 'r', encoding='utf-8') as f:
                 ibc_code_str = f.read()
@@ -214,10 +214,10 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             return ""
         # 读取用户提示词模板
         app_data_manager = get_app_data_manager()
-        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'target_code_gen_user.md')
+        app_user_prompt_file_path = os.path.join(app_data_manager.get_user_prompt_dir(), 'target_code_gen_user.md')
         
         try:
-            with open(user_prompt_file, 'r', encoding='utf-8') as f:
+            with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
                 user_prompt_template_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
@@ -226,25 +226,25 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         # 填充模板
         user_prompt_str = user_prompt_template_str
         user_prompt_str = user_prompt_str.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
-        user_prompt_str = user_prompt_str.replace('CURRENT_FILE_PATH_PLACEHOLDER', file_path)
+        user_prompt_str = user_prompt_str.replace('CURRENT_FILE_PATH_PLACEHOLDER', icp_json_file_path)
         user_prompt_str = user_prompt_str.replace('USER_REQUIREMENTS_PLACEHOLDER', user_requirements_str)
         user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_str)
         user_prompt_str = user_prompt_str.replace('IBC_CODE_PLACEHOLDER', ibc_code_str)
         
         return user_prompt_str
 
-    def _generate_target_code(self, file_path: str) -> str:
+    def _generate_target_code(self, icp_json_file_path: str) -> str:
         """
         生成目标语言代码
         
         Args:
-            file_path: 文件路径
+            icp_json_file_path: 文件路径
             
         Returns:
             str: 生成的目标代码
         """
         # 构建用户提示词
-        user_prompt_str = self._build_user_prompt_for_target_code_gen(file_path)
+        user_prompt_str = self._build_user_prompt_for_target_code_gen(icp_json_file_path)
         if not user_prompt_str:
             return ""
         
@@ -267,15 +267,15 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         
         return cleaned_code_str
 
-    def _get_ast_file_path(self, ibc_root_path: str, file_path: str) -> str:
+    def _get_ast_file_path(self, work_ibc_dir_path: str, icp_json_file_path: str) -> str:
         """获取AST文件路径"""
-        return os.path.join(ibc_root_path, f"{file_path}_ibc_ast.json")
+        return os.path.join(work_ibc_dir_path, f"{icp_json_file_path}_ibc_ast.json")
 
     def _get_ibc_directory_name(self) -> str:
         """获取IBC目录名称"""
-        icp_config_file = os.path.join(self.proj_config_data_dir, 'icp_config.json')
+        work_icp_config_file_path = os.path.join(self.work_config_dir_path, 'icp_config.json')
         try:
-            with open(icp_config_file, 'r', encoding='utf-8') as f:
+            with open(work_icp_config_file_path, 'r', encoding='utf-8') as f:
                 icp_config_json_dict = json.load(f)
             return icp_config_json_dict["file_system_mapping"].get("behavioral_layer_dir", "src_ibc")
         except:
@@ -283,9 +283,9 @@ class CmdHandlerCodeGen(BaseCmdHandler):
 
     def _get_target_directory_name(self) -> str:
         """获取目标代码目录名称"""
-        icp_config_file = os.path.join(self.proj_config_data_dir, 'icp_config.json')
+        work_icp_config_file_path = os.path.join(self.work_config_dir_path, 'icp_config.json')
         try:
-            with open(icp_config_file, 'r', encoding='utf-8') as f:
+            with open(work_icp_config_file_path, 'r', encoding='utf-8') as f:
                 icp_config_json_dict = json.load(f)
             return icp_config_json_dict["file_system_mapping"].get("target_layer_dir", "src_main")
         except:
@@ -293,9 +293,9 @@ class CmdHandlerCodeGen(BaseCmdHandler):
 
     def _get_target_suffix(self) -> str:
         """获取目标代码文件后缀"""
-        icp_config_file = os.path.join(self.proj_config_data_dir, 'icp_config.json')
+        work_icp_config_file_path = os.path.join(self.work_config_dir_path, 'icp_config.json')
         try:
-            with open(icp_config_file, 'r', encoding='utf-8') as f:
+            with open(work_icp_config_file_path, 'r', encoding='utf-8') as f:
                 icp_config_json_dict = json.load(f)
             return icp_config_json_dict.get("target_suffix", ".py")
         except:
@@ -303,9 +303,9 @@ class CmdHandlerCodeGen(BaseCmdHandler):
 
     def _get_target_language(self) -> str:
         """获取目标编程语言"""
-        icp_config_file = os.path.join(self.proj_config_data_dir, 'icp_config.json')
+        work_icp_config_file_path = os.path.join(self.work_config_dir_path, 'icp_config.json')
         try:
-            with open(icp_config_file, 'r', encoding='utf-8') as f:
+            with open(work_icp_config_file_path, 'r', encoding='utf-8') as f:
                 icp_config_json_dict = json.load(f)
             return icp_config_json_dict.get("target_language", "Python")
         except:
@@ -314,15 +314,15 @@ class CmdHandlerCodeGen(BaseCmdHandler):
     def _check_cmd_requirement(self) -> bool:
         """验证命令的前置条件"""
         # 检查IBC目录结构文件是否存在
-        ibc_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_final.json')
+        ibc_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_final.json')
         if not os.path.exists(ibc_dir_file):
             print(f"  {Colors.WARNING}警告: IBC目录结构文件不存在，请先执行ibc_gen命令{Colors.ENDC}")
             return False
         
         # 检查IBC目录是否存在
         ibc_dir_name = self._get_ibc_directory_name()
-        ibc_root_path = os.path.join(self.proj_work_dir, ibc_dir_name)
-        if not os.path.exists(ibc_root_path):
+        work_ibc_dir_path = os.path.join(self.work_dir_path, ibc_dir_name)
+        if not os.path.exists(work_ibc_dir_path):
             print(f"  {Colors.WARNING}警告: IBC目录不存在，请先执行ibc_gen命令{Colors.ENDC}")
             return False
         
@@ -349,12 +349,12 @@ class CmdHandlerCodeGen(BaseCmdHandler):
     
     def _init_ai_handlers(self):
         """初始化AI处理器"""
-        if not os.path.exists(self.icp_api_config_file):
-            print(f"错误: 配置文件 {self.icp_api_config_file} 不存在")
+        if not os.path.exists(self.work_api_config_file_path):
+            print(f"错误: 配置文件 {self.work_api_config_file_path} 不存在")
             return
         
         try:
-            with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
+            with open(self.work_api_config_file_path, 'r', encoding='utf-8') as f:
                 config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
@@ -379,9 +379,9 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         
         # 加载角色
         app_data_manager = get_app_data_manager()
-        prompt_dir = app_data_manager.get_prompt_dir()
-        sys_prompt_path = os.path.join(prompt_dir, f"{self.role_name}.md")
-        self.chat_handler.load_role_from_file(self.role_name, sys_prompt_path)
+        app_prompt_dir_path = app_data_manager.get_prompt_dir()
+        app_sys_prompt_file_path = os.path.join(app_prompt_dir_path, f"{self.role_name}.md")
+        self.chat_handler.load_role_from_file(self.role_name, app_sys_prompt_file_path)
         
         # Embedding处理器配置
         if 'embedding_handler' in config_json_dict:

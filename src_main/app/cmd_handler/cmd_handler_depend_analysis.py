@@ -28,10 +28,10 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             help_text="根据目录结构分析并生成项目依赖关系",
         )
         proj_cfg_manager = get_proj_cfg_manager()
-        self.proj_work_dir = proj_cfg_manager.get_work_dir()
-        self.proj_data_dir = os.path.join(self.proj_work_dir, 'icp_proj_data')
-        self.proj_config_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_config')
-        self.icp_api_config_file = os.path.join(self.proj_config_data_dir, 'icp_api_config.json')
+        self.work_dir_path = proj_cfg_manager.get_work_dir()
+        self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
+        self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
+        self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
 
         # 使用新的 ICPChatHandler
         self.chat_handler = ICPChatHandler()
@@ -78,7 +78,7 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             return
         
         # 保存依赖分析结果到 icp_dir_content_with_depend.json
-        output_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_depend.json')
+        output_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_depend.json')
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write(cleaned_json_str)
@@ -97,7 +97,7 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             str: 完整的用户提示词，失败时返回空字符串
         """
         # 读取文件级实现规划
-        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        implementation_plan_file = os.path.join(self.work_data_dir_path, 'icp_implementation_plan.txt')
         try:
             with open(implementation_plan_file, 'r', encoding='utf-8') as f:
                 implementation_plan_str = f.read()
@@ -110,7 +110,7 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             return ""
             
         # 读取带文件描述的目录结构
-        dir_with_files_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_files.json')
+        dir_with_files_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_files.json')
         try:
             with open(dir_with_files_file, 'r', encoding='utf-8') as f:
                 dir_with_files_str = f.read()
@@ -129,9 +129,9 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
 
         # 读取用户提示词模板
         app_data_manager = get_app_data_manager()
-        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'depend_analysis_user.md')
+        app_user_prompt_file_path = os.path.join(app_data_manager.get_user_prompt_dir(), 'depend_analysis_user.md')
         try:
-            with open(user_prompt_file, 'r', encoding='utf-8') as f:
+            with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
                 user_prompt_template_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
@@ -195,13 +195,13 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
     def _check_cmd_requirement(self) -> bool:
         """验证依赖分析命令的前置条件"""
         # 检查文件级实现规划文件是否存在
-        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        implementation_plan_file = os.path.join(self.work_data_dir_path, 'icp_implementation_plan.txt')
         if not os.path.exists(implementation_plan_file):
             print(f"  {Colors.WARNING}警告: 文件级实现规划文件不存在，请先执行目录文件填充命令{Colors.ENDC}")
             return False
             
         # 检查带文件描述的目录结构文件是否存在
-        dir_with_files_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_files.json')
+        dir_with_files_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_files.json')
         if not os.path.exists(dir_with_files_file):
             print(f"  {Colors.WARNING}警告: 带文件描述的目录结构文件不存在，请先执行目录文件填充命令{Colors.ENDC}")
             return False
@@ -225,12 +225,12 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
     def _init_ai_handlers(self):
         """初始化AI处理器"""
         # 检查配置文件是否存在
-        if not os.path.exists(self.icp_api_config_file):
-            print(f"错误: 配置文件 {self.icp_api_config_file} 不存在，请创建该文件并填充必要内容")
+        if not os.path.exists(self.work_api_config_file_path):
+            print(f"错误: 配置文件 {self.work_api_config_file_path} 不存在，请创建该文件并填充必要内容")
             return
         
         try:
-            with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
+            with open(self.work_api_config_file_path, 'r', encoding='utf-8') as f:
                 config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
@@ -257,9 +257,9 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         
         # 加载角色的系统提示词
         app_data_manager = get_app_data_manager()
-        prompt_dir = app_data_manager.get_prompt_dir()
+        app_prompt_dir_path = app_data_manager.get_prompt_dir()
         prompt_file_name = self.role_name + ".md"
-        sys_prompt_path = os.path.join(prompt_dir, prompt_file_name)
+        app_sys_prompt_file_path = os.path.join(app_prompt_dir_path, prompt_file_name)
         
         # 从文件加载角色提示词
-        self.chat_handler.load_role_from_file(self.role_name, sys_prompt_path)
+        self.chat_handler.load_role_from_file(self.role_name, app_sys_prompt_file_path)

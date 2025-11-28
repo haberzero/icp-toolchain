@@ -27,10 +27,10 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             help_text="根据已有的dir_content.json文件的内容在src_staging目录结构下创建单文件的编程需求描述, 为IBC的生成做准备",
         )
         proj_cfg_manager = get_proj_cfg_manager()
-        self.proj_work_dir = proj_cfg_manager.get_work_dir()
-        self.proj_data_dir = os.path.join(self.proj_work_dir, 'icp_proj_data')
-        self.proj_config_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_config')
-        self.icp_api_config_file = os.path.join(self.proj_config_data_dir, 'icp_api_config.json')
+        self.work_dir_path = proj_cfg_manager.get_work_dir()
+        self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
+        self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
+        self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
 
         self.chat_handler = ICPChatHandler()
         self.role_one_file_req = "7_one_file_req_gen"
@@ -49,17 +49,17 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         self._build_pre_execution_variables()
 
         # 创建src_staging目录用于存储_one_file_req.txt文件
-        staging_dir_path = os.path.join(self.proj_work_dir, 'src_staging')
+        work_staging_dir_path = os.path.join(self.work_dir_path, 'src_staging')
         try:
-            os.makedirs(staging_dir_path, exist_ok=True)
-            print(f"  {Colors.OKGREEN}src_staging目录创建成功: {staging_dir_path}{Colors.ENDC}")
+            os.makedirs(work_staging_dir_path, exist_ok=True)
+            print(f"  {Colors.OKGREEN}src_staging目录创建成功: {work_staging_dir_path}{Colors.ENDC}")
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 创建src_staging目录失败: {e}{Colors.ENDC}")
             return
 
         # 按文件生成顺序遍历并生成后续文件
-        for file_path in self.file_creation_order_list:
-            success = self._create_single_one_file_req(file_path)
+        for icp_json_file_path in self.file_creation_order_list:
+            success = self._create_single_one_file_req(icp_json_file_path)
             if not success:
                 print(f"{Colors.FAIL}单文件需求描述生成失败，终止执行{Colors.ENDC}")
                 return
@@ -70,7 +70,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             "dependent_relation": self.dependent_relation_dict
         }
         
-        dir_content_file = os.path.join(self.proj_data_dir, "icp_dir_content_final.json")
+        dir_content_file = os.path.join(self.work_data_dir_path, "icp_dir_content_final.json")
         try:
             with open(dir_content_file, 'w', encoding='utf-8') as f:
                 json.dump(dir_content_dict, f, indent=2, ensure_ascii=False)
@@ -91,7 +91,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             return ""
         
         # 读取经过依赖项修复的目录结构
-        final_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_refined.json')
+        final_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_refined.json')
         try:
             with open(final_dir_file, 'r', encoding='utf-8') as f:
                 final_dir_json_dict = json.load(f)
@@ -113,7 +113,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         file_creation_order_list = DirJsonFuncs.build_file_creation_order(dependent_relation_dict)
         
         # 读取文件级实现规划
-        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        implementation_plan_file = os.path.join(self.work_data_dir_path, 'icp_implementation_plan.txt')
         try:
             with open(implementation_plan_file, 'r', encoding='utf-8') as f:
                 implementation_plan_str = f.read()
@@ -126,7 +126,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         module_suggestions_text = "（无可用模块依赖建议）"
         allowed_lib_keys = set()
 
-        refined_requirements_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
+        refined_requirements_file = os.path.join(self.work_data_dir_path, 'refined_requirements.json')
         try:
             with open(refined_requirements_file, 'r', encoding='utf-8') as rf:
                 refined = json.load(rf)
@@ -164,7 +164,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
 
         return
 
-    def _create_single_one_file_req(self, file_path: str) -> bool:
+    def _create_single_one_file_req(self, icp_json_file_path: str) -> bool:
         """为当前选中路径生成单文件需求描述并保存"""
         max_attempts = 3
         response_content = None
@@ -174,9 +174,9 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             print(f"{self.role_one_file_req}正在进行第 {attempt + 1} 次尝试...")
             
             # 构建用户提示词
-            user_prompt_ofr = self._build_user_prompt_for_one_file_req(file_path)
+            user_prompt_ofr = self._build_user_prompt_for_one_file_req(icp_json_file_path)
             if not user_prompt_ofr:
-                print(f"  {Colors.FAIL}错误: 无法构建用户提示词: {file_path}{Colors.ENDC}")
+                print(f"  {Colors.FAIL}错误: 无法构建用户提示词: {icp_json_file_path}{Colors.ENDC}")
                 return False
 
             # 获取模型输出
@@ -191,20 +191,20 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             if success:
                 break
             else:
-                print(f"  {Colors.FAIL}错误: 生成文件依赖关系失败: {file_path}{Colors.ENDC}")
+                print(f"  {Colors.FAIL}错误: 生成文件依赖关系失败: {icp_json_file_path}{Colors.ENDC}")
                 print(f"  {Colors.FAIL}重试当前文件的生成过程{Colors.ENDC}")
         
         # 循环已跳出，检查运行结果并进行相应操作
         if attempt == max_attempts - 1:
-            print(f"{Colors.FAIL}错误: 达到最大尝试次数，生成单文件需求描述失败: {file_path}{Colors.ENDC}")
+            print(f"{Colors.FAIL}错误: 达到最大尝试次数，生成单文件需求描述失败: {icp_json_file_path}{Colors.ENDC}")
             return False
 
         # 累计保存目前已经生成的文件的路径以及其单文件编程需求描述
-        self.accumulated_file_str_list.append((file_path, response_content))
+        self.accumulated_file_str_list.append((icp_json_file_path, response_content))
 
         # 保存需求描述至具体文件
-        staging_dir_path = os.path.join(self.proj_work_dir, 'src_staging')
-        req_file_path = os.path.join(staging_dir_path, f"{file_path}_one_file_req.txt")
+        work_staging_dir_path = os.path.join(self.work_dir_path, 'src_staging')
+        req_file_path = os.path.join(work_staging_dir_path, f"{icp_json_file_path}_one_file_req.txt")
     
         parent_dir = os.path.dirname(req_file_path)
         if parent_dir:
@@ -219,27 +219,27 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: 保存文件需求描述失败 {req_file_path}: {e}{Colors.ENDC}")
             return False
 
-    def _build_user_prompt_for_one_file_req(self, file_path: str) -> str:
+    def _build_user_prompt_for_one_file_req(self, icp_json_file_path: str) -> str:
         """
         构建单文件需求生成的用户提示词
         Args:
-            file_path: 当前执行中的文件的路径
+            icp_json_file_path: 当前执行中的文件的路径
         
         Returns:
             str: 完整的用户提示词，失败时返回空字符串
         """
         # 获取dir_json中的文件描述
-        file_description = DirJsonFuncs.get_file_description(self.final_dir_json_dict['proj_root'], file_path)
+        file_description = DirJsonFuncs.get_file_description(self.final_dir_json_dict['proj_root'], icp_json_file_path)
         if not file_description:
-            print(f"  {Colors.FAIL}错误: 无法获取文件描述: {file_path}{Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 无法获取文件描述: {icp_json_file_path}{Colors.ENDC}")
             return ""
         
         # 遍历读取已生成的累积描述，仅获取当前文件依赖的文件的描述
         if self.dependent_relation_dict and isinstance(self.dependent_relation_dict, dict):
-            current_file_dependencies = self.dependent_relation_dict.get(file_path, [])
+            current_file_dependencies = self.dependent_relation_dict.get(icp_json_file_path, [])
             print(f"  {Colors.OKGREEN}当前文件依赖: {current_file_dependencies}{Colors.ENDC}")
         else:
-            print(f"  {Colors.FAIL}错误: 无法获取当前文件依赖: {file_path}{Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 无法获取当前文件依赖: {icp_json_file_path}{Colors.ENDC}")
             return ""
         accumulated_related_desc = []
         
@@ -266,9 +266,9 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
 
         # 读取用户提示词模板
         app_data_manager = get_app_data_manager()
-        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'one_file_req_gen_user.md')
+        app_user_prompt_file_path = os.path.join(app_data_manager.get_user_prompt_dir(), 'one_file_req_gen_user.md')
         try:
-            with open(user_prompt_file, 'r', encoding='utf-8') as f:
+            with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
                 user_prompt_template_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
@@ -345,13 +345,13 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
     def _check_cmd_requirement(self) -> bool:
         """验证命令的前置条件"""
         # 检查最终目录结构文件是否存在
-        final_dir_file = os.path.join(self.proj_data_dir, 'icp_dir_content_refined.json')
+        final_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_refined.json')
         if not os.path.exists(final_dir_file):
             print(f"  {Colors.WARNING}警告: 目录结构文件不存在，请先执行循环依赖解决命令{Colors.ENDC}")
             return False
         
         # 检查文件级实现规划文件是否存在
-        implementation_plan_file = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        implementation_plan_file = os.path.join(self.work_data_dir_path, 'icp_implementation_plan.txt')
         if not os.path.exists(implementation_plan_file):
             print(f"  {Colors.WARNING}警告: 文件级实现规划文件不存在，请先执行目录文件填充命令{Colors.ENDC}")
             return False
@@ -364,7 +364,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             return False
         
         # 检查精炼需求文件是否存在（用于获取第三方库信息）
-        refined_requirements_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
+        refined_requirements_file = os.path.join(self.work_data_dir_path, 'refined_requirements.json')
         if not os.path.exists(refined_requirements_file):
             print(f"  {Colors.WARNING}警告: 精炼需求文件不存在，请先执行需求分析命令{Colors.ENDC}")
             return False
@@ -383,12 +383,12 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
     
     def _init_ai_handlers(self):
         """初始化AI处理器"""
-        if not os.path.exists(self.icp_api_config_file):
-            print(f"错误: 配置文件 {self.icp_api_config_file} 不存在")
+        if not os.path.exists(self.work_api_config_file_path):
+            print(f"错误: 配置文件 {self.work_api_config_file_path} 不存在")
             return
         
         try:
-            with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
+            with open(self.work_api_config_file_path, 'r', encoding='utf-8') as f:
                 config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
@@ -412,7 +412,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             ICPChatHandler.initialize_chat_interface(handler_config)
         
         app_data_manager = get_app_data_manager()
-        prompt_dir = app_data_manager.get_prompt_dir()
-        sys_prompt_path = os.path.join(prompt_dir, self.role_one_file_req + ".md")
+        app_prompt_dir_path = app_data_manager.get_prompt_dir()
+        app_sys_prompt_file_path = os.path.join(app_prompt_dir_path, self.role_one_file_req + ".md")
         
-        self.chat_handler.load_role_from_file(self.role_one_file_req, sys_prompt_path)
+        self.chat_handler.load_role_from_file(self.role_one_file_req, app_sys_prompt_file_path)

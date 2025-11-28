@@ -28,10 +28,10 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             help_text="根据需求分析结果在目录结构中添加功能文件描述",
         )
         proj_cfg_manager = get_proj_cfg_manager()
-        self.proj_work_dir = proj_cfg_manager.get_work_dir()
-        self.proj_data_dir = os.path.join(self.proj_work_dir, 'icp_proj_data')
-        self.proj_config_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_config')
-        self.icp_api_config_file = os.path.join(self.proj_config_data_dir, 'icp_api_config.json')
+        self.work_dir_path = proj_cfg_manager.get_work_dir()
+        self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
+        self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
+        self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
 
         # 使用新的 ICPChatHandler
         self.chat_handler = ICPChatHandler()
@@ -79,7 +79,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             return
 
         # 保存结果到icp_dir_content_with_files.json
-        output_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_files.json')
+        output_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_files.json')
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
                 # 保存修改后的JSON内容，而不是原始的cleaned_content
@@ -114,7 +114,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             break
         
         # 保存实现规划
-        output_file_path = os.path.join(self.proj_data_dir, 'icp_implementation_plan.txt')
+        output_file_path = os.path.join(self.work_data_dir_path, 'icp_implementation_plan.txt')
         try:
             with open(output_file_path, 'w', encoding='utf-8') as f:
                 f.write(cleaned_content)
@@ -132,7 +132,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             str: 完整的用户提示词，失败时返回空字符串
         """
         # 读取需求分析结果
-        requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
+        requirement_analysis_file = os.path.join(self.work_data_dir_path, 'refined_requirements.json')
         try:
             with open(requirement_analysis_file, 'r', encoding='utf-8') as f:
                 requirement_str = f.read()
@@ -145,7 +145,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             return ""
             
         # 读取目录结构
-        dir_structure_file = os.path.join(self.proj_data_dir, 'icp_dir_content.json')
+        dir_structure_file = os.path.join(self.work_data_dir_path, 'icp_dir_content.json')
         try:
             with open(dir_structure_file, 'r', encoding='utf-8') as f:
                 dir_structure_str = f.read()
@@ -160,9 +160,9 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
 
         # 读取用户提示词模板
         app_data_manager = get_app_data_manager()
-        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'dir_file_fill_user.md')
+        app_user_prompt_file_path = os.path.join(app_data_manager.get_user_prompt_dir(), 'dir_file_fill_user.md')
         try:
-            with open(user_prompt_file, 'r', encoding='utf-8') as f:
+            with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
                 user_prompt_template_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
@@ -192,7 +192,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             return ""
         
         # 读取精炼需求内容
-        requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
+        requirement_analysis_file = os.path.join(self.work_data_dir_path, 'refined_requirements.json')
         try:
             with open(requirement_analysis_file, 'r', encoding='utf-8') as f:
                 refined_requirement_str = f.read()
@@ -201,7 +201,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             return ""
         
         # 读取目录文件内容
-        dir_file_path = os.path.join(self.proj_data_dir, 'icp_dir_content_with_files.json')
+        dir_file_path = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_files.json')
         try:
             with open(dir_file_path, 'r', encoding='utf-8') as f:
                 dir_file_str = f.read()
@@ -211,9 +211,9 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
 
         # 读取用户提示词模板
         app_data_manager = get_app_data_manager()
-        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'dir_file_fill_plan_gen_user.md')
+        app_user_prompt_file_path = os.path.join(app_data_manager.get_user_prompt_dir(), 'dir_file_fill_plan_gen_user.md')
         try:
-            with open(user_prompt_file, 'r', encoding='utf-8') as f:
+            with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
                 user_prompt_template_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
@@ -331,13 +331,13 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
     def _check_cmd_requirement(self) -> bool:
         """验证目录文件填充命令的前置条件"""
         # 检查需求分析结果文件是否存在
-        requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
+        requirement_analysis_file = os.path.join(self.work_data_dir_path, 'refined_requirements.json')
         if not os.path.exists(requirement_analysis_file):
             print(f"  {Colors.WARNING}警告: 需求分析结果文件不存在，请先执行需求分析命令{Colors.ENDC}")
             return False
             
         # 检查目录结构文件是否存在
-        dir_structure_file = os.path.join(self.proj_data_dir, 'icp_dir_content.json')
+        dir_structure_file = os.path.join(self.work_data_dir_path, 'icp_dir_content.json')
         if not os.path.exists(dir_structure_file):
             print(f"  {Colors.WARNING}警告: 目录结构文件不存在，请先执行目录生成命令{Colors.ENDC}")
             return False
@@ -366,12 +366,12 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
     def _init_ai_handlers(self):
         """初始化AI处理器"""
         # 检查配置文件是否存在
-        if not os.path.exists(self.icp_api_config_file):
-            print(f"错误: 配置文件 {self.icp_api_config_file} 不存在，请创建该文件并填充必要内容")
+        if not os.path.exists(self.work_api_config_file_path):
+            print(f"错误: 配置文件 {self.work_api_config_file_path} 不存在，请创建该文件并填充必要内容")
             return
         
         try:
-            with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
+            with open(self.work_api_config_file_path, 'r', encoding='utf-8') as f:
                 config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
@@ -398,13 +398,13 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         
         # 加载两个角色的系统提示词
         app_data_manager = get_app_data_manager()
-        prompt_dir = app_data_manager.get_prompt_dir()
+        app_prompt_dir_path = app_data_manager.get_prompt_dir()
         prompt_file_name_1 = self.role_dir_file_fill + ".md"
         prompt_file_name_2 = self.role_plan_gen + ".md"
-        sys_prompt_path_1 = os.path.join(prompt_dir, prompt_file_name_1)
-        sys_prompt_path_2 = os.path.join(prompt_dir, prompt_file_name_2)
+        app_sys_prompt_file_path_1 = os.path.join(app_prompt_dir_path, prompt_file_name_1)
+        app_sys_prompt_file_path_2 = os.path.join(app_prompt_dir_path, prompt_file_name_2)
         
         # 从文件加载角色提示词
-        self.chat_handler.load_role_from_file(self.role_dir_file_fill, sys_prompt_path_1)
-        self.chat_handler.load_role_from_file(self.role_plan_gen, sys_prompt_path_2)
+        self.chat_handler.load_role_from_file(self.role_dir_file_fill, app_sys_prompt_file_path_1)
+        self.chat_handler.load_role_from_file(self.role_plan_gen, app_sys_prompt_file_path_2)
     

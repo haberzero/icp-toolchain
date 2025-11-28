@@ -27,10 +27,10 @@ class CmdHandlerDependRefine(BaseCmdHandler):
             help_text="根据检测到的循环依赖信息，重构依赖结构以解决循环依赖问题",
         )
         proj_cfg_manager = get_proj_cfg_manager()
-        self.proj_work_dir = proj_cfg_manager.get_work_dir()
-        self.proj_data_dir = os.path.join(self.proj_work_dir, 'icp_proj_data')
-        self.proj_config_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_config')
-        self.icp_api_config_file = os.path.join(self.proj_config_data_dir, 'icp_api_config.json')
+        self.work_dir_path = proj_cfg_manager.get_work_dir()
+        self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
+        self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
+        self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
 
         # 使用新的 ICPChatHandler
         self.chat_handler = ICPChatHandler()
@@ -126,7 +126,7 @@ class CmdHandlerDependRefine(BaseCmdHandler):
             bool: 预处理是否成功
         """
         # 读取依赖分析结果
-        depend_analysis_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_depend.json')
+        depend_analysis_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_depend.json')
         try:
             with open(depend_analysis_file, 'r', encoding='utf-8') as f:
                 depend_str = f.read()
@@ -173,7 +173,7 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         Args:
             json_dict: 要保存的JSON内容
         """
-        output_file = os.path.join(self.proj_data_dir, 'icp_dir_content_refined.json')
+        output_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_refined.json')
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(json_dict, f, indent=2, ensure_ascii=False)
@@ -194,9 +194,9 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         """
         # 读取用户提示词模板
         app_data_manager = get_app_data_manager()
-        user_prompt_file = os.path.join(app_data_manager.get_user_prompt_dir(), 'depend_refine_user.md')
+        app_user_prompt_file_path = os.path.join(app_data_manager.get_user_prompt_dir(), 'depend_refine_user.md')
         try:
-            with open(user_prompt_file, 'r', encoding='utf-8') as f:
+            with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
                 user_prompt_template_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
@@ -272,7 +272,7 @@ class CmdHandlerDependRefine(BaseCmdHandler):
     def _check_cmd_requirement(self) -> bool:
         """验证解决循环依赖命令的前置条件"""
         # 检查依赖分析结果文件是否存在
-        depend_analysis_file = os.path.join(self.proj_data_dir, 'icp_dir_content_with_depend.json')
+        depend_analysis_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_depend.json')
         if not os.path.exists(depend_analysis_file):
             print(f"  {Colors.WARNING}警告: 依赖分析结果文件不存在，请先执行依赖分析命令{Colors.ENDC}")
             return False
@@ -296,12 +296,12 @@ class CmdHandlerDependRefine(BaseCmdHandler):
     def _init_ai_handlers(self):
         """初始化AI处理器"""
         # 检查配置文件是否存在
-        if not os.path.exists(self.icp_api_config_file):
-            print(f"错误: 配置文件 {self.icp_api_config_file} 不存在，请创建该文件并填充必要内容")
+        if not os.path.exists(self.work_api_config_file_path):
+            print(f"错误: 配置文件 {self.work_api_config_file_path} 不存在，请创建该文件并填充必要内容")
             return
         
         try:
-            with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
+            with open(self.work_api_config_file_path, 'r', encoding='utf-8') as f:
                 config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
@@ -328,9 +328,9 @@ class CmdHandlerDependRefine(BaseCmdHandler):
         
         # 加载角色的系统提示词
         app_data_manager = get_app_data_manager()
-        prompt_dir = app_data_manager.get_prompt_dir()
+        app_prompt_dir_path = app_data_manager.get_prompt_dir()
         prompt_file_name = self.role_name + ".md"
-        sys_prompt_path = os.path.join(prompt_dir, prompt_file_name)
+        app_sys_prompt_file_path = os.path.join(app_prompt_dir_path, prompt_file_name)
         
         # 从文件加载角色提示词
-        self.chat_handler.load_role_from_file(self.role_name, sys_prompt_path)
+        self.chat_handler.load_role_from_file(self.role_name, app_sys_prompt_file_path)

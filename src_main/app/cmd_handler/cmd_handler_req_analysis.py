@@ -101,33 +101,33 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
         # 检查必需字段是否存在
         required_fields = ['main_goal', 'core_functions', 'module_breakdown', 'ExternalLibraryDependencies']
         for field in required_fields:
-            if field not in json_content:
+            if field not in json_dict:
                 print(f"{Colors.WARNING}警告: 生成的JSON缺少必需字段: {field}{Colors.ENDC}")
                 return False
         
         # 验证 main_goal 是字符串
-        if not isinstance(json_content['main_goal'], str) or not json_content['main_goal'].strip():
+        if not isinstance(json_dict['main_goal'], str) or not json_dict['main_goal'].strip():
             print(f"{Colors.WARNING}警告: main_goal 字段必须是非空字符串{Colors.ENDC}")
             return False
         
         # 验证 core_functions 是列表且不为空
-        if not isinstance(json_content['core_functions'], list) or len(json_content['core_functions']) == 0:
+        if not isinstance(json_dict['core_functions'], list) or len(json_dict['core_functions']) == 0:
             print(f"{Colors.WARNING}警告: core_functions 字段必须是非空列表{Colors.ENDC}")
             return False
         
         # 验证 core_functions 中的每个元素都是字符串
-        for func in json_content['core_functions']:
+        for func in json_dict['core_functions']:
             if not isinstance(func, str) or not func.strip():
                 print(f"{Colors.WARNING}警告: core_functions 中的元素必须是非空字符串{Colors.ENDC}")
                 return False
         
         # 验证 module_breakdown 是字典且不为空
-        if not isinstance(json_content['module_breakdown'], dict) or len(json_content['module_breakdown']) == 0:
+        if not isinstance(json_dict['module_breakdown'], dict) or len(json_dict['module_breakdown']) == 0:
             print(f"{Colors.WARNING}警告: module_breakdown 字段必须是非空字典{Colors.ENDC}")
             return False
         
         # 验证每个模块的结构
-        for module_name, module_info in json_content['module_breakdown'].items():
+        for module_name, module_info in json_dict['module_breakdown'].items():
             if not isinstance(module_info, dict):
                 print(f"{Colors.WARNING}警告: 模块 {module_name} 的信息必须是字典{Colors.ENDC}")
                 return False
@@ -148,12 +148,12 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
                 return False
         
         # 验证 ExternalLibraryDependencies 是字典
-        if not isinstance(json_content['ExternalLibraryDependencies'], dict):
+        if not isinstance(json_dict['ExternalLibraryDependencies'], dict):
             print(f"{Colors.WARNING}警告: ExternalLibraryDependencies 字段必须是字典{Colors.ENDC}")
             return False
         
         # 验证 ExternalLibraryDependencies 中的值都是字符串
-        for lib_name, lib_desc in json_content['ExternalLibraryDependencies'].items():
+        for lib_name, lib_desc in json_dict['ExternalLibraryDependencies'].items():
             if not isinstance(lib_desc, str) or not lib_desc.strip():
                 print(f"{Colors.WARNING}警告: 库 {lib_name} 的描述必须是非空字符串{Colors.ENDC}")
                 return False

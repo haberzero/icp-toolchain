@@ -27,10 +27,10 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             help_text="基于需求分析生成标准化的项目目录结构",
         )
         proj_cfg_manager = get_proj_cfg_manager()
-        self.proj_work_dir = proj_cfg_manager.get_work_dir()
-        self.proj_data_dir = os.path.join(self.proj_work_dir, 'icp_proj_data')
-        self.proj_config_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_config')
-        self.icp_api_config_file = os.path.join(self.proj_config_data_dir, 'icp_api_config.json')
+        self.work_dir_path = proj_cfg_manager.get_work_dir()
+        self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
+        self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
+        self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
 
         self.chat_handler = ICPChatHandler()
         self.role_name = "3_module_to_dir"
@@ -74,7 +74,7 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             return
         
         # 保存结果到icp_dir_content.json
-        output_file = os.path.join(self.proj_data_dir, 'icp_dir_content.json')
+        output_file = os.path.join(self.work_data_dir_path, 'icp_dir_content.json')
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write(cleaned_content)
@@ -90,7 +90,7 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             str: 完整的用户提示词，失败时返回空字符串
         """
         # 读取需求分析结果
-        requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
+        requirement_analysis_file = os.path.join(self.work_data_dir_path, 'refined_requirements.json')
         try:
             with open(requirement_analysis_file, 'r', encoding='utf-8') as f:
                 requirement_str = f.read()
@@ -178,7 +178,7 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
     def _check_cmd_requirement(self) -> bool:
         """验证目录生成命令的前置条件"""
         # 检查需求分析结果文件是否存在
-        requirement_analysis_file = os.path.join(self.proj_data_dir, 'refined_requirements.json')
+        requirement_analysis_file = os.path.join(self.work_data_dir_path, 'refined_requirements.json')
         if not os.path.exists(requirement_analysis_file):
             print(f"  {Colors.WARNING}警告: 需求分析结果文件不存在，请先执行需求分析命令{Colors.ENDC}")
             return False
@@ -195,11 +195,11 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         return True
 
     def _init_ai_handlers(self):
-        if not os.path.exists(self.icp_api_config_file):
-            print(f"错误: 配置文件 {self.icp_api_config_file} 不存在")
+        if not os.path.exists(self.work_api_config_file_path):
+            print(f"错误: 配置文件 {self.work_api_config_file_path} 不存在")
             return
         try:
-            with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
+            with open(self.work_api_config_file_path, 'r', encoding='utf-8') as f:
                 config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
@@ -219,5 +219,5 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         if not ICPChatHandler.is_initialized():
             ICPChatHandler.initialize_chat_interface(handler_config)
         app_data_manager = get_app_data_manager()
-        sys_prompt_path = os.path.join(app_data_manager.get_prompt_dir(), self.role_name + ".md")
-        self.chat_handler.load_role_from_file(self.role_name, sys_prompt_path)
+        app_sys_prompt_file_path = os.path.join(app_data_manager.get_prompt_dir(), self.role_name + ".md")
+        self.chat_handler.load_role_from_file(self.role_name, app_sys_prompt_file_path)

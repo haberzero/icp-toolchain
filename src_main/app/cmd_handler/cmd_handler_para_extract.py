@@ -27,10 +27,10 @@ class CmdHandlerParaExtract(BaseCmdHandler):
             help_text="对用户需求进行解析，并且从中提取出关键的参数，供后续步骤使用",
         )
         proj_cfg_manager = get_proj_cfg_manager()
-        self.proj_work_dir = proj_cfg_manager.get_work_dir()
-        self.proj_data_dir = os.path.join(self.proj_work_dir, 'icp_proj_data')
-        self.proj_config_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_config')
-        self.icp_api_config_file = os.path.join(self.proj_config_data_dir, 'icp_api_config.json')
+        self.work_dir_path = proj_cfg_manager.get_work_dir()
+        self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
+        self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
+        self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
 
         self.chat_handler = ICPChatHandler()
         self.role_name = "1_param_extractor"
@@ -60,8 +60,8 @@ class CmdHandlerParaExtract(BaseCmdHandler):
         cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
         
         # 保存结果到extracted_params.json
-        os.makedirs(self.proj_data_dir, exist_ok=True)
-        output_file = os.path.join(self.proj_data_dir, 'extracted_params.json')
+        os.makedirs(self.work_data_dir_path, exist_ok=True)
+        output_file = os.path.join(self.work_data_dir_path, 'extracted_params.json')
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write(cleaned_content)
@@ -95,12 +95,12 @@ class CmdHandlerParaExtract(BaseCmdHandler):
 
     def _init_ai_handlers(self):
         """初始化AI处理器"""
-        if not os.path.exists(self.icp_api_config_file):
-            print(f"错误: 配置文件 {self.icp_api_config_file} 不存在")
+        if not os.path.exists(self.work_api_config_file_path):
+            print(f"错误: 配置文件 {self.work_api_config_file_path} 不存在")
             return
         
         try:
-            with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
+            with open(self.work_api_config_file_path, 'r', encoding='utf-8') as f:
                 config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
@@ -124,6 +124,6 @@ class CmdHandlerParaExtract(BaseCmdHandler):
             ICPChatHandler.initialize_chat_interface(handler_config)
         
         app_data_manager = get_app_data_manager()
-        prompt_dir = app_data_manager.get_prompt_dir()
-        sys_prompt_path = os.path.join(prompt_dir, self.role_name + ".md")
-        self.chat_handler.load_role_from_file(self.role_name, sys_prompt_path)
+        app_prompt_dir_path = app_data_manager.get_prompt_dir()
+        app_sys_prompt_file_path = os.path.join(app_prompt_dir_path, self.role_name + ".md")
+        self.chat_handler.load_role_from_file(self.role_name, app_sys_prompt_file_path)
