@@ -235,10 +235,8 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             return ""
         
         # 遍历读取已生成的累积描述，仅获取当前文件依赖的文件的描述
-        # 根据前序依赖分析的结果，只包含当前文件直接依赖的文件
         if self.dependent_relation_dict and isinstance(self.dependent_relation_dict, dict):
             current_file_dependencies = self.dependent_relation_dict.get(file_path, [])
-            # 调试信息：显示当前文件的依赖内容
             print(f"  {Colors.OKGREEN}当前文件依赖: {current_file_dependencies}{Colors.ENDC}")
         else:
             print(f"  {Colors.FAIL}错误: 无法获取当前文件依赖: {file_path}{Colors.ENDC}")
