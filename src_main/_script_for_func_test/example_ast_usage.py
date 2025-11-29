@@ -1,7 +1,5 @@
 """
 AST数据管理器使用示例
-
-演示如何在实际场景中使用 AstDataManager 进行 AST 的保存和加载
 """
 
 import sys

@@ -1,7 +1,6 @@
 import sys, os
 import json
 
-from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
 from typedef.cmd_data_types import Colors
 
 # 本文件涉及对用户工程中的持久性文件的存取
@@ -20,7 +19,6 @@ class UserDataStore:
         if not hasattr(self, '_initialized'):
             self._initialized = True
             self.user_prompt = ""
-            self.proj_run_time_cfg = get_proj_run_time_cfg()
 
     def set_user_prompt(self, prompt):
         self.user_prompt = prompt

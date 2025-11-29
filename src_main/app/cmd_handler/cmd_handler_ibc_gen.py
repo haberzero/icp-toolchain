@@ -35,9 +35,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     4. 提示词构建：_build_user_prompt_for_xxx() - 为不同角色构建提示词
     5. 输出处理：验证、保存、解析、规范化、向量化
     """
-    
-    MAX_RETRY_COUNT = 3
-    
+
     def __init__(self):
         super().__init__()
         self.command_info = CommandInfo(
