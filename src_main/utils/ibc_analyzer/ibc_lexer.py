@@ -174,6 +174,7 @@ class IbcLexer:
                 # 跳过空行和注释行
                 striped_line = self.current_line.strip()
                 if not striped_line or striped_line.startswith('//'):
+                    self.tokens.append(Token(IbcTokenType.NEWLINE, '', self.line_num))
                     continue
 
                 # 处理缩进

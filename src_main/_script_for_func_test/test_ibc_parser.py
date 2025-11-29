@@ -147,11 +147,14 @@ var config"""
 
 
 def test_function_declaration():
-    """测试函数声明"""
+    """测试函数声明（更新为符合新语法：多行参数）"""
     print("\n测试 function_declaration 函数...")
     
     code = """\
-func 计算订单总价(商品列表: 包含价格信息的商品对象数组, 折扣率: 0到1之间的小数):
+func 计算订单总价(
+    商品列表: 包含价格信息的商品对象数组,
+    折扣率: 0到1之间的小数
+):
     初始化 总价 = 0
     遍历 商品列表 中的每个 商品:
         总价 = 总价 + 商品.价格"""
@@ -968,7 +971,6 @@ func 长语句():
     这是一个非常非常长的语句 \\
     需要分成多行来书写 \\
     以便提高可读性
-    
     执行操作"""
     
     try:
@@ -995,6 +997,137 @@ func 长语句():
         print("  ✓ 成功解析反斜杠延续行")
         print("\nAST树结构:")
         print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_param_desc_with_comma():
+    """测试参数描述中包含逗号"""
+    print("\n测试 param_desc_with_comma 函数...")
+    
+    code = """func 计算实体边界坐标(
+    坐标1: 初始值(0, 0),
+    实体: 实体对象，具备半径值
+):
+    计算边界"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        assert isinstance(func_node, FunctionNode), "预期为FunctionNode"
+        assert len(func_node.params) == 2, f"预期2个参数，实际{len(func_node.params)}"
+        
+        # 验证参数描述中包含括号和逗号
+        assert "0, 0" in func_node.params["坐标1"], f"坐标1描述应包含括号和逗号: {func_node.params['坐标1']}"
+        assert "实体对象，具备半径值" == func_node.params["实体"], f"实体描述不匹配: {func_node.params['实体']}"
+        
+        print("  ✓ 成功解析参数描述中的逗号和括号")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_param_desc_with_nested_parens():
+    """测试参数描述中包含嵌套括号"""
+    print("\n测试 param_desc_with_nested_parens 函数...")
+    
+    code = """func 处理配置(
+    配置项: 格式为dict(key: str, value: tuple(int, int)),
+    选项: 可选参数
+):
+    处理逻辑"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 验证参数描述包含嵌套括号
+        assert "dict(key: str, value: tuple(int, int))" in func_node.params["配置项"], \
+            f"配置项描述应包含嵌套括号: {func_node.params['配置项']}"
+        
+        print("  ✓ 成功解析嵌套括号")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_param_desc_with_multiple_commas():
+    """测试参数描述中包含多个逗号"""
+    print("\n测试 param_desc_with_multiple_commas 函数...")
+    
+    code = """func 创建用户(
+    用户信息: 包含姓名、年龄、地址、电话等信息的字典,
+    权限级别: 管理员、普通用户、访客之一
+):
+    创建用户"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 验证参数描述包含多个逗号
+        assert "姓名、年龄、地址、电话" in func_node.params["用户信息"], \
+            f"用户信息描述应包含多个项: {func_node.params['用户信息']}"
+        
+        print("  ✓ 成功解析参数描述中的多个逗号")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_param_desc_bracket_types():
+    """测试参数描述中各种括号类型"""
+    print("\n测试 param_desc_bracket_types 函数...")
+    
+    code = """func 处理数据(
+    数据: 格式为List[Dict[str, Any]]的数据结构,
+    过滤器: 可选的过滤函数
+):
+    处理数据"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 验证方括号被正确处理为普通文本
+        assert "List[Dict[str, Any]]" in func_node.params["数据"], \
+            f"数据描述应包含方括号: {func_node.params['数据']}"
+        
+        print("  ✓ 成功解析各种括号类型")
         return True
     except Exception as e:
         print(f"  ❌ 测试失败: {e}")
@@ -1030,6 +1163,12 @@ if __name__ == "__main__":
         test_results.append(("方括号延续行", test_bracket_continuation()))
         test_results.append(("嵌套括号", test_nested_brackets()))
         test_results.append(("反斜杠延续行", test_backslash_continuation()))
+        
+        # 新增的参数描述测试
+        test_results.append(("参数描述含逗号", test_param_desc_with_comma()))
+        test_results.append(("参数描述嵌套括号", test_param_desc_with_nested_parens()))
+        test_results.append(("参数描述多逗号", test_param_desc_with_multiple_commas()))
+        test_results.append(("参数描述各种括号", test_param_desc_bracket_types()))
         
         print("\n" + "=" * 60)
         print("测试结果汇总")

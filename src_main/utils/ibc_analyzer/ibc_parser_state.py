@@ -223,7 +223,7 @@ class VarDeclState(BaseState):
 
     def is_need_pop(self) -> bool:
         return self.pop_flag
-    
+
 
 
 # 对外描述解析的子状态枚举
@@ -475,9 +475,9 @@ class FuncDeclSubState(Enum):
     EXPECTING_PARAM_NAME = "EXPECTING_PARAM_NAME"
     EXPECTING_PARAM_COLON = "EXPECTING_PARAM_COLON"
     EXPECTING_PARAM_DESC = "EXPECTING_PARAM_DESC"
-    EXPECTING_PARAM_COMMA = "EXPECTING_PARAM_COMMA"
+    EXPECTING_PARAM_DESC_COMMA_CHECK = "EXPECTING_PARAM_DESC_COMMA_CHECK"  # 参数描述中遇到逗号，等待下一个token判断
 
-    EXPECTING_RPAREN = "EXPECTING_RPAREN"   # 此状态事实上不会被使用，在参数列表解析时，右括号会被覆盖
+    EXPECTING_RPAREN = "EXPECTING_RPAREN"   # 参数描述结束后等待右括号
     EXPECTING_COLON = "EXPECTING_COLON"
     EXPECTING_NEWLIEN = "EXPECTING_NEWLIEN"
 
@@ -495,6 +495,7 @@ class FuncDeclState(BaseState):
         self.pop_flag = False
         self.pass_in_token_flag = False
         self.pending_indent_level = 0
+        self.paren_count = 0  # 用于跟踪参数描述中的括号
 
     def process_token(self, token: Token) -> None:
         self.current_token = token
@@ -562,25 +563,89 @@ class FuncDeclState(BaseState):
                 raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting colon, comma or right parenthesis but got {token.type}")
 
         elif self.sub_state == FuncDeclSubState.EXPECTING_PARAM_DESC:
-            if token.type == IbcTokenType.IDENTIFIER:
-                self.current_param_desc = token.value.strip()
+            # 参数描述是贪婪式解析：冒号后所有内容都是描述，直到遇到换行
+            if token.type == IbcTokenType.NEWLINE:
+                # 参数描述结束，检查行末是否有逗号
+                desc_stripped = self.current_param_desc.strip()
+                if desc_stripped and desc_stripped[-1] == ",":
+                    # 行末有逗号，移除逗号，保存参数，准备解析下一个参数
+                    self.current_param_desc = desc_stripped[:-1].strip()
+                    if self.current_param_name not in self.params:
+                        self.params[self.current_param_name] = self.current_param_desc
+                    else:
+                        raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Got an duplicate parameter definitions")
+                    self.current_param_name = ""
+                    self.current_param_desc = ""
+                    self.paren_count = 0
+                    self.sub_state = FuncDeclSubState.EXPECTING_PARAM_NAME
+                else:
+                    # 行末没有逗号，保存参数，准备等待右括号
+                    self.current_param_desc = desc_stripped
+                    if self.current_param_name not in self.params:
+                        self.params[self.current_param_name] = self.current_param_desc
+                    else:
+                        raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Got an duplicate parameter definitions")
+                    self.current_param_name = ""
+                    self.current_param_desc = ""
+                    self.paren_count = 0
+                    self.sub_state = FuncDeclSubState.EXPECTING_RPAREN
+            elif token.type == IbcTokenType.LPAREN:
+                # 记录左括号
+                self.paren_count += 1
+                self.current_param_desc += token.value
+            elif token.type == IbcTokenType.RPAREN:
+                # 检查是否是参数描述内的右括号
+                if self.paren_count > 0:
+                    # 这是参数描述内的右括号，作为普通文本处理
+                    self.paren_count -= 1
+                    self.current_param_desc += token.value
+                else:
+                    # paren_count为0，这是函数参数列表的结束括号
+                    # 保存当前参数，准备解析函数体的冒号
+                    desc_stripped = self.current_param_desc.strip()
+                    self.current_param_desc = desc_stripped
+                    if self.current_param_name not in self.params:
+                        self.params[self.current_param_name] = self.current_param_desc
+                    else:
+                        raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Got an duplicate parameter definitions")
+                    self.current_param_name = ""
+                    self.current_param_desc = ""
+                    self.paren_count = 0
+                    self.sub_state = FuncDeclSubState.EXPECTING_COLON
+            elif token.type == IbcTokenType.COMMA:
+                # 遇到逗号，需要判断下一个token是否为换行
+                self.current_param_desc += token.value
+                self.sub_state = FuncDeclSubState.EXPECTING_PARAM_DESC_COMMA_CHECK
+            else:
+                # 所有其他token都作为描述内容收集
+                self.current_param_desc += token.value
+
+        elif self.sub_state == FuncDeclSubState.EXPECTING_PARAM_DESC_COMMA_CHECK:
+            # 在参数描述中遇到逗号后，检查下一个token
+            if token.type == IbcTokenType.NEWLINE:
+                # 逗号后是换行，说明逗号是参数分隔符，移除描述末尾的逗号
+                desc_stripped = self.current_param_desc.strip()
+                if desc_stripped and desc_stripped[-1] == ",":
+                    self.current_param_desc = desc_stripped[:-1].strip()
                 if self.current_param_name not in self.params:
                     self.params[self.current_param_name] = self.current_param_desc
                 else:
                     raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Got an duplicate parameter definitions")
                 self.current_param_name = ""
                 self.current_param_desc = ""
-                self.sub_state = FuncDeclSubState.EXPECTING_PARAM_COMMA
-            else:
-                raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting param description but got {token.type}")
-
-        elif self.sub_state == FuncDeclSubState.EXPECTING_PARAM_COMMA:
-            if token.type == IbcTokenType.COMMA:
+                self.paren_count = 0
                 self.sub_state = FuncDeclSubState.EXPECTING_PARAM_NAME
-            elif token.type == IbcTokenType.RPAREN:
+            else:
+                # 逗号后不是换行，说明逗号是描述内容的一部分，继续收集内容
+                self.current_param_desc += token.value
+                self.sub_state = FuncDeclSubState.EXPECTING_PARAM_DESC
+
+        elif self.sub_state == FuncDeclSubState.EXPECTING_RPAREN:
+            # 参数描述结束后等待右括号
+            if token.type == IbcTokenType.RPAREN:
                 self.sub_state = FuncDeclSubState.EXPECTING_COLON
             elif token.type == IbcTokenType.NEWLINE:
-                # 直接忽略换行token
+                # 允许在右括号前换行
                 pass
             elif token.type == IbcTokenType.INDENT:
                 self.pending_indent_level += 1
@@ -589,8 +654,8 @@ class FuncDeclState(BaseState):
                 if self.pending_indent_level < 0:
                     raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Unexpected dedent structure")
             else:
-                raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting comma or right parenthesis but got {token.type}")
-
+                raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting right parenthesis but got {token.type}")
+        
         elif self.sub_state == FuncDeclSubState.EXPECTING_COLON:
             if token.type == IbcTokenType.COLON:
                 self.pass_in_token_flag = False
