@@ -72,34 +72,85 @@
    - constraints: 新节点必须为"key":"string"格式
 
 4. **示例说明**：
-   1. 示例1：
-      - 标题: 模块内新增
-      - 格式类型: JSON
-      - 说明: 在模块目录添加功能文件
-      - 示例内容: |
-          {
-            "proj_root": {
-              "physics_engine": {
-                "dynamics_calculator": "计算物体受力和运动轨迹"
-              }
-              "main": "程序启动入口和初始化物理引擎"
-            }
-          }
+   1. Web应用目录填充前后对比:
+      - 格式类型: json
+      - 说明: 填充前仅包含目录；填充后仅新增字符串叶子节点（文件描述），目录结构键不变；主入口文件位于proj_root
+      - 填充前:
 
-   2. 示例2：
-      - 标题: 根目录新增
-      - 格式类型: JSON
-      - 说明: 在src层级添加主入口
-      - 示例内容: |
-          {
-            "proj_root": {
-              "modules": {
-                "calculator": "计算模块"
-                "controller": "控制器模块"
-              }
-              "main": "程序启动入口"
+      ```json
+      {
+        "proj_root": {
+          "src": {
+            "modules": {}
+          },
+          "config": {},
+          "public": {}
+        }
+      }
+      ```
+
+      - 填充后:
+
+      ```json
+      {
+        "proj_root": {
+          "src": {
+            "modules": {
+              "user_controller": "处理用户请求与路由",
+              "user_service": "用户业务逻辑",
+              "user_repository": "用户数据访问"
             }
+          },
+          "config": {
+            "app_config": "应用配置加载与校验"
+          },
+          "public": {
+            "assets_manifest": "静态资源索引"
+          },
+          "main": "主入口程序，执行初始化并启动程序"
+        }
+      }
+      ```
+
+   2. 数据处理项目填充前后对比:
+      - 格式类型: json
+      - 说明: 目录键与层级完全一致；仅在各模块目录下新增文件描述；可在根添加主入口文件
+      - 填充前:
+
+      ```json
+      {
+        "proj_root": {
+          "pipeline": {
+            "ingest": {},
+            "process": {},
+            "export": {}
           }
+        }
+      }
+      ```
+
+      - 填充后:
+
+      ```json
+      {
+        "proj_root": {
+          "pipeline": {
+            "ingest": {
+              "reader": "数据源读取",
+              "validator": "原始数据校验"
+            },
+            "process": {
+              "transformer": "数据转换与清洗",
+              "aggregator": "汇总与聚合"
+            },
+            "export": {
+              "writer": "结果输出至目标存储"
+            }
+          },
+          "main": "主入口程序，负责流程调度与启动"
+        }
+      }
+      ```
 
 ## Initialization
 

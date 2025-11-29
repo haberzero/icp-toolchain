@@ -13,7 +13,7 @@ AST 持久化功能说明
    - 为所有 AstNode 类添加了 from_dict() 静态方法
    - 保留原有的 to_dict() 方法
 
-2. data_exchange/ibc_data_manager.py (新增)
+2. data_store/ibc_data_manager.py (新增)
    - AstDataManager 类：单例模式的 AST 数据管理器
    - save_ast_to_file(): 保存 AST 到 JSON 文件
    - load_ast_from_file(): 从 JSON 文件加载 AST
@@ -35,7 +35,7 @@ AST 持久化功能说明
 
 1. 保存 AST 到文件：
 
-    from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
+    from data_store.ibc_data_manager import get_instance as get_ibc_data_manager
     
     # 获取管理器实例
     ast_manager = get_ibc_data_manager()
@@ -45,7 +45,7 @@ AST 持久化功能说明
 
 2. 从文件加载 AST：
 
-    from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
+    from data_store.ibc_data_manager import get_instance as get_ibc_data_manager
     
     # 获取管理器实例
     ast_manager = get_ibc_data_manager()
@@ -57,7 +57,7 @@ AST 持久化功能说明
 3. 与 IBC 解析器集成使用：
 
     from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code
-    from data_exchange.ibc_data_manager import get_instance as get_ibc_data_manager
+    from data_store.ibc_data_manager import get_instance as get_ibc_data_manager
     
     # 解析 IBC 代码
     ibc_code = "..."

@@ -1,14 +1,14 @@
 import tkinter as tk
 from tkinter import ttk
 import os
-from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
-from data_exchange.user_data_manager import get_instance as get_user_data_manager
+from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
+from data_store.user_data_manager import get_instance as get_user_data_manager
 
 
 class MainWindow:
     def __init__(self, parent):
         self.parent = parent
-        self.proj_cfg_manager = get_proj_cfg_manager()
+        self.proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
         self.user_data_manager = get_user_data_manager()
         self.create_window()
         self.populate_tree()
@@ -169,7 +169,7 @@ class MainWindow:
             self.tree.delete(item)
 
         # 获取项目根路径
-        root_path = self.proj_cfg_manager.get_work_dir()
+        root_path = self.proj_run_time_cfg_manager.get_work_dir_path()
         if not root_path or not os.path.exists(root_path):
             return
 

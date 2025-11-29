@@ -26,7 +26,7 @@ class ChatInterface:
             # 使用标准 OpenAI SDK 初始化客户端
             self.client = AsyncOpenAI(
                 base_url=self.base_url,
-                api_key=self.api_key.get_secret_value(),
+                api_key=self.api_key,
             )
         except Exception as e:
             print(f"ChatInterface 客户端初始化失败: {e}")

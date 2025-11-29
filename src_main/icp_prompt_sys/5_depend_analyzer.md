@@ -65,29 +65,139 @@
 
 3. 示例说明
 
-   1. 完整依赖示例
-      - 标题: 简单工程依赖关系
+   1. Web应用依赖建模前后对比:
       - 格式类型: json
-      - 说明: 包含基本的模块依赖描述
-      - 结构示意:
-          {
-            "proj_root": {
-              "src": {
-                "main": {
-                  "main_loop": "调用物理计算核心"
-                },
-                "physics": {
-                  "physics_core": "计算常见物理属性"
-                }
-              }
-            },
-            "dependent_relation": {
-              "src/main/main_loop": [
-                "src/physics/physics_core"
-                ],
-              "src/physics/physics_core": []
+      - 说明: 运行前仅包含目录与文件描述；运行后目录结构键与层级保持不变，仅新增 dependent_relation 映射
+      - 运行前:
+
+      ```json
+      {
+        "proj_root": {
+          "src": {
+            "modules": {
+              "user_controller": "处理用户请求与路由",
+              "user_service": "用户业务逻辑",
+              "user_repository": "用户数据访问"
             }
-          }
+          },
+          "config": {
+            "app_config": "应用配置加载与校验"
+          },
+          "public": {
+            "assets_manifest": "静态资源索引"
+          },
+          "main": "主入口程序，执行初始化并启动程序"
+        }
+      }
+      ```
+
+      - 运行后:
+
+      ```json
+      {
+        "proj_root": {
+          "src": {
+            "modules": {
+              "user_controller": "处理用户请求与路由",
+              "user_service": "用户业务逻辑",
+              "user_repository": "用户数据访问"
+            }
+          },
+          "config": {
+            "app_config": "应用配置加载与校验"
+          },
+          "public": {
+            "assets_manifest": "静态资源索引"
+          },
+          "main": "主入口程序，执行初始化并启动程序"
+        },
+        "dependent_relation": {
+          "main": [
+            "src/modules/user_controller"
+          ],
+          "src/modules/user_controller": [
+            "src/modules/user_service"
+          ],
+          "src/modules/user_service": [
+            "src/modules/user_repository"
+          ],
+          "src/modules/user_repository": [],
+          "config/app_config": [],
+          "public/assets_manifest": []
+        }
+      }
+      ```
+
+   2. 数据处理项目依赖建模前后对比:
+      - 格式类型: json
+      - 说明: 运行前后目录结构保持一致；运行后仅新增 dependent_relation，描述文件间调用关系
+      - 运行前:
+
+      ```json
+      {
+        "proj_root": {
+          "pipeline": {
+            "ingest": {
+              "ingest": "数据源读取主模块",
+              "reader": "数据源读取",
+              "validator": "原始数据校验"
+            },
+            "process": {
+              "transformer": "数据转换与清洗",
+              "aggregator": "汇总与聚合"
+            },
+            "export": {
+              "export": "结果输出至目标存储"
+            }
+          },
+          "main": "主入口程序，负责流程调度与启动"
+        }
+      }
+      ```
+
+      - 运行后:
+
+      ```json
+      {
+        "proj_root": {
+          "pipeline": {
+            "ingest": {
+              "ingest": "数据源读取主模块",
+              "reader": "数据源读取",
+              "validator": "原始数据校验"
+            },
+            "process": {
+              "transformer": "数据转换与清洗",
+              "aggregator": "汇总与聚合"
+            },
+            "export": {
+              "export": "结果输出至目标存储"
+            }
+          },
+          "main": "主入口程序，负责流程调度与启动"
+        },
+        "dependent_relation": {
+          "main": [
+            "pipeline/ingest/ingest",
+            "pipeline/process/transformer",
+            "pipeline/export/export"
+          ],
+          "pipeline/ingest/ingest": [
+            "pipeline/ingest/reader",
+            "pipeline/ingest/validator"
+          ],
+          "pipeline/ingest/reader": [
+            "pipeline/ingest/validator"
+          ],
+          "pipeline/ingest/validator": [],
+          "pipeline/process/transformer": [
+            "pipeline/process/aggregator"
+          ],
+          "pipeline/process/aggregator": [],
+          "pipeline/export/export": []
+        }
+      }
+      ```
 
 ## Initialization
 

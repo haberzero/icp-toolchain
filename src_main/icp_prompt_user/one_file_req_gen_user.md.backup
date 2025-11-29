@@ -21,6 +21,9 @@ FILE_DESCRIPTION_PLACEHOLDER
 与当前文件有较多关联的文件功能描述如下，需要合理利用：
 RELATED_FILE_DESCRIPTIONS_PLACEHOLDER
 
+与当前文件有较少关联的文件功能描述如下，也可视情况使用：
+UNRELATED_FILE_DESCRIPTIONS_PLACEHOLDER
+
 **允许使用的第三方库：**
 
 仅允许考虑使用以下第三方库：
@@ -35,7 +38,6 @@ MODULE_DEPENDENCY_SUGGESTIONS_PLACEHOLDER
 
 1. **在实现规划中的位置**
    - 当前文件在整体实现规划中处于哪个层级（基础层/业务层/应用层）
-   - 根据实现规划中描述的功能逻辑，该文件具备哪些职责
    - 根据实现规划中描述的调用关系，该文件会被哪些文件调用
    - 根据实现规划中的数据流转，该文件处理哪些数据/实例
 

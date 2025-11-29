@@ -1,26 +1,26 @@
 import sys, os
 import json
 
-from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
+from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
 from typedef.cmd_data_types import Colors
 
 # 本文件涉及对用户工程中的持久性文件的存取
 # 未完成，没考虑好怎么应对不同的用户初期需求输入，现在以根目录下的.md文件为主
 # 之后ui界面出来或者工具链定义规范化之后再补全
 
-class UserDataManager:
+class UserDataStore:
     _instance = None
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = super(UserDataManager, cls).__new__(cls)
+            cls._instance = super(UserDataStore, cls).__new__(cls)
         return cls._instance
 
     def __init__(self):
         if not hasattr(self, '_initialized'):
             self._initialized = True
             self.user_prompt = ""
-            self.proj_cfg_manager = get_proj_cfg_manager()
+            self.proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
 
     def set_user_prompt(self, prompt):
         self.user_prompt = prompt
@@ -29,7 +29,7 @@ class UserDataManager:
         return self.user_prompt
 
 
-_instance = UserDataManager()
+_instance = UserDataStore()
 
 
 def get_instance():

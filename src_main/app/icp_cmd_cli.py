@@ -15,8 +15,8 @@ from enum import Enum
 
 from typedef.cmd_data_types import Colors
 
-from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
-from data_exchange.user_data_manager import get_instance as get_user_data_manager
+from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
+from data_store.user_data_manager import get_instance as get_user_data_manager
 from .cmd_handler.command_manager import CommandManager
 
 
@@ -32,7 +32,7 @@ def signal_handler(sig, frame):
 class IcpCmdCli:
     def __init__(self):
         # 初始化管理器和命令处理器
-        self.proj_cfg_manager = get_proj_cfg_manager()
+        self.proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
         self.command_manager = CommandManager()
 
     def start_cli(self):
@@ -45,7 +45,7 @@ class IcpCmdCli:
         signal.signal(signal.SIGINT, signal_handler)
         
         print("欢迎使用 ICP - Intent Code Protocol 命令行工具")
-        print("当前工作目录:", self.proj_cfg_manager.get_work_dir())
+        print("当前工作目录:", self.proj_run_time_cfg_manager.get_work_dir_path())
         
         # 显示初始帮助和状态
         self._show_status()
@@ -103,7 +103,7 @@ class IcpCmdCli:
         print(f"{Colors.OKCYAN}{'='*60}{Colors.ENDC}")
         
         print(f"{Colors.HEADER}{Colors.BOLD}项目状态:{Colors.ENDC}")
-        work_dir = self.proj_cfg_manager.get_work_dir()
+        work_dir = self.proj_run_time_cfg_manager.get_work_dir_path()
         print(f"  {Colors.OKBLUE}工作目录:{Colors.ENDC} {work_dir}")
         
         # 遍历所有命令，显示它们的状态

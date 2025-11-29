@@ -28,7 +28,7 @@ class EmbeddingInterface:
         """初始化客户端，不含重试逻辑"""
         try:
             self.client = OpenAI(
-                api_key=self.api_key.get_secret_value(),
+                api_key=self.api_key,
                 base_url=self.base_url
             )
         except Exception as e:

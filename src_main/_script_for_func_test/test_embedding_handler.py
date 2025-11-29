@@ -15,8 +15,6 @@ import os
 
 # 添加父目录到路径以导入模块
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from pydantic import SecretStr
 from typedef.ai_data_types import EmbeddingApiConfig, EmbeddingStatus
 from utils.icp_ai_handler.icp_embedding_handler import ICPEmbeddingHandler
 
@@ -35,7 +33,7 @@ def test_basic_initialization():
     # 使用测试API配置
     config = EmbeddingApiConfig(
         base_url="http://127.0.0.1:11234/v1/",
-        api_key=SecretStr("LOCAL"),
+        api_key="LOCAL",
         model="text-embedding-qwen3-embedding-0.6b"
     )
     
@@ -115,7 +113,7 @@ def test_icp_embedding_handler():
     # 使用测试API配置
     config = EmbeddingApiConfig(
         base_url="http://127.0.0.1:11234/v1/",
-        api_key=SecretStr("LOCAL"),
+        api_key="LOCAL",
         model="text-embedding-qwen3-embedding-0.6b"
     )
     
@@ -234,7 +232,7 @@ def test_error_handling():
     # print("测试错误的API URL:")
     # config = EmbeddingApiConfig(
     #     base_url="http://invalid-url:9999/v1/",
-    #     api_key=SecretStr("LOCAL"),
+    #     api_key="LOCAL",
     #     model="text-embedding-qwen3-embedding-0.6b"
     # )
     

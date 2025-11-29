@@ -1,21 +1,12 @@
-"""
-符号替换处理器
-
-负责在IBC代码中进行符号替换：
-1. 将原始符号名替换为规范化符号名
-2. 将$ref_symbols$引用替换为实际的规范化符号名
-"""
 import re
 from typing import Dict, List, Optional, Set
 from typedef.ibc_data_types import (
     IbcBaseAstNode, ClassNode, FunctionNode, VariableNode, 
     BehaviorStepNode, FileSymbolTable
 )
-from typedef.cmd_data_types import Colors
 
-
-class SymbolReplacer:
-    """符号替换处理器"""
+class IbcSymbolFuncs:
+    """Ibc符号相关功能"""
     
     def __init__(
         self, 
@@ -132,13 +123,8 @@ class SymbolReplacer:
             
             # 使用向量搜索查找最匹配的符号
             normalized_name = self.vector_db_manager.search_symbol(ref_text)
-            
-            if normalized_name:
-                # 记录替换
-                replacements.append((match.group(0), f"${normalized_name}$"))
-                print(f"  {Colors.OKBLUE}符号引用替换: {ref_text} -> {normalized_name}{Colors.ENDC}")
-            else:
-                print(f"  {Colors.WARNING}警告: 未找到符号引用的匹配: {ref_text}{Colors.ENDC}")
+        
+            replacements.append((match.group(0), f"${normalized_name}$"))
         
         # 执行替换
         for old_text, new_text in replacements:

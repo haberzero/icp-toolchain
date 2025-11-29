@@ -3,14 +3,12 @@ import asyncio
 import json
 from typing import List
 
-from pydantic import SecretStr
-
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
 
-from cfg.proj_cfg_manager import get_instance as get_proj_cfg_manager
-from data_exchange.app_data_manager import get_instance as get_app_data_manager
-from data_exchange.user_data_manager import get_instance as get_user_data_manager
+from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
+from data_store.app_data_manager import get_instance as get_app_data_manager
+from data_store.user_data_manager import get_instance as get_user_data_manager
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
@@ -28,11 +26,11 @@ class CmdHandlerParaExtract(BaseCmdHandler):
             description="从用户初始编程需求中提取参数",
             help_text="对用户需求进行解析，并且从中提取出关键的参数，供后续步骤使用",
         )
-        proj_cfg_manager = get_proj_cfg_manager()
-        self.proj_work_dir = proj_cfg_manager.get_work_dir()
-        self.proj_data_dir = os.path.join(self.proj_work_dir, 'icp_proj_data')
-        self.proj_config_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_config')
-        self.icp_api_config_file = os.path.join(self.proj_config_data_dir, 'icp_api_config.json')
+        proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
+        self.work_dir_path = proj_run_time_cfg_manager.get_work_dir_path()
+        self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
+        self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
+        self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
 
         self.chat_handler = ICPChatHandler()
         self.role_name = "1_param_extractor"
@@ -62,8 +60,8 @@ class CmdHandlerParaExtract(BaseCmdHandler):
         cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
         
         # 保存结果到extracted_params.json
-        os.makedirs(self.proj_data_dir, exist_ok=True)
-        output_file = os.path.join(self.proj_data_dir, 'extracted_params.json')
+        os.makedirs(self.work_data_dir_path, exist_ok=True)
+        output_file = os.path.join(self.work_data_dir_path, 'extracted_params.json')
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write(cleaned_content)
@@ -97,35 +95,35 @@ class CmdHandlerParaExtract(BaseCmdHandler):
 
     def _init_ai_handlers(self):
         """初始化AI处理器"""
-        if not os.path.exists(self.icp_api_config_file):
-            print(f"错误: 配置文件 {self.icp_api_config_file} 不存在")
+        if not os.path.exists(self.work_api_config_file_path):
+            print(f"错误: 配置文件 {self.work_api_config_file_path} 不存在")
             return
         
         try:
-            with open(self.icp_api_config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+            with open(self.work_api_config_file_path, 'r', encoding='utf-8') as f:
+                config_json_dict = json.load(f)
         except Exception as e:
             print(f"错误: 读取配置文件失败: {e}")
             return
         
-        if 'para_extract_handler' in config:
-            chat_api_config = config['para_extract_handler']
-        elif 'coder_handler' in config:
-            chat_api_config = config['coder_handler']
+        if 'para_extract_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['para_extract_handler']
+        elif 'coder_handler' in config_json_dict:
+            chat_api_config_dict = config_json_dict['coder_handler']
         else:
             print("错误: 配置文件缺少para_extract_handler或coder_handler配置")
             return
         
         handler_config = ChatApiConfig(
-            base_url=chat_api_config.get('api-url', ''),
-            api_key=SecretStr(chat_api_config.get('api-key', '')),
-            model=chat_api_config.get('model', '')
+            base_url=chat_api_config_dict.get('api-url', ''),
+            api_key=chat_api_config_dict.get('api-key', ''),
+            model=chat_api_config_dict.get('model', '')
         )
         
         if not ICPChatHandler.is_initialized():
             ICPChatHandler.initialize_chat_interface(handler_config)
         
         app_data_manager = get_app_data_manager()
-        prompt_dir = app_data_manager.get_prompt_dir()
-        sys_prompt_path = os.path.join(prompt_dir, self.role_name + ".md")
-        self.chat_handler.load_role_from_file(self.role_name, sys_prompt_path)
+        app_prompt_dir_path = app_data_manager.get_prompt_dir()
+        app_sys_prompt_file_path = os.path.join(app_prompt_dir_path, self.role_name + ".md")
+        self.chat_handler.load_role_from_file(self.role_name, app_sys_prompt_file_path)

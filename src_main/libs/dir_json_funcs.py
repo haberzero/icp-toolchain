@@ -274,6 +274,15 @@ class DirJsonFuncs:
         return ""
 
     @staticmethod
+    def get_all_file_paths(proj_root: Dict[str, Any]) -> List[str]:
+        """
+        获取proj_root中的所有文件路径列表，按字母顺序排序
+        返回: 文件路径列表
+        """
+        paths = DirJsonFuncs._collect_paths(proj_root)
+        return list(paths)
+
+    @staticmethod
     def validate_dependent_paths(dependent_relation: Dict[str, Any], proj_root: Dict[str, Any]) -> tuple[bool, List[str]]:
         """
         检查dependent_relation中的依赖路径是否都存在于proj_root中
