@@ -20,7 +20,7 @@ from data_store.ibc_data_store import get_instance as get_ibc_data_store
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 from utils.icp_ai_handler.icp_embedding_handler import ICPEmbeddingHandler
-from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code, IbcAnalyzerError
+from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code
 from libs.dir_json_funcs import DirJsonFuncs
 # from libs.symbol_vector_db_manager import SymbolVectorDBManager
 
@@ -219,8 +219,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                     print(f"    {Colors.WARNING}警告: 符号规范化失败{Colors.ENDC}")
                     continue
                 
-            except IbcAnalyzerError as e:
-                print(f"  {Colors.FAIL}错误: IBC代码分析失败: {e}{Colors.ENDC}")
             except Exception as e:
                 print(f"  {Colors.FAIL}错误: 处理失败: {e}{Colors.ENDC}")
             
@@ -275,7 +273,11 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             # 解析IBC代码生成AST
             print(f"    正在分析IBC代码生成AST...")
-            ast_dict, symbol_table = analyze_ibc_code(ibc_code)
+            success, ast_dict, symbol_table = analyze_ibc_code(ibc_code)
+            
+            if not success or not ast_dict or not symbol_table:
+                print(f"    {Colors.WARNING}警告: IBC代码分析失败{Colors.ENDC}")
+                return None
             
             # 保存AST
             ast_file_path = self._get_ast_file_path(ibc_file_path)

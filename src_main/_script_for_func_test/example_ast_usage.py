@@ -41,11 +41,11 @@ class User():
     
     # 1. 解析IBC代码生成AST
     print("\n1. 解析IBC代码...")
-    try:
-        ast_dict, _ = analyze_ibc_code(ibc_code)
+    success, ast_dict, _ = analyze_ibc_code(ibc_code)
+    if success and ast_dict:
         print(f"   ✓ 解析成功，生成 {len(ast_dict)} 个AST节点")
-    except Exception as e:
-        print(f"   ✗ 解析失败: {e}")
+    else:
+        print(f"   ✗ 解析失败")
         return
     
     # 2. 保存AST到文件
