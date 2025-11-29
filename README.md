@@ -23,20 +23,28 @@ v0.0.1 - 初始版本，demo状态，仅包含一个基本可用的命令行应�
         Windows (Powershell):
    
         (Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | py -
+
+    c. 将poetry加入路径：
    
-    c. 拉取代码仓库并进入仓库根目录
+        $HOME/.local/bin on Unix.
+   
+        %APPDATA%\Python\Scripts on Windows.
+   
+        $POETRY_HOME/bin if $POETRY_HOME is set.
+
+    d. 拉取代码仓库并进入仓库根目录
    
         git clone https://github.com/haberzero/icp-toolchain.git && cd icp-toolchain
    
-    d. 安装项目依赖
+    e. 安装项目依赖
    
         poetry install --no-root
    
-    e. poetry环境激活
+    f. poetry环境激活
    
         poetry env activate
 
-2. 工程模板及目录准备
+3. 工程模板及目录准备
    
     a. 复制整个`./template_proj`至你所期望的路径下，并更改文件夹名称。请勿直接使用`template_proj`作为工程目录。
    
@@ -46,7 +54,7 @@ v0.0.1 - 初始版本，demo状态，仅包含一个基本可用的命令行应�
    
     d. 修改工程目录下的`.icp_proj_config/icp_config.json`, 填写目标编程语言以及目标后缀名
 
-3. 运行主命令行工具
+4. 运行主命令行工具
    
         poetry run ./src_main/main_cmd.py
 
