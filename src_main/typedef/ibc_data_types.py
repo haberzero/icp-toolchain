@@ -284,8 +284,8 @@ class BehaviorStepNode(IbcBaseAstNode):
         return f"BehaviorStepNode(uid={self.uid})"
 
 
-# TODO: 下面的代码和AST持久化存储有关，完全由AI生成，通过了一些脚本测试，之后需要过来仔细review一遍
 class VisibilityTypes(Enum):
+    DEFAULT = "default" # 未被填充，性质等同于private
     PUBLIC = "public"
     PRIVATE = "private"
     PROTECTED = "protected"
@@ -295,10 +295,10 @@ class VisibilityTypes(Enum):
 
 class SymbolType(Enum):
     """符号类型枚举"""
+    DEFAULT = "default"
     CLASS = "class"
     FUNCTION = "func"
     VARIABLE = "var"
-    MODULE = "module"
 
 
 @dataclass
@@ -307,9 +307,9 @@ class SymbolNode:
     uid: int = 0
     symbol_name: str = ""
     normalized_name: str = ""  # 规范化名称，由AI推断后填充
-    visibility: Optional[VisibilityTypes] = None  # 可见性，由AI推断后填充
-    description: str = ""
-    symbol_type: Optional[SymbolType] = None
+    visibility: VisibilityTypes = VisibilityTypes.DEFAULT  # 可见性，由AI推断后填充
+    symbol_type: SymbolType = SymbolType.DEFAULT
+    description: str = ""   # 对外功能描述
     
     def to_dict(self) -> Dict[str, Any]:
         """将符号节点转换为字典表示"""
@@ -317,30 +317,21 @@ class SymbolNode:
             "uid": self.uid,
             "symbol_name": self.symbol_name,
             "normalized_name": self.normalized_name,
-            "visibility": self.visibility.value if self.visibility else None,
+            "visibility": self.visibility.value,
             "description": self.description,
-            "symbol_type": self.symbol_type.value if self.symbol_type else None
+            "symbol_type": self.symbol_type.value
         }
     
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> 'SymbolNode':
         """从字典创建符号节点"""
-        visibility_str = data.get("visibility")
-        visibility = None
-        if visibility_str:
-            try:
-                visibility = VisibilityTypes(visibility_str)
-            except ValueError:
-                # 如果枚举值无效，保持为None
-                pass
-        
         return SymbolNode(
             uid=data.get("uid", 0),
             symbol_name=data.get("symbol_name", ""),
             normalized_name=data.get("normalized_name", ""),
-            visibility=visibility,
+            visibility=data.get("visibility", VisibilityTypes.DEFAULT),
             description=data.get("description", ""),
-            symbol_type=SymbolType(data["symbol_type"]) if data.get("symbol_type") else None
+            symbol_type=data.get("symbol_type", SymbolType.DEFAULT)
         )
     
     def __repr__(self):
@@ -348,53 +339,47 @@ class SymbolNode:
     
     def is_normalized(self) -> bool:
         """检查符号是否已经规范化（包含规范化名称和可见性）"""
-        return bool(self.normalized_name and self.visibility)
+        return bool(self.normalized_name and self.visibility is not VisibilityTypes.DEFAULT)
     
-    def update_normalized_info(self, normalized_name: str, visibility: str) -> None:
-        """更新规范化信息
-        
-        Args:
-            normalized_name: 规范化名称
-            visibility: 可见性字符串，将被转换为VisibilityTypes枚举
-        """
+    def update_normalized_info_from_str(self, normalized_name: str, visibility: str) -> None:
+        """直接从str更新规范化信息, 主要在ai进行文本填充后使用"""
         self.normalized_name = normalized_name
-        try:
-            self.visibility = VisibilityTypes(visibility)
-        except ValueError:
-            # 如果枚举值无效，保持原值
-            self.visibility = None
+        self.visibility = VisibilityTypes(visibility)
+
+    def update_normalized_info(self, normalized_name: str, visibility: VisibilityTypes) -> None:
+        """更新规范化信息"""
+        self.normalized_name = normalized_name
+        self.visibility = visibility
 
 
 @dataclass
 class FileSymbolTable:
     """文件符号表类"""
-    file_md5: str = ""
     symbols: Dict[str, SymbolNode] = field(default_factory=dict)  # key为symbol_name
     
     def to_dict(self) -> Dict[str, Any]:
         """将文件符号表转换为字典表示"""
-        return {
-            "md5": self.file_md5,
-            "symbols": {
-                name: symbol.to_dict() 
-                for name, symbol in self.symbols.items()
-            }
-        }
+        symbols_dict = {}
+        for name, symbol in self.symbols.items():
+            symbols_dict[name] = symbol.to_dict()
+        
+        return symbols_dict
     
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> 'FileSymbolTable':
         """从字典创建文件符号表"""
         symbols = {}
-        for name, symbol_dict in data.get("symbols", {}).items():
-            symbols[name] = SymbolNode.from_dict(symbol_dict)
+        
+        for name, symbol_dict in data.items():
+            symbol_node = SymbolNode.from_dict(symbol_dict)
+            symbols[name] = symbol_node
         
         return FileSymbolTable(
-            file_md5=data.get("md5", ""),
             symbols=symbols
         )
     
     def __repr__(self):
-        return f"FileSymbolTable(md5={self.file_md5}, symbols_count={len(self.symbols)})"
+        return f"FileSymbolTable(symbols_count={len(self.symbols)})"
     
     def add_symbol(self, symbol: SymbolNode) -> None:
         """添加符号"""
@@ -419,8 +404,10 @@ class FileSymbolTable:
     
     def get_unnormalized_symbols(self) -> Dict[str, SymbolNode]:
         """获取所有未规范化的符号"""
-        return {
-            name: symbol 
-            for name, symbol in self.symbols.items() 
-            if not symbol.is_normalized()
-        }
+        unnormalized_symbols = {}
+        
+        for name, symbol in self.symbols.items():
+            if not symbol.is_normalized():
+                unnormalized_symbols[name] = symbol
+        
+        return unnormalized_symbols

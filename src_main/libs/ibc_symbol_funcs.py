@@ -1,10 +1,3 @@
-"""
-符号替换处理器
-
-负责在IBC代码中进行符号替换：
-1. 将原始符号名替换为规范化符号名
-2. 将$ref_symbols$引用替换为实际的规范化符号名
-"""
 import re
 from typing import Dict, List, Optional, Set
 from typedef.ibc_data_types import (
@@ -14,8 +7,8 @@ from typedef.ibc_data_types import (
 from typedef.cmd_data_types import Colors
 
 
-class SymbolReplacer:
-    """符号替换处理器"""
+class IbcSymbolFuncs:
+    """Ibc符号相关功能"""
     
     def __init__(
         self, 

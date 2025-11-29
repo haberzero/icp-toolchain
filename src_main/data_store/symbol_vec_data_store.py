@@ -10,7 +10,7 @@ from typedef.ibc_data_types import FileSymbolTable, SymbolNode
 from typedef.cmd_data_types import Colors
 
 
-class SymbolVectorDBManager:
+class SymbolVecDataStore:
     """符号向量数据库管理器，使用LanceDB存储和检索符号向量"""
     
     def __init__(self, db_path: str, embedding_handler):
