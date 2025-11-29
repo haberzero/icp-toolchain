@@ -4,8 +4,6 @@ from typedef.ibc_data_types import (
     IbcBaseAstNode, ClassNode, FunctionNode, VariableNode, 
     BehaviorStepNode, FileSymbolTable
 )
-from typedef.cmd_data_types import Colors
-
 
 class IbcSymbolFuncs:
     """Ibc符号相关功能"""
@@ -125,13 +123,8 @@ class IbcSymbolFuncs:
             
             # 使用向量搜索查找最匹配的符号
             normalized_name = self.vector_db_manager.search_symbol(ref_text)
-            
-            if normalized_name:
-                # 记录替换
-                replacements.append((match.group(0), f"${normalized_name}$"))
-                print(f"  {Colors.OKBLUE}符号引用替换: {ref_text} -> {normalized_name}{Colors.ENDC}")
-            else:
-                print(f"  {Colors.WARNING}警告: 未找到符号引用的匹配: {ref_text}{Colors.ENDC}")
+        
+            replacements.append((match.group(0), f"${normalized_name}$"))
         
         # 执行替换
         for old_text, new_text in replacements:
