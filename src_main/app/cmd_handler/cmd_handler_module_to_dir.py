@@ -6,9 +6,9 @@ from typing import List, Dict, Any
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
 
-from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
-from data_store.app_data_manager import get_instance as get_app_data_manager
-from data_store.user_data_manager import get_instance as get_user_data_manager
+from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
+from data_store.app_data_store import get_instance as get_app_data_store
+from data_store.user_data_store import get_instance as get_user_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
@@ -26,8 +26,8 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             description="根据需求分析结果生成项目目录结构",
             help_text="基于需求分析生成标准化的项目目录结构",
         )
-        proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
-        self.work_dir_path = proj_run_time_cfg_manager.get_work_dir_path()
+        proj_run_time_cfg = get_proj_run_time_cfg()
+        self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
@@ -218,6 +218,6 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         )
         if not ICPChatHandler.is_initialized():
             ICPChatHandler.initialize_chat_interface(handler_config)
-        app_data_manager = get_app_data_manager()
-        app_sys_prompt_file_path = os.path.join(app_data_manager.get_prompt_dir(), self.role_name + ".md")
+        app_data_store = get_app_data_store()
+        app_sys_prompt_file_path = os.path.join(app_data_store.get_prompt_dir(), self.role_name + ".md")
         self.chat_handler.load_role_from_file(self.role_name, app_sys_prompt_file_path)

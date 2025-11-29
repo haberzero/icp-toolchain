@@ -12,17 +12,17 @@ from typedef.ibc_data_types import (
     VisibilityTypes, SymbolType, FileSymbolTable, SymbolNode
 )
 
-from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
-from data_store.app_data_manager import get_instance as get_app_data_manager
-from data_store.user_data_manager import get_instance as get_user_data_manager
-from data_store.ibc_data_manager import get_instance as get_ibc_data_manager
+from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
+from data_store.app_data_store import get_instance as get_app_data_store
+from data_store.user_data_store import get_instance as get_user_data_store
+from data_store.ibc_data_store import get_instance as get_ibc_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 from utils.icp_ai_handler.icp_embedding_handler import ICPEmbeddingHandler
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code, IbcAnalyzerError
 from libs.dir_json_funcs import DirJsonFuncs
-from libs.symbol_vector_db_manager import SymbolVectorDBManager
+# from libs.symbol_vector_db_manager import SymbolVectorDBManager
 
 
 class CmdHandlerIbcGen(BaseCmdHandler):
@@ -48,8 +48,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         )
         
         # 路径配置
-        proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
-        self.work_dir_path = proj_run_time_cfg_manager.get_work_dir_path()
+        proj_run_time_cfg = get_proj_run_time_cfg()
+        self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
@@ -77,11 +77,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         print(f"{Colors.OKBLUE}开始生成半自然语言行为描述代码...{Colors.ENDC}")
         
-        # 初始化向量数据库
-        if not self._init_vector_database():
-            print(f"{Colors.FAIL}错误: 向量数据库初始化失败{Colors.ENDC}")
-            return
-        
         # 准备执行前所需的变量
         self._build_pre_execution_variables()
         
@@ -93,20 +88,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 return
         
         print(f"{Colors.OKGREEN}半自然语言行为描述代码生成完毕!{Colors.ENDC}")
-
-    def _init_vector_database(self) -> bool:
-        """初始化符号向量数据库"""
-        print(f"{Colors.OKBLUE}正在初始化符号向量数据库...{Colors.ENDC}")
-        vector_db_path = os.path.join(self.work_data_dir_path, 'symbol_vector_db')
-        try:
-            self.vector_db_manager = SymbolVectorDBManager(vector_db_path, self.embedding_handler)
-            print(f"{Colors.OKGREEN}符号向量数据库管理器初始化完成{Colors.ENDC}")
-            return True
-        except Exception as e:
-            print(f"{Colors.FAIL}错误: 符号向量数据库管理器初始化失败: {e}{Colors.ENDC}")
-            self.vector_db_manager = None
-            return False
-    
     
     # ========== 变量准备方法 ==========
     
@@ -131,8 +112,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             return
         
         # 读取用户需求
-        user_data_manager = get_user_data_manager()
-        user_requirements_str = user_data_manager.get_user_prompt()
+        user_data_store = get_user_data_store()
+        user_requirements_str = user_data_store.get_user_prompt()
         if not user_requirements_str:
             print(f"  {Colors.FAIL}错误: 未找到用户原始需求{Colors.ENDC}")
             return
@@ -240,11 +221,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                     print(f"    {Colors.WARNING}警告: 符号规范化失败{Colors.ENDC}")
                     continue
                 
-                # 更新符号表并保存+向量化
-                if self._save_and_vectorize_symbols(icp_json_file_path, symbol_table, normalized_symbols_dict):
-                    print(f"  {Colors.OKGREEN}文件处理完成: {icp_json_file_path}{Colors.ENDC}")
-                    return True
-                
             except IbcAnalyzerError as e:
                 print(f"  {Colors.FAIL}错误: IBC代码分析失败: {e}{Colors.ENDC}")
             except Exception as e:
@@ -305,8 +281,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             # 保存AST
             ast_file_path = self._get_ast_file_path(ibc_file_path)
-            ibc_data_manager = get_ibc_data_manager()
-            if ibc_data_manager.save_ast_to_file(ast_dict, ast_file_path):
+            ibc_data_store = get_ibc_data_store()
+            if ibc_data_store.save_ast_to_file(ast_dict, ast_file_path):
                 print(f"    {Colors.OKGREEN}AST已保存: {ast_file_path}{Colors.ENDC}")
             else:
                 print(f"    {Colors.WARNING}警告: AST保存失败{Colors.ENDC}")
@@ -387,63 +363,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 达到最大重试次数
         print(f"    {Colors.FAIL}符号规范化失败：AI未能返回有效结果（已重试{max_attempts}次）{Colors.ENDC}")
         return None
-    
-    def _save_and_vectorize_symbols(
-        self,
-        icp_json_file_path: str,
-        symbol_table: FileSymbolTable,
-        normalized_symbols_dict: Dict[str, Dict[str, str]]
-    ) -> bool:
-        """更新、保存符号表并进行向量化
-        
-        Args:
-            icp_json_file_path: 文件路径
-            symbol_table: 符号表
-            normalized_symbols_dict: 规范化符号字典
-            
-        Returns:
-            bool: 是否成功
-        """
-        print(f"    正在更新符号表...")
-        
-        # 更新符号表中的规范化信息
-        for symbol_name, norm_info in normalized_symbols_dict.items():
-            symbol = symbol_table.get_symbol(symbol_name)
-            if symbol:
-                symbol.update_normalized_info(
-                    norm_info['normalized_name'],
-                    norm_info['visibility']
-                )
-        
-        # 计算并保存MD5
-        req_file_path = os.path.join(self.work_staging_dir_path, f"{icp_json_file_path}_one_file_req.txt")
-        current_md5 = self._calculate_file_md5(req_file_path)
-        symbol_table.file_md5 = current_md5
-        
-        # 保存符号表
-        print(f"    正在保存符号表...")
-        ibc_data_manager = get_ibc_data_manager()
-        if not ibc_data_manager.save_file_symbols(self.work_ibc_dir_path, icp_json_file_path, symbol_table):
-            print(f"    {Colors.WARNING}警告: 符号表保存失败{Colors.ENDC}")
-            return False
-        
-        # 向量化符号
-        self._vectorize_symbols(icp_json_file_path, symbol_table)
-        
-        return True
-    
-
-    
-    def _vectorize_symbols(self, icp_json_file_path: str, symbol_table: FileSymbolTable):
-        """将符号添加到向量数据库"""
-        if not self.vector_db_manager:
-            return
-        
-        print(f"    正在将符号添加到向量数据库...")
-        try:
-            self.vector_db_manager.add_file_symbols(icp_json_file_path, symbol_table)
-        except Exception as e:
-            print(f"    {Colors.FAIL}错误: 向量化失败: {e}{Colors.ENDC}")
     
     def _extract_section_content(self, content: str, section_name: str) -> str:
         """从文件内容中提取指定部分的内容"""
@@ -565,8 +484,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         import_content = self._extract_section_content(file_req_str, 'import')
         
         # 读取用户提示词模板
-        app_data_manager = get_app_data_manager()
-        app_user_prompt_file_path = os.path.join(app_data_manager.get_user_prompt_dir(), 'intent_code_behavior_gen_user.md')
+        app_data_store = get_app_data_store()
+        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'intent_code_behavior_gen_user.md')
         try:
             with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
                 user_prompt_template_str = f.read()
@@ -605,8 +524,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             str: 完整的用户提示词，失败时抛出RuntimeError
         """
         # 读取提示词模板
-        app_data_manager = get_app_data_manager()
-        app_user_prompt_file_path = os.path.join(app_data_manager.get_user_prompt_dir(), 'symbol_normalizer_user.md')
+        app_data_store = get_app_data_store()
+        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'symbol_normalizer_user.md')
         try:
             with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
                 user_prompt_template_str = f.read()
@@ -660,7 +579,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             Dict[str, bool]: 更新状态字典，key为文件路径，value为是否需要更新
         """
         update_status = {}
-        ibc_data_manager = get_ibc_data_manager()
+        ibc_data_store = get_ibc_data_store()
         
         for file_path in file_creation_order_list:
             # 计算当前需求文件的MD5
@@ -685,7 +604,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 continue
             
             # 加载已保存的符号表
-            file_symbol_table = ibc_data_manager.load_file_symbols(work_ibc_dir_path, file_path)
+            file_symbol_table = ibc_data_store.load_file_symbols(work_ibc_dir_path, file_path)
             
             # 判断MD5是否匹配
             if file_symbol_table.file_md5 != current_md5:
@@ -829,7 +748,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         if not dependencies:
             return '暂无可用的依赖符号'
 
-        ibc_data_manager = get_ibc_data_manager()
+        ibc_data_store = get_ibc_data_store()
         lines = ['可用的已生成符号：', '']
         
         # 定义可对外可见的符号类型（使用枚举）
@@ -842,7 +761,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         for dep_file in dependencies:
             # 加载依赖文件的符号表
-            dep_symbol_table = ibc_data_manager.load_file_symbols(work_ibc_dir_path, dep_file)
+            dep_symbol_table = ibc_data_store.load_file_symbols(work_ibc_dir_path, dep_file)
             
             if not dep_symbol_table.symbols:
                 # TODO: 不应该直接continue 虽然理论上来说不应该进入这里
@@ -995,8 +914,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     
     def _load_chat_roles(self):
         """加载Chat角色"""
-        app_data_manager = get_app_data_manager()
-        app_prompt_dir_path = app_data_manager.get_prompt_dir()
+        app_data_store = get_app_data_store()
+        app_prompt_dir_path = app_data_store.get_prompt_dir()
         
         # 加载IBC生成角色
         sys_prompt_path_1 = os.path.join(prompt_dir, f"{self.role_ibc_gen}.md")

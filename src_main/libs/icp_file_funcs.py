@@ -35,7 +35,7 @@ class FileFuncs:
             Dict[str, bool]: 更新状态字典，key为文件路径，value为是否需要更新
         """
         update_status = {}
-        ibc_data_manager = get_ibc_data_manager()
+        ibc_data_store = get_ibc_data_store()
         
         for file_path in file_creation_order_list:
             # 计算当前需求文件的MD5
@@ -60,7 +60,7 @@ class FileFuncs:
                 continue
             
             # 加载已保存的符号表
-            file_symbol_table = ibc_data_manager.load_file_symbols(ibc_root_path, file_path)
+            file_symbol_table = ibc_data_store.load_file_symbols(ibc_root_path, file_path)
             
             # 判断MD5是否匹配
             if file_symbol_table.file_md5 != current_md5:

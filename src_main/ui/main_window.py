@@ -1,15 +1,15 @@
 import tkinter as tk
 from tkinter import ttk
 import os
-from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
-from data_store.user_data_manager import get_instance as get_user_data_manager
+from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
+from data_store.user_data_store import get_instance as get_user_data_store
 
 
 class MainWindow:
     def __init__(self, parent):
         self.parent = parent
-        self.proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
-        self.user_data_manager = get_user_data_manager()
+        self.proj_run_time_cfg = get_proj_run_time_cfg()
+        self.user_data_store = get_user_data_store()
         self.create_window()
         self.populate_tree()
 
@@ -169,7 +169,7 @@ class MainWindow:
             self.tree.delete(item)
 
         # 获取项目根路径
-        root_path = self.proj_run_time_cfg_manager.get_work_dir_path()
+        root_path = self.proj_run_time_cfg.get_work_dir_path()
         if not root_path or not os.path.exists(root_path):
             return
 
@@ -235,7 +235,7 @@ class MainWindow:
     def on_user_input_change(self, event=None):
         # 获取用户输入并保存到单例中
         user_input = self.user_input.get(1.0, tk.END)
-        self.user_data_manager.set_user_prompt(user_input)
+        self.user_data_store.set_user_prompt(user_input)
 
     def on_button1_click(self):
         # 按钮1功能待实现

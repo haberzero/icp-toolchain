@@ -12,10 +12,10 @@ from typedef.ibc_data_types import (
     VisibilityTypes, SymbolType, FileSymbolTable, SymbolNode
 )
 
-from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
-from data_store.app_data_manager import get_instance as get_app_data_manager
-from data_store.user_data_manager import get_instance as get_user_data_manager
-from data_store.ibc_data_manager import get_instance as get_ibc_data_manager
+from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
+from data_store.app_data_store import get_instance as get_app_data_store
+from data_store.user_data_store import get_instance as get_user_data_store
+from data_store.ibc_data_store import get_instance as get_ibc_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
@@ -48,8 +48,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         )
         
         # 路径配置
-        proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
-        self.work_dir_path = proj_run_time_cfg_manager.get_work_dir_path()
+        proj_run_time_cfg = get_proj_run_time_cfg()
+        self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
@@ -131,8 +131,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             return
         
         # 读取用户需求
-        user_data_manager = get_user_data_manager()
-        user_requirements_str = user_data_manager.get_user_prompt()
+        user_data_store = get_user_data_store()
+        user_requirements_str = user_data_store.get_user_prompt()
         if not user_requirements_str:
             print(f"  {Colors.FAIL}错误: 未找到用户原始需求{Colors.ENDC}")
             return
@@ -305,8 +305,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             # 保存AST
             ast_file_path = self._get_ast_file_path(ibc_file_path)
-            ibc_data_manager = get_ibc_data_manager()
-            if ibc_data_manager.save_ast_to_file(ast_dict, ast_file_path):
+            ibc_data_store = get_ibc_data_store()
+            if ibc_data_store.save_ast_to_file(ast_dict, ast_file_path):
                 print(f"    {Colors.OKGREEN}AST已保存: {ast_file_path}{Colors.ENDC}")
             else:
                 print(f"    {Colors.WARNING}警告: AST保存失败{Colors.ENDC}")
@@ -422,8 +422,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         # 保存符号表
         print(f"    正在保存符号表...")
-        ibc_data_manager = get_ibc_data_manager()
-        if not ibc_data_manager.save_file_symbols(self.work_ibc_dir_path, icp_json_file_path, symbol_table):
+        ibc_data_store = get_ibc_data_store()
+        if not ibc_data_store.save_file_symbols(self.work_ibc_dir_path, icp_json_file_path, symbol_table):
             print(f"    {Colors.WARNING}警告: 符号表保存失败{Colors.ENDC}")
             return False
         
@@ -565,8 +565,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         import_content = self._extract_section_content(file_req_str, 'import')
         
         # 读取用户提示词模板
-        app_data_manager = get_app_data_manager()
-        app_user_prompt_file_path = os.path.join(app_data_manager.get_user_prompt_dir(), 'intent_code_behavior_gen_user.md')
+        app_data_store = get_app_data_store()
+        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'intent_code_behavior_gen_user.md')
         try:
             with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
                 user_prompt_template_str = f.read()
@@ -605,8 +605,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             str: 完整的用户提示词，失败时抛出RuntimeError
         """
         # 读取提示词模板
-        app_data_manager = get_app_data_manager()
-        app_user_prompt_file_path = os.path.join(app_data_manager.get_user_prompt_dir(), 'symbol_normalizer_user.md')
+        app_data_store = get_app_data_store()
+        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'symbol_normalizer_user.md')
         try:
             with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
                 user_prompt_template_str = f.read()
@@ -660,7 +660,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             Dict[str, bool]: 更新状态字典，key为文件路径，value为是否需要更新
         """
         update_status = {}
-        ibc_data_manager = get_ibc_data_manager()
+        ibc_data_store = get_ibc_data_store()
         
         for file_path in file_creation_order_list:
             # 计算当前需求文件的MD5
@@ -685,7 +685,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 continue
             
             # 加载已保存的符号表
-            file_symbol_table = ibc_data_manager.load_file_symbols(work_ibc_dir_path, file_path)
+            file_symbol_table = ibc_data_store.load_file_symbols(work_ibc_dir_path, file_path)
             
             # 判断MD5是否匹配
             if file_symbol_table.file_md5 != current_md5:
@@ -829,7 +829,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         if not dependencies:
             return '暂无可用的依赖符号'
 
-        ibc_data_manager = get_ibc_data_manager()
+        ibc_data_store = get_ibc_data_store()
         lines = ['可用的已生成符号：', '']
         
         # 定义可对外可见的符号类型（使用枚举）
@@ -842,7 +842,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         for dep_file in dependencies:
             # 加载依赖文件的符号表
-            dep_symbol_table = ibc_data_manager.load_file_symbols(work_ibc_dir_path, dep_file)
+            dep_symbol_table = ibc_data_store.load_file_symbols(work_ibc_dir_path, dep_file)
             
             if not dep_symbol_table.symbols:
                 # TODO: 不应该直接continue 虽然理论上来说不应该进入这里
@@ -995,8 +995,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     
     def _load_chat_roles(self):
         """加载Chat角色"""
-        app_data_manager = get_app_data_manager()
-        app_prompt_dir_path = app_data_manager.get_prompt_dir()
+        app_data_store = get_app_data_store()
+        app_prompt_dir_path = app_data_store.get_prompt_dir()
         
         # 加载IBC生成角色
         sys_prompt_path_1 = os.path.join(prompt_dir, f"{self.role_ibc_gen}.md")

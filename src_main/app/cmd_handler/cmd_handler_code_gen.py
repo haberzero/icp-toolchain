@@ -7,10 +7,10 @@ from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig, EmbeddingApiConfig, EmbeddingStatus
 from typedef.ibc_data_types import IbcBaseAstNode
 
-from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
-from data_store.app_data_manager import get_instance as get_app_data_manager
-from data_store.user_data_manager import get_instance as get_user_data_manager
-from data_store.ibc_data_manager import get_instance as get_ibc_data_manager
+from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
+from data_store.app_data_store import get_instance as get_app_data_store
+from data_store.user_data_store import get_instance as get_user_data_store
+from data_store.ibc_data_store import get_instance as get_ibc_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
@@ -32,8 +32,8 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             description="将IBC代码转换为目标编程语言代码",
             help_text="读取IBC代码和AST，进行符号规范化替换，生成目标语言代码",
         )
-        proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
-        self.work_dir_path = proj_run_time_cfg_manager.get_work_dir_path()
+        proj_run_time_cfg = get_proj_run_time_cfg()
+        self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
@@ -90,8 +90,8 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         self.vector_db_manager = SymbolVectorDBManager(vector_db_path, self.embedding_handler)
         
         # 读取用户原始需求
-        user_data_manager = get_user_data_manager()
-        user_requirements_str = user_data_manager.get_user_prompt()
+        user_data_store = get_user_data_store()
+        user_requirements_str = user_data_store.get_user_prompt()
         
         # 读取文件级实现规划
         implementation_plan_file = os.path.join(self.work_data_dir_path, 'icp_implementation_plan.txt')
@@ -116,8 +116,8 @@ class CmdHandlerCodeGen(BaseCmdHandler):
                 continue
             
             print(f"    正在加载AST...")
-            ibc_data_manager = get_ibc_data_manager()
-            ast_dict = ibc_data_manager.load_ast_from_file(ast_file_path)
+            ibc_data_store = get_ibc_data_store()
+            ast_dict = ibc_data_store.load_ast_from_file(ast_file_path)
             
             if not ast_dict:
                 print(f"    {Colors.FAIL}错误: AST加载失败{Colors.ENDC}")
@@ -125,7 +125,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             
             # 2. 加载符号表
             print(f"    正在加载符号表...")
-            symbol_table = ibc_data_manager.load_file_symbols(work_ibc_dir_path, icp_json_file_path)
+            symbol_table = ibc_data_store.load_file_symbols(work_ibc_dir_path, icp_json_file_path)
             
             if not symbol_table or not symbol_table.symbols:
                 print(f"    {Colors.WARNING}警告: 符号表为空{Colors.ENDC}")
@@ -184,8 +184,8 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             str: 完整的用户提示词，失败时返回空字符串
         """
         # 读取用户原始需求
-        user_data_manager = get_user_data_manager()
-        user_requirements_str = user_data_manager.get_user_prompt()
+        user_data_store = get_user_data_store()
+        user_requirements_str = user_data_store.get_user_prompt()
         if not user_requirements_str:
             print(f"  {Colors.FAIL}错误: 读取用户需求失败{Colors.ENDC}")
             return ""
@@ -213,8 +213,8 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: 读取规范化IBC代码失败: {e}{Colors.ENDC}")
             return ""
         # 读取用户提示词模板
-        app_data_manager = get_app_data_manager()
-        app_user_prompt_file_path = os.path.join(app_data_manager.get_user_prompt_dir(), 'target_code_gen_user.md')
+        app_data_store = get_app_data_store()
+        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'target_code_gen_user.md')
         
         try:
             with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
@@ -378,8 +378,8 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             ICPChatHandler.initialize_chat_interface(chat_handler_config)
         
         # 加载角色
-        app_data_manager = get_app_data_manager()
-        app_prompt_dir_path = app_data_manager.get_prompt_dir()
+        app_data_store = get_app_data_store()
+        app_prompt_dir_path = app_data_store.get_prompt_dir()
         app_sys_prompt_file_path = os.path.join(app_prompt_dir_path, f"{self.role_name}.md")
         self.chat_handler.load_role_from_file(self.role_name, app_sys_prompt_file_path)
         

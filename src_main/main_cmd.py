@@ -5,9 +5,9 @@ import argparse
 import tkinter as tk
 from ui.path_selector import PathSelector
 
-from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
-from data_store.app_data_manager import get_instance as get_app_data_manager
-from data_store.user_data_manager import get_instance as get_user_data_manager
+from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
+from data_store.app_data_store import get_instance as get_app_data_store
+from data_store.user_data_store import get_instance as get_user_data_store
 from app.icp_cmd_cli import IcpCmdCli
 
 
@@ -18,9 +18,9 @@ def main():
     parser.add_argument('--requirements', type=str, help='直接提供的需求内容')
     args = parser.parse_args()
     
-    app_data_manager = get_app_data_manager()
-    proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
-    user_data_manager = get_user_data_manager()
+    app_data_store = get_app_data_store()
+    proj_run_time_cfg = get_proj_run_time_cfg()
+    user_data_store = get_user_data_store()
     
     root = None
     
@@ -30,7 +30,7 @@ def main():
 
     else:
         root = tk.Tk()
-        last_path = app_data_manager.load_last_path()
+        last_path = app_data_store.load_last_path()
         if not last_path:
             path_selector = PathSelector(root)
         else:
@@ -43,25 +43,25 @@ def main():
             root.destroy()
             return
 
-    if not proj_run_time_cfg_manager.set_work_dir_path(work_dir):
+    if not proj_run_time_cfg.set_work_dir_path(work_dir):
         print(f"错误: 无法设置工作目录为 {work_dir}")
         if root:
             root.destroy()
         return
 
-    app_data_manager.save_last_path(work_dir)
+    app_data_store.save_last_path(work_dir)
     if root:
         root.destroy()
     
     if args.requirements:
-        user_data_manager.set_user_prompt(args.requirements)
+        user_data_store.set_user_prompt(args.requirements)
         return
     else:
         requirement_file = os.path.join(work_dir, 'requirements.md')
         if os.path.exists(requirement_file):
             with open(requirement_file, 'r', encoding='utf-8') as f:
                 requirement_content = f.read()
-            user_data_manager.set_user_prompt(requirement_content)
+            user_data_store.set_user_prompt(requirement_content)
 
     cmd_interface = IcpCmdCli()
     cmd_interface.start_cli()

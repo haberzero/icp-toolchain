@@ -280,5 +280,5 @@ def get_instance() -> IbcDataStore:
     return _instance
 
 
-# 兼容旧的ibc_data_manager接口
+# 兼容旧的ibc_data_store接口
 AstDataManager = IbcDataStore

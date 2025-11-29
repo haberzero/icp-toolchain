@@ -6,9 +6,9 @@ from typing import List, Dict, Any
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
 
-from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
-from data_store.app_data_manager import get_instance as get_app_data_manager
-from data_store.user_data_manager import get_instance as get_user_data_manager
+from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
+from data_store.app_data_store import get_instance as get_app_data_store
+from data_store.user_data_store import get_instance as get_user_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
@@ -26,8 +26,8 @@ class CmdHandlerDependRefine(BaseCmdHandler):
             description="解决项目中的循环依赖问题",
             help_text="根据检测到的循环依赖信息，重构依赖结构以解决循环依赖问题",
         )
-        proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
-        self.work_dir_path = proj_run_time_cfg_manager.get_work_dir_path()
+        proj_run_time_cfg = get_proj_run_time_cfg()
+        self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
@@ -193,8 +193,8 @@ class CmdHandlerDependRefine(BaseCmdHandler):
             str: 完整的用户提示词，失败时返回空字符串
         """
         # 读取用户提示词模板
-        app_data_manager = get_app_data_manager()
-        app_user_prompt_file_path = os.path.join(app_data_manager.get_user_prompt_dir(), 'depend_refine_user.md')
+        app_data_store = get_app_data_store()
+        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'depend_refine_user.md')
         try:
             with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
                 user_prompt_template_str = f.read()
@@ -327,8 +327,8 @@ class CmdHandlerDependRefine(BaseCmdHandler):
             ICPChatHandler.initialize_chat_interface(chat_handler_config)
         
         # 加载角色的系统提示词
-        app_data_manager = get_app_data_manager()
-        app_prompt_dir_path = app_data_manager.get_prompt_dir()
+        app_data_store = get_app_data_store()
+        app_prompt_dir_path = app_data_store.get_prompt_dir()
         prompt_file_name = self.role_name + ".md"
         app_sys_prompt_file_path = os.path.join(app_prompt_dir_path, prompt_file_name)
         

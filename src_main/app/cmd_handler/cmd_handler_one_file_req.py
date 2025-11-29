@@ -6,9 +6,9 @@ from typing import List, Dict, Any
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
 
-from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
-from data_store.app_data_manager import get_instance as get_app_data_manager
-from data_store.user_data_manager import get_instance as get_user_data_manager
+from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
+from data_store.app_data_store import get_instance as get_app_data_store
+from data_store.user_data_store import get_instance as get_user_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
@@ -26,8 +26,8 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             description="在文件系统中创建src_staging目录结构以及one_file_req.txt文件",
             help_text="根据已有的dir_content.json文件的内容在src_staging目录结构下创建单文件的编程需求描述, 为IBC的生成做准备",
         )
-        proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
-        self.work_dir_path = proj_run_time_cfg_manager.get_work_dir_path()
+        proj_run_time_cfg = get_proj_run_time_cfg()
+        self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
@@ -84,8 +84,8 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
     def _build_pre_execution_variables(self) -> List[str]:
         """准备命令正式开始执行之前所需的变量内容"""
         # 读取用户原始需求
-        user_data_manager = get_user_data_manager()
-        user_requirements_str = user_data_manager.get_user_prompt()
+        user_data_store = get_user_data_store()
+        user_requirements_str = user_data_store.get_user_prompt()
         if not user_requirements_str:
             print(f"  {Colors.FAIL}错误: 读取用户需求失败{Colors.ENDC}")
             return ""
@@ -265,8 +265,8 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             accumulated_related_desc.append(formatted)
 
         # 读取用户提示词模板
-        app_data_manager = get_app_data_manager()
-        app_user_prompt_file_path = os.path.join(app_data_manager.get_user_prompt_dir(), 'one_file_req_gen_user.md')
+        app_data_store = get_app_data_store()
+        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'one_file_req_gen_user.md')
         try:
             with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
                 user_prompt_template_str = f.read()
@@ -357,8 +357,8 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             return False
         
         # 检查用户原始需求是否存在
-        user_data_manager = get_user_data_manager()
-        user_requirements_str = user_data_manager.get_user_prompt()
+        user_data_store = get_user_data_store()
+        user_requirements_str = user_data_store.get_user_prompt()
         if not user_requirements_str:
             print(f"  {Colors.WARNING}警告: 用户原始需求不存在，请先加载用户需求{Colors.ENDC}")
             return False
@@ -411,8 +411,8 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         if not ICPChatHandler.is_initialized():
             ICPChatHandler.initialize_chat_interface(handler_config)
         
-        app_data_manager = get_app_data_manager()
-        app_prompt_dir_path = app_data_manager.get_prompt_dir()
+        app_data_store = get_app_data_store()
+        app_prompt_dir_path = app_data_store.get_prompt_dir()
         app_sys_prompt_file_path = os.path.join(app_prompt_dir_path, self.role_one_file_req + ".md")
         
         self.chat_handler.load_role_from_file(self.role_one_file_req, app_sys_prompt_file_path)

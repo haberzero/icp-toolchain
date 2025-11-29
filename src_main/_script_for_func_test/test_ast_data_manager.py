@@ -8,7 +8,7 @@ from typedef.ibc_data_types import (
     IbcBaseAstNode, AstNodeType, ModuleNode, ClassNode, 
     FunctionNode, VariableNode, BehaviorStepNode
 )
-from data_store.ibc_data_manager import get_instance as get_ibc_data_manager
+from data_store.ibc_data_store import get_instance as get_ibc_data_store
 
 
 def test_ast_persistence():
@@ -102,7 +102,7 @@ def test_ast_persistence():
     
     # 保存AST到文件
     print("\n2. 保存AST到文件...")
-    ast_manager = get_ibc_data_manager()
+    ast_manager = get_ibc_data_store()
     test_file_path = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), 
         "test_ast_output.json"

@@ -6,9 +6,9 @@ from typing import List
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
 
-from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
-from data_store.app_data_manager import get_instance as get_app_data_manager
-from data_store.user_data_manager import get_instance as get_user_data_manager
+from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
+from data_store.app_data_store import get_instance as get_app_data_store
+from data_store.user_data_store import get_instance as get_user_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
@@ -26,8 +26,8 @@ class CmdHandlerParaExtract(BaseCmdHandler):
             description="从用户初始编程需求中提取参数",
             help_text="对用户需求进行解析，并且从中提取出关键的参数，供后续步骤使用",
         )
-        proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
-        self.work_dir_path = proj_run_time_cfg_manager.get_work_dir_path()
+        proj_run_time_cfg = get_proj_run_time_cfg()
+        self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
@@ -42,7 +42,7 @@ class CmdHandlerParaExtract(BaseCmdHandler):
             return
             
         print(f"{Colors.OKBLUE}开始提取参数...{Colors.ENDC}")
-        requirement_content = get_user_data_manager().get_user_prompt()
+        requirement_content = get_user_data_store().get_user_prompt()
         response_content, success = asyncio.run(self.chat_handler.get_role_response(
             role_name=self.role_name,
             user_prompt=requirement_content
@@ -72,7 +72,7 @@ class CmdHandlerParaExtract(BaseCmdHandler):
     def _check_cmd_requirement(self) -> bool:
         """验证参数提取命令的前置条件"""
         # 检查用户需求内容是否存在
-        requirement_content = get_user_data_manager().get_user_prompt()
+        requirement_content = get_user_data_store().get_user_prompt()
         if not requirement_content:
             print(f"  {Colors.FAIL}错误: {self.role_name} 未找到用户需求内容，请先提供需求内容{Colors.ENDC}")
             return False
@@ -123,7 +123,7 @@ class CmdHandlerParaExtract(BaseCmdHandler):
         if not ICPChatHandler.is_initialized():
             ICPChatHandler.initialize_chat_interface(handler_config)
         
-        app_data_manager = get_app_data_manager()
-        app_prompt_dir_path = app_data_manager.get_prompt_dir()
+        app_data_store = get_app_data_store()
+        app_prompt_dir_path = app_data_store.get_prompt_dir()
         app_sys_prompt_file_path = os.path.join(app_prompt_dir_path, self.role_name + ".md")
         self.chat_handler.load_role_from_file(self.role_name, app_sys_prompt_file_path)

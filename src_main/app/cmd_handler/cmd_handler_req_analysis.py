@@ -6,9 +6,9 @@ from typing import List
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
 
-from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
-from data_store.app_data_manager import get_instance as get_app_data_manager
-from data_store.user_data_manager import get_instance as get_user_data_manager
+from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
+from data_store.app_data_store import get_instance as get_app_data_store
+from data_store.user_data_store import get_instance as get_user_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
@@ -26,8 +26,8 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
             description="对用户需求进行结构化分析",
             help_text="对用户需求进行深入分析，生成技术选型和模块拆解",
         )
-        proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
-        self.proj_work_dir = proj_run_time_cfg_manager.get_work_dir_path()
+        proj_run_time_cfg = get_proj_run_time_cfg()
+        self.proj_work_dir = proj_run_time_cfg.get_work_dir_path()
         self.proj_data_dir = os.path.join(self.proj_work_dir, 'icp_proj_data')
         self.proj_config_data_dir = os.path.join(self.proj_work_dir, '.icp_proj_config')
         self.icp_api_config_file = os.path.join(self.proj_config_data_dir, 'icp_api_config.json')
@@ -42,7 +42,7 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
             return
             
         print(f"{Colors.OKBLUE}开始进行需求分析...{Colors.ENDC}")
-        requirement_content = get_user_data_manager().get_user_prompt()
+        requirement_content = get_user_data_store().get_user_prompt()
         
         max_attempts = 3
         for attempt in range(max_attempts):
@@ -164,7 +164,7 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
     def _check_cmd_requirement(self) -> bool:
         """验证需求分析命令的前置条件"""
         # 检查用户需求内容是否存在
-        requirement_content = get_user_data_manager().get_user_prompt()
+        requirement_content = get_user_data_store().get_user_prompt()
         if not requirement_content:
             print(f"  {Colors.FAIL}错误: {self.role_name} 未找到用户需求内容，请先提供需求内容{Colors.ENDC}")
             return False
@@ -215,7 +215,7 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
         if not ICPChatHandler.is_initialized():
             ICPChatHandler.initialize_chat_interface(handler_config)
         
-        app_data_manager = get_app_data_manager()
-        prompt_dir = app_data_manager.get_prompt_dir()
+        app_data_store = get_app_data_store()
+        prompt_dir = app_data_store.get_prompt_dir()
         sys_prompt_path = os.path.join(prompt_dir, self.role_name + ".md")
         self.chat_handler.load_role_from_file(self.role_name, sys_prompt_path)

@@ -6,9 +6,9 @@ from typing import List, Dict, Any
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
 
-from run_time_cfg.proj_run_time_cfg_manager import get_instance as get_proj_run_time_cfg_manager
-from data_store.app_data_manager import get_instance as get_app_data_manager
-from data_store.user_data_manager import get_instance as get_user_data_manager
+from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
+from data_store.app_data_store import get_instance as get_app_data_store
+from data_store.user_data_store import get_instance as get_user_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
@@ -27,8 +27,8 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             description="在目录结构中添加功能文件描述",
             help_text="根据需求分析结果在目录结构中添加功能文件描述",
         )
-        proj_run_time_cfg_manager = get_proj_run_time_cfg_manager()
-        self.work_dir_path = proj_run_time_cfg_manager.get_work_dir_path()
+        proj_run_time_cfg = get_proj_run_time_cfg()
+        self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
@@ -159,8 +159,8 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         self.old_json_dict = json.loads(dir_structure_str)
 
         # 读取用户提示词模板
-        app_data_manager = get_app_data_manager()
-        app_user_prompt_file_path = os.path.join(app_data_manager.get_user_prompt_dir(), 'dir_file_fill_user.md')
+        app_data_store = get_app_data_store()
+        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'dir_file_fill_user.md')
         try:
             with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
                 user_prompt_template_str = f.read()
@@ -185,8 +185,8 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             str: 完整的用户提示词，失败时返回空字符串
         """
         # 读取用户原始需求
-        user_data_manager = get_user_data_manager()
-        user_requirements_str = user_data_manager.get_user_prompt()
+        user_data_store = get_user_data_store()
+        user_requirements_str = user_data_store.get_user_prompt()
         if not user_requirements_str:
             print(f"  {Colors.FAIL}错误: 未找到用户原始需求{Colors.ENDC}")
             return ""
@@ -210,8 +210,8 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             return ""
 
         # 读取用户提示词模板
-        app_data_manager = get_app_data_manager()
-        app_user_prompt_file_path = os.path.join(app_data_manager.get_user_prompt_dir(), 'dir_file_fill_plan_gen_user.md')
+        app_data_store = get_app_data_store()
+        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'dir_file_fill_plan_gen_user.md')
         try:
             with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
                 user_prompt_template_str = f.read()
@@ -397,8 +397,8 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             ICPChatHandler.initialize_chat_interface(chat_handler_config)
         
         # 加载两个角色的系统提示词
-        app_data_manager = get_app_data_manager()
-        app_prompt_dir_path = app_data_manager.get_prompt_dir()
+        app_data_store = get_app_data_store()
+        app_prompt_dir_path = app_data_store.get_prompt_dir()
         prompt_file_name_1 = self.role_dir_file_fill + ".md"
         prompt_file_name_2 = self.role_plan_gen + ".md"
         app_sys_prompt_file_path_1 = os.path.join(app_prompt_dir_path, prompt_file_name_1)
