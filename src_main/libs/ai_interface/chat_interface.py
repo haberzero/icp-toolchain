@@ -32,6 +32,25 @@ class ChatInterface:
             print(f"ChatInterface 客户端初始化失败: {e}")
             self.client = None
 
+    async def verify_connection(self) -> bool:
+        """
+        验证与模型的连接是否正常（通过检查模型是否可访问）
+        这是一个轻量级测试，不消耗对话 token
+        
+        Returns:
+            bool: 连接是否正常
+        """
+        if self.client is None:
+            return False
+        
+        try:
+            # 尝试获取模型信息，验证连接
+            await self.client.models.retrieve(self.model)
+            return True
+        except Exception as e:
+            print(f"模型连接验证失败: {e}")
+            return False
+
     async def stream_response(
         self, 
         sys_prompt: str, 

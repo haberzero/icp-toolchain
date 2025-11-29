@@ -918,11 +918,11 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         app_prompt_dir_path = app_data_store.get_prompt_dir()
         
         # 加载IBC生成角色
-        sys_prompt_path_1 = os.path.join(prompt_dir, f"{self.role_ibc_gen}.md")
+        sys_prompt_path_1 = os.path.join(app_prompt_dir_path, f"{self.role_ibc_gen}.md")
         self.chat_handler.load_role_from_file(self.role_ibc_gen, sys_prompt_path_1)
         
         # 加载符号规范化角色
-        sys_prompt_path_2 = os.path.join(prompt_dir, f"{self.role_symbol_normalizer}.md")
+        sys_prompt_path_2 = os.path.join(app_prompt_dir_path, f"{self.role_symbol_normalizer}.md")
         self.chat_handler.load_role_from_file(self.role_symbol_normalizer, sys_prompt_path_2)
     
     def _get_embedding_config(self, config: Dict[str, Any]) -> Optional[EmbeddingApiConfig]:
