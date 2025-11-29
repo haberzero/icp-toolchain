@@ -4,19 +4,9 @@ from typedef.ibc_data_types import (
     IbcTokenType, Token, IbcBaseAstNode, AstNodeType, 
     ModuleNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode
 )
+from typedef.exception_types import IbcParserError
 
 from utils.ibc_analyzer.ibc_parser_uid_generator import IbcParserUidGenerator
-
-
-class IbcParserStateError(Exception):
-    """解析器状态机异常"""
-    def __init__(self, message: str):
-        self.message = message
-        super().__init__(self.message)
-    
-    def __str__(self):
-        return f"ParserError: {self.message}"
-
 
 class ParserState(Enum):
     """解析器状态枚举"""
@@ -94,7 +84,10 @@ class ModuleDeclState(BaseState):
                 self.module_name = token.value.strip()
                 self.sub_state = ModuleDeclSubState.EXPECTING_COLON
             else:
-                raise IbcParserStateError(f"Line {token.line_num} ModuleDeclState: Expecting module name but got {token.type}")
+                raise IbcParserError(
+                    message=f"ModuleDeclState: Expecting module name but got {token.type}",
+                    line_num=token.line_num
+                )
                 
         elif self.sub_state == ModuleDeclSubState.EXPECTING_COLON:
             if token.type == IbcTokenType.COLON:
@@ -104,7 +97,10 @@ class ModuleDeclState(BaseState):
                 self._create_module_node()
                 self.pop_flag = True
             else:
-                raise IbcParserStateError(f"Line {token.line_num} ModuleDeclState: Expecting colon but got {token.type}")
+                raise IbcParserError(
+                    message=f"ModuleDeclState: Expecting colon but got {token.type}",
+                    line_num=token.line_num
+                )
                 
         elif self.sub_state == ModuleDeclSubState.EXPECTING_CONTENT:
             # 解析直到换行
@@ -112,7 +108,10 @@ class ModuleDeclState(BaseState):
                 self.content = self.content.strip()
                 # 行末不应以冒号结束
                 if self.content and self.content[-1] == ":":
-                    raise IbcParserStateError(f"Line {token.line_num} ModuleDeclState: Cannot end with colon")
+                    raise IbcParserError(
+                        message=f"ModuleDeclState: Cannot end with colon",
+                        line_num=token.line_num
+                    )
                 self._create_module_node()
                 self.pop_flag = True
             else:
@@ -121,9 +120,6 @@ class ModuleDeclState(BaseState):
 
     def _create_module_node(self) -> None:
         """创建模块节点"""
-        if not self.current_token:
-            raise IbcParserStateError("ModuleDeclState: Should not happen, contact dev please")
-        
         uid = self.uid_generator.gen_uid()
         line_num = self.current_token.line_num 
         self.content = self.content.strip()
@@ -170,7 +166,10 @@ class VarDeclState(BaseState):
                 self.current_var_name = token.value.strip()
                 self.sub_state = VarDeclSubState.EXPECTING_COLON
             else:
-                raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Expecting variable name but got {token.type}")
+                raise IbcParserError(
+                    message=f"VarDeclState: Expecting variable name but got {token.type}",
+                    line_num=token.line_num
+                )
                 
         elif self.sub_state == VarDeclSubState.EXPECTING_COLON:
             if token.type == IbcTokenType.COLON:
@@ -181,13 +180,19 @@ class VarDeclState(BaseState):
                 if self.current_var_name not in self.variables:
                     self.variables[self.current_var_name] = self.current_var_desc
                 else:
-                    raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Got an duplicate var definitions")
+                    raise IbcParserError(
+                        message=f"VarDeclState: Got an duplicate var definitions",
+                        line_num=token.line_num
+                    )
                 self.current_var_name = ""
                 self.current_var_desc = ""
                 self._create_variable_nodes()
                 self.pop_flag = True
             else:
-                raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Expecting colon or new line but got {token.type}")
+                raise IbcParserError(
+                    message=f"VarDeclState: Expecting colon or new line but got {token.type}",
+                    line_num=token.line_num
+                )
         
         elif self.sub_state == VarDeclSubState.EXPECTING_VAR_DESC:
             if token.type == IbcTokenType.NEWLINE:
@@ -195,7 +200,10 @@ class VarDeclState(BaseState):
                 if self.current_var_name not in self.variables:
                     self.variables[self.current_var_name] = self.current_var_desc.strip()
                 else:
-                    raise IbcParserStateError(f"Line {token.line_num} VarDeclState: Got an duplicate var definitions")
+                    raise IbcParserError(
+                        message=f"VarDeclState: Got an duplicate var definitions",
+                        line_num=token.line_num
+                    )
                 self.current_var_name = ""
                 self.current_var_desc = ""
                 self._create_variable_nodes()
@@ -253,7 +261,10 @@ class DescriptionState(BaseState):
             if token.type == IbcTokenType.COLON:
                 self.sub_state = DescriptionSubState.EXPECTING_CONTENT
             else:
-                raise IbcParserStateError(f"Line {token.line_num} DescriptionState: Expecting colon but got {token.type}")
+                raise IbcParserError(
+                    message=f"DescriptionState: Expecting colon but got {token.type}",
+                    line_num=token.line_num
+                )
         
         elif self.sub_state == DescriptionSubState.EXPECTING_CONTENT:
             if token.type == IbcTokenType.NEWLINE:
@@ -266,14 +277,20 @@ class DescriptionState(BaseState):
                 self.content += token.value
                 self.sub_state = DescriptionSubState.EXPECTING_ONELINE
             else:
-                raise IbcParserStateError(f"Line {token.line_num} DescriptionState: Expecting newline or identifier but got {token.type}")
+                raise IbcParserError(
+                    message=f"DescriptionState: Expecting newline or identifier but got {token.type}",
+                    line_num=token.line_num
+                )
 
         elif self.sub_state == DescriptionSubState.EXPECTING_ONELINE:
             if token.type == IbcTokenType.NEWLINE:
                 # 行末不应以冒号结束
                 self.content = self.content.strip()
                 if self.content and self.content[-1] == ":":
-                    raise IbcParserStateError(f"Line {token.line_num} DescriptionState: Cannot end with colon")
+                    raise IbcParserError(
+                        message=f"DescriptionState: Cannot end with colon",
+                        line_num=token.line_num
+                    )
                 self.pop_flag = True
             else:
                 self.content += token.value
@@ -283,21 +300,30 @@ class DescriptionState(BaseState):
             if token.type == IbcTokenType.INDENT:
                 self.sub_state = DescriptionSubState.EXPECTING_MULTILINE_CONTENT
             else:
-                raise IbcParserStateError(f"Line {token.line_num} DescriptionState: Expecting indent in multiline mode but got {token.type}")
+                raise IbcParserError(
+                    message=f"DescriptionState: Expecting indent in multiline mode but got {token.type}",
+                    line_num=token.line_num
+                )
         
         elif self.sub_state == DescriptionSubState.EXPECTING_MULTILINE_CONTENT:
             if token.type == IbcTokenType.DEDENT:
                 # 退缩进表示多行描述结束
                 self.content = self.content.strip()
                 if self.content and self.content[-1] == ":":
-                    raise IbcParserStateError(f"Line {token.line_num} DescriptionState: Cannot end with colon")
+                    raise IbcParserError(
+                        message=f"DescriptionState: Cannot end with colon",
+                        line_num=token.line_num
+                    )
                 if self.content and self.content[-1] == "\n":
                     self.content = self.content[:-1]
                 self.pass_in_token_flag = False
                 self.pop_flag = True
             elif token.type == IbcTokenType.INDENT:
                 # 不允许进一步缩进
-                raise IbcParserStateError(f"Line {token.line_num} DescriptionState: Further indentation is not allowed in multiline description")
+                raise IbcParserError(
+                    message=f"DescriptionState: Further indentation is not allowed in multiline description",
+                    line_num=token.line_num
+                )
             elif token.type == IbcTokenType.NEWLINE:
                 # 换行,添加到内容中
                 self.content += "\n"
@@ -335,7 +361,10 @@ class IntentCommentState(BaseState):
                 # 行末不应以冒号结束
                 self.content = self.content.strip()
                 if self.content and self.content[-1] == ":":
-                    raise IbcParserStateError(f"Line {token.line_num} IntentCommentState: Cannot end with colon")
+                    raise IbcParserError(
+                        message=f"IntentCommentState: Cannot end with colon",
+                        line_num=token.line_num
+                    )
                 self.pop_flag = True
             else:
                 self.content += token.value
@@ -383,13 +412,19 @@ class ClassDeclState(BaseState):
                 self.class_name = token.value.strip()
                 self.sub_state = ClassDeclSubState.EXPECTING_LPAREN
             else:
-                raise IbcParserStateError(f"Line {token.line_num} ClassDeclState: Expecting class name but got {token.type}")
+                raise IbcParserError(
+                    message=f"ClassDeclState: Expecting class name but got {token.type}",
+                    line_num=token.line_num
+                )
                 
         elif self.sub_state == ClassDeclSubState.EXPECTING_LPAREN:
             if token.type == IbcTokenType.LPAREN:
                 self.sub_state = ClassDeclSubState.EXPECTING_INH_CLASS
             else:
-                raise IbcParserStateError(f"Line {token.line_num} ClassDeclState: Expecting left parenthesis or colon but got {token.type}")
+                raise IbcParserError(
+                    message=f"ClassDeclState: Expecting left parenthesis or colon but got {token.type}",
+                    line_num=token.line_num
+                )
                 
         elif self.sub_state == ClassDeclSubState.EXPECTING_INH_CLASS:
             if token.type == IbcTokenType.IDENTIFIER:
@@ -398,7 +433,10 @@ class ClassDeclState(BaseState):
             elif token.type == IbcTokenType.RPAREN:
                 self.sub_state = ClassDeclSubState.EXPECTING_COLON
             else:
-                raise IbcParserStateError(f"Line {token.line_num} ClassDeclState: Expecting Parent Name or right parenthesis but got {token.type}")
+                raise IbcParserError(
+                    message=f"ClassDeclState: Expecting Parent Name or right parenthesis but got {token.type}",
+                    line_num=token.line_num
+                )
             
         elif self.sub_state == ClassDeclSubState.EXPECTING_INH_COLON:
             if token.type == IbcTokenType.COLON:
@@ -406,26 +444,38 @@ class ClassDeclState(BaseState):
             elif token.type == IbcTokenType.RPAREN:
                 self.sub_state = ClassDeclSubState.EXPECTING_COLON
             else:
-                raise IbcParserStateError(f"Line {token.line_num} ClassDeclState: Expecting COLON or right parenthesis but got {token.type}")
+                raise IbcParserError(
+                    message=f"ClassDeclState: Expecting COLON or right parenthesis but got {token.type}",
+                    line_num=token.line_num
+                )
 
         elif self.sub_state == ClassDeclSubState.EXPECTING_INH_DESC:
             if token.type == IbcTokenType.IDENTIFIER:
                 self.inherit_desc = token.value.strip()
                 self.sub_state = ClassDeclSubState.EXPECTING_RPAREN
             else:
-                raise IbcParserStateError(f"Line {token.line_num} ClassDeclState: Expecting inherit description but got {token.type}")
+                raise IbcParserError(
+                    message=f"ClassDeclState: Expecting inherit description but got {token.type}",
+                    line_num=token.line_num
+                )
 
         elif self.sub_state == ClassDeclSubState.EXPECTING_RPAREN:
             if token.type == IbcTokenType.RPAREN:
                 self.sub_state = ClassDeclSubState.EXPECTING_COLON
             else:
-                raise IbcParserStateError(f"Line {token.line_num} ClassDeclState: Expecting right parenthesis but got {token.type}")
+                raise IbcParserError(
+                    message=f"ClassDeclState: Expecting right parenthesis but got {token.type}",
+                    line_num=token.line_num
+                )
                 
         elif self.sub_state == ClassDeclSubState.EXPECTING_COLON:
             if token.type == IbcTokenType.COLON:
                 self.sub_state = ClassDeclSubState.EXPECTING_NEWLINE
             else:
-                raise IbcParserStateError(f"Line {token.line_num} ClassDeclState: Expecting colon but got {token.type}")
+                raise IbcParserError(
+                    message=f"ClassDeclState: Expecting colon but got {token.type}",
+                    line_num=token.line_num
+                )
             
         elif self.sub_state == ClassDeclSubState.EXPECTING_NEWLINE:
             if token.type == IbcTokenType.NEWLINE:
@@ -433,7 +483,10 @@ class ClassDeclState(BaseState):
                 self._create_class_node()
                 self.pop_flag = True
             else:
-                raise IbcParserStateError(f"Line {token.line_num} ClassDeclState: Expecting new line but got {token.type}")
+                raise IbcParserError(
+                    message=f"ClassDeclState: Expecting new line but got {token.type}",
+                    line_num=token.line_num
+                )
 
     def _create_class_node(self) -> None:
         """创建类节点"""
@@ -505,7 +558,10 @@ class FuncDeclState(BaseState):
                 self.func_name = token.value.strip()
                 self.sub_state = FuncDeclSubState.EXPECTING_LPAREN
             else:
-                raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting function name but got {token.type}")
+                raise IbcParserError(
+                    message=f"FuncDeclState: Expecting function name but got {token.type}",
+                    line_num=token.line_num
+                )
         
         elif self.sub_state == FuncDeclSubState.EXPECTING_LPAREN:
             if token.type == IbcTokenType.LPAREN:
@@ -516,7 +572,10 @@ class FuncDeclState(BaseState):
             elif token.type == IbcTokenType.COLON:
                 self.sub_state = FuncDeclSubState.EXPECTING_NEWLIEN
             else:
-                raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting left parenthesis but got {token.type}")
+                raise IbcParserError(
+                    message=f"FuncDeclState: Expecting left parenthesis but got {token.type}",
+                    line_num=token.line_num
+                )
         
         elif self.sub_state == FuncDeclSubState.EXPECTING_PARAM_NAME:
             if token.type == IbcTokenType.IDENTIFIER:
@@ -532,9 +591,15 @@ class FuncDeclState(BaseState):
             elif token.type == IbcTokenType.DEDENT:
                 self.pending_indent_level -= 1
                 if self.pending_indent_level < 0:
-                    raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Unexpected dedent structure")
+                    raise IbcParserError(
+                        message=f"FuncDeclState: Unexpected dedent structure",
+                        line_num=token.line_num
+                    )
             else:
-                raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting param name or right parenthesis but got {token.type}")
+                raise IbcParserError(
+                    message=f"FuncDeclState: Expecting param name or right parenthesis but got {token.type}",
+                    line_num=token.line_num
+                )
         
         elif self.sub_state == FuncDeclSubState.EXPECTING_PARAM_COLON:
             if token.type == IbcTokenType.COLON:
@@ -545,7 +610,10 @@ class FuncDeclState(BaseState):
                 if self.current_param_name not in self.params:
                     self.params[self.current_param_name] = self.current_param_desc
                 else:
-                    raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Got an duplicate parameter definitions")
+                    raise IbcParserError(
+                    message=f"FuncDeclState: Got an duplicate parameter definitions",
+                    line_num=token.line_num
+                )
                 self.current_param_name = ""
                 self.current_param_desc = ""
                 self.sub_state = FuncDeclSubState.EXPECTING_PARAM_NAME
@@ -555,12 +623,18 @@ class FuncDeclState(BaseState):
                 if self.current_param_name not in self.params:
                     self.params[self.current_param_name] = self.current_param_desc
                 else:
-                    raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Got an duplicate parameter definitions")
+                    raise IbcParserError(
+                    message=f"FuncDeclState: Got an duplicate parameter definitions",
+                    line_num=token.line_num
+                )
                 self.current_param_name = ""
                 self.current_param_desc = ""
                 self.sub_state = FuncDeclSubState.EXPECTING_COLON
             else:
-                raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting colon, comma or right parenthesis but got {token.type}")
+                raise IbcParserError(
+                    message=f"FuncDeclState: Expecting colon, comma or right parenthesis but got {token.type}",
+                    line_num=token.line_num
+                )
 
         elif self.sub_state == FuncDeclSubState.EXPECTING_PARAM_DESC:
             # 参数描述是贪婪式解析：冒号后所有内容都是描述，直到遇到换行
@@ -573,7 +647,10 @@ class FuncDeclState(BaseState):
                     if self.current_param_name not in self.params:
                         self.params[self.current_param_name] = self.current_param_desc
                     else:
-                        raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Got an duplicate parameter definitions")
+                        raise IbcParserError(
+                    message=f"FuncDeclState: Got an duplicate parameter definitions",
+                    line_num=token.line_num
+                )
                     self.current_param_name = ""
                     self.current_param_desc = ""
                     self.paren_count = 0
@@ -584,7 +661,10 @@ class FuncDeclState(BaseState):
                     if self.current_param_name not in self.params:
                         self.params[self.current_param_name] = self.current_param_desc
                     else:
-                        raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Got an duplicate parameter definitions")
+                        raise IbcParserError(
+                    message=f"FuncDeclState: Got an duplicate parameter definitions",
+                    line_num=token.line_num
+                )
                     self.current_param_name = ""
                     self.current_param_desc = ""
                     self.paren_count = 0
@@ -607,7 +687,10 @@ class FuncDeclState(BaseState):
                     if self.current_param_name not in self.params:
                         self.params[self.current_param_name] = self.current_param_desc
                     else:
-                        raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Got an duplicate parameter definitions")
+                        raise IbcParserError(
+                    message=f"FuncDeclState: Got an duplicate parameter definitions",
+                    line_num=token.line_num
+                )
                     self.current_param_name = ""
                     self.current_param_desc = ""
                     self.paren_count = 0
@@ -630,7 +713,10 @@ class FuncDeclState(BaseState):
                 if self.current_param_name not in self.params:
                     self.params[self.current_param_name] = self.current_param_desc
                 else:
-                    raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Got an duplicate parameter definitions")
+                    raise IbcParserError(
+                    message=f"FuncDeclState: Got an duplicate parameter definitions",
+                    line_num=token.line_num
+                )
                 self.current_param_name = ""
                 self.current_param_desc = ""
                 self.paren_count = 0
@@ -652,23 +738,35 @@ class FuncDeclState(BaseState):
             elif token.type == IbcTokenType.DEDENT:
                 self.pending_indent_level -= 1
                 if self.pending_indent_level < 0:
-                    raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Unexpected dedent structure")
+                    raise IbcParserError(
+                    message=f"FuncDeclState: Unexpected dedent structure",
+                    line_num=token.line_num
+                )
             else:
-                raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting right parenthesis but got {token.type}")
+                raise IbcParserError(
+                    message=f"FuncDeclState: Expecting right parenthesis but got {token.type}",
+                    line_num=token.line_num
+                )
         
         elif self.sub_state == FuncDeclSubState.EXPECTING_COLON:
             if token.type == IbcTokenType.COLON:
                 self.pass_in_token_flag = False
                 self.sub_state = FuncDeclSubState.EXPECTING_NEWLIEN
             else:
-                raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting colon but got {token.type}")
+                raise IbcParserError(
+                    message=f"FuncDeclState: Expecting colon but got {token.type}",
+                    line_num=token.line_num
+                )
         
         elif self.sub_state == FuncDeclSubState.EXPECTING_NEWLIEN:
             if token.type == IbcTokenType.NEWLINE:
                 self._create_function_node()
                 self.pop_flag = True
             else:
-                raise IbcParserStateError(f"Line {token.line_num} FuncDeclState: Expecting new line but got {token.type}")
+                raise IbcParserError(
+                    message=f"FuncDeclState: Expecting new line but got {token.type}",
+                    line_num=token.line_num
+                )
     
     def _create_function_node(self) -> None:
         """创建函数节点"""
@@ -820,7 +918,10 @@ class BehaviorStepState(BaseState):
             # 延续行中的退缩进
             self.local_indent_level -= 1
             if self.local_indent_level < 0:
-                raise IbcParserStateError(f"Line {token.line_num} BehaviorStepState: Unexpected dedent structure")
+                raise IbcParserError(
+                    message=f"BehaviorStepState: Unexpected dedent structure",
+                    line_num=token.line_num
+                )
         elif token.type == IbcTokenType.NEWLINE:
             content_stripped = self.content.strip()
             
@@ -857,13 +958,19 @@ class BehaviorStepState(BaseState):
             # 跟踪局部退缩进
             self.local_indent_level -= 1
             if self.local_indent_level < 0:
-                raise IbcParserStateError(f"Line {token.line_num} BehaviorStepState: Unexpected dedent structure")
+                raise IbcParserError(
+                    message=f"BehaviorStepState: Unexpected dedent structure",
+                    line_num=token.line_num
+                )
         elif token.type == IbcTokenType.NEWLINE:
             content_stripped = self.content.strip()
             
             # 延续行的行末不允许出现冒号
             if content_stripped and content_stripped[-1] == ":":
-                raise IbcParserStateError(f"Line {token.line_num} BehaviorStepState: Backslash continuation line cannot end with colon")
+                raise IbcParserError(
+                    message=f"BehaviorStepState: Backslash continuation line cannot end with colon",
+                    line_num=token.line_num
+                )
             
             # 检查行末是否以反斜杠结束
             if content_stripped and content_stripped[-1] == "\\":
@@ -888,7 +995,10 @@ class BehaviorStepState(BaseState):
             # 跟踪局部退缩进
             self.local_indent_level -= 1
             if self.local_indent_level < 0:
-                raise IbcParserStateError(f"Line {token.line_num} BehaviorStepState: Unexpected dedent structure")
+                raise IbcParserError(
+                    message=f"BehaviorStepState: Unexpected dedent structure",
+                    line_num=token.line_num
+                )
         elif token.type == IbcTokenType.LPAREN:
             self.paren_count += 1
             self.content += token.value
@@ -916,7 +1026,10 @@ class BehaviorStepState(BaseState):
             # 跟踪局部退缩进
             self.local_indent_level -= 1
             if self.local_indent_level < 0:
-                raise IbcParserStateError(f"Line {token.line_num} BehaviorStepState: Unexpected dedent structure")
+                raise IbcParserError(
+                    message=f"BehaviorStepState: Unexpected dedent structure",
+                    line_num=token.line_num
+                )
         elif token.type == IbcTokenType.LBRACE:
             self.brace_count += 1
             self.content += token.value
@@ -944,7 +1057,10 @@ class BehaviorStepState(BaseState):
             # 跟踪局部退缩进
             self.local_indent_level -= 1
             if self.local_indent_level < 0:
-                raise IbcParserStateError(f"Line {token.line_num} BehaviorStepState: Unexpected dedent structure")
+                raise IbcParserError(
+                    message=f"BehaviorStepState: Unexpected dedent structure",
+                    line_num=token.line_num
+                )
         elif token.type == IbcTokenType.LBRACKET:
             self.bracket_count += 1
             self.content += token.value

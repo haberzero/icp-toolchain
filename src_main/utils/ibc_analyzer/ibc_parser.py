@@ -4,6 +4,7 @@ from typedef.ibc_data_types import (
     IbcTokenType, Token, IbcBaseAstNode, AstNodeType, 
     ModuleNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode
 )
+from typedef.exception_types import IbcParserError
 
 from utils.ibc_analyzer.ibc_parser_state import (
     ParserState, BaseState, TopLevelState, ModuleDeclState, 
@@ -12,16 +13,6 @@ from utils.ibc_analyzer.ibc_parser_state import (
 )
 
 from utils.ibc_analyzer.ibc_parser_uid_generator import IbcParserUidGenerator
-
-
-class ParserError(Exception):
-    """词法分析器异常"""
-    def __init__(self, message: str):
-        self.message = message
-        super().__init__(self.message)
-    
-    def __str__(self):
-        return f"ParserError: {self.message}"
 
 
 # TODO: 目前设计模式不完善，后处理也许应该整合到整个状态处理逻辑里，不应该零散分布。
@@ -228,7 +219,10 @@ class IbcParser:
                 state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
                 self.state_stack.append((state_obj, self.last_ast_node.uid))
             else:
-                raise ParserError(f"Line {token.line_num}: Parser TOP --- Should not happen, contact dev please")
+                raise IbcParserError(
+                    message="Parser TOP --- Should not happen, contact dev please",
+                    line_num=token.line_num
+                )
         
         # 处理延续行后需要手工压栈的情况
         if self.continuation_needs_new_block:
@@ -237,7 +231,10 @@ class IbcParser:
                 state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
                 self.state_stack.append((state_obj, self.last_ast_node.uid))
             else:
-                raise ParserError(f"Line {token.line_num}: Parser TOP --- continuation_needs_new_block should only be set for BehaviorStepNode")
+                raise IbcParserError(
+                    message="Parser TOP --- continuation_needs_new_block should only be set for BehaviorStepNode",
+                    line_num=token.line_num
+                )
     
     def _handle_behavior_start(self, token: Token) -> None:
         """处理行为步骤开始"""
@@ -280,13 +277,19 @@ class IbcParser:
 
         elif isinstance(self.last_ast_node, BehaviorStepNode):
             if not isinstance(self.state_stack[-1][0], (FuncContentState, BehaviorStepState)):
-                raise ParserError(f"Line {token.line_num}: Behavior step must be inside a function")
+                raise IbcParserError(
+                    message="Behavior step must be inside a function",
+                    line_num=token.line_num
+                )
 
             if self.last_ast_node.new_block_flag:
                 state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
                 self.state_stack.append((state_obj, self.last_ast_node.uid))
             else:
-                raise ParserError(f"Line {token.line_num}: Invalid indent, missing colon after behavior step to start a new block")
+                raise IbcParserError(
+                    message="Invalid indent, missing colon after behavior step to start a new block",
+                    line_num=token.line_num
+                )
 
     def _handle_dedent(self, token: Token) -> None:
         """处理退格"""
@@ -303,7 +306,10 @@ class IbcParser:
         if len(self.state_stack) > 1:  # 不能弹出顶层状态
             self.state_stack.pop()
         else:
-            raise ParserError(f"Line {token.line_num}: pop state toplevel, should not happen, contact dev please")
+            raise IbcParserError(
+                message="pop state toplevel, should not happen, contact dev please",
+                line_num=token.line_num
+            )
 
     def _handle_keyword(self, token: Token) -> None:
         """处理关键字"""
@@ -312,7 +318,10 @@ class IbcParser:
         
         # 检查关键字在当前位置是否合法
         if token.value == "module" and current_state_type != ParserState.TOP_LEVEL:
-            raise ParserError(f"Line {token.line_num}: 'module' keyword only allowed at top level")
+            raise IbcParserError(
+                message="'module' keyword only allowed at top level",
+                line_num=token.line_num
+            )
         
         # 根据关键字类型压入相应的状态
         state_obj = None
@@ -329,7 +338,10 @@ class IbcParser:
         elif token.type == IbcTokenType.KEYWORDS and token.value == "@":
             state_obj = IntentCommentState(parent_uid, self.uid_generator, self.ast_nodes)
         else:
-            raise ParserError(f"Line {token.line_num}: Invalid keyword token'{token.value}', should not happen, contact dev please")
+            raise IbcParserError(
+                message=f"Invalid keyword token'{token.value}', should not happen, contact dev please",
+                line_num=token.line_num
+            )
             
         if state_obj:
             self.state_stack.append((state_obj, parent_uid))
@@ -337,7 +349,10 @@ class IbcParser:
     def _process_token_in_current_state(self, token: Token) -> None:
         """将token传递给当前状态机处理"""
         if not self.state_stack:
-            raise ParserError(f"Line {token.line_num}: No state in stack")
+            raise IbcParserError(
+                message="No state in stack",
+                line_num=token.line_num
+            )
             
         # 获取栈顶的状态机实例
         current_state_obj, parent_uid = self.state_stack[-1]

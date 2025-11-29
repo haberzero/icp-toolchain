@@ -1,17 +1,7 @@
 from typing import List
 
 from typedef.ibc_data_types import IbcKeywords, IbcTokenType, Token
-
-
-class LexerError(Exception):
-    """词法分析器异常"""
-    def __init__(self, message: str) -> None:
-        self.message:str = message
-        super().__init__(self.message)
-    
-    def __str__(self) -> str:
-        return f"LexerError: {self.message}"
-
+from typedef.exception_types import LexerError
 
 class IbcLexer:
     """Intent Behavior Code 词法分析器"""
@@ -42,7 +32,10 @@ class IbcLexer:
         """计算缩进等级"""
         lstriped_line: str = current_line.lstrip(' ')
         if lstriped_line.startswith('\t'):
-            raise LexerError(message=f"Line {self.line_num}: Tab indentation is not allowed")
+            raise LexerError(
+                message="Tab indentation is not allowed",
+                line_num=self.line_num
+            )
 
         left_spaces_num: int = len(current_line) - len(lstriped_line)
         if left_spaces_num % 4 != 0:
@@ -99,7 +92,10 @@ class IbcLexer:
         
         # 检查$符号数量是否为偶数
         if len(parts) % 2 == 0:
-            raise LexerError(f"Line {self.line_num}: Unexpected $ symbol usage, $ symbols must appear in pairs")
+            raise LexerError(
+                message="Unexpected $ symbol usage, $ symbols must appear in pairs",
+                line_num=self.line_num
+            )
         
         # 处理过滤后的部分
         for i, part in enumerate(parts):
@@ -195,7 +191,10 @@ class IbcLexer:
                     
                     # 检查缩进是否对齐
                     if not self.indent_stack or self.indent_stack[-1] != indent_level:
-                        raise LexerError(f"Line {self.line_num}: Inconsistent indentation")
+                        raise LexerError(
+                            message="Inconsistent indentation",
+                            line_num=self.line_num
+                        )
                 
                 # 识别并处理行开头可能存在的关键字
                 content_line: str = self._process_keyword(striped_line)
@@ -218,9 +217,13 @@ class IbcLexer:
             return self.tokens
         
         except LexerError:
-            raise LexerError(f"Line {self.line_num}: Lexer error")
+            # LexerError已经带有line_num，直接重新抛出
+            raise
         
         except Exception as e:
             print(f"!!! Unexpected Error: {e}")
-            raise LexerError(f"Line {self.line_num}: Lexer error")
+            raise LexerError(
+                message=f"Unexpected lexer error: {str(e)}",
+                line_num=self.line_num
+            ) from e
         
