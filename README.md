@@ -18,23 +18,23 @@ v0.0.1 - 初始版本，demo状态，仅包含一个基本可用的命令行应�
    
         Linux, macOS, WSL:
    
-        `curl -sSL https://install.python-poetry.org | python3 -`
+        curl -sSL https://install.python-poetry.org | python3 -
    
         Windows (Powershell):
    
-        `(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | py -`
+        (Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | py -
    
     c. 拉取代码仓库并进入仓库根目录
    
-        `git clone https://github.com/haberzero/icp-toolchain.git && cd icp-toolchain`
+        git clone https://github.com/haberzero/icp-toolchain.git && cd icp-toolchain
    
     d. 安装项目依赖
    
-        `poetry install --no-root`
+        poetry install --no-root
    
     e. poetry环境激活
    
-        `poetry env activate`
+        poetry env activate
 
 2. 工程模板及目录准备
    
@@ -48,7 +48,7 @@ v0.0.1 - 初始版本，demo状态，仅包含一个基本可用的命令行应�
 
 3. 运行主命令行工具
    
-    `poetry run ./src_main/main_cmd.py`
+    poetry run ./src_main/main_cmd.py
 
 7. 自 `req_analysis` 指令开始，按顺序执行后续所有指令直到 `code_gen`。指令执行时可直接使用缩写，如 `RA`, `CG`
 
