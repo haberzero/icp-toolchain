@@ -299,6 +299,14 @@ class SymbolType(Enum):
     CLASS = "class"
     FUNCTION = "func"
     VARIABLE = "var"
+    PARAMETER = "param"  # 函数参数
+
+
+class ReferenceType(Enum):
+    """符号引用类型枚举"""
+    BEHAVIOR_REF = "behavior_ref"  # 行为描述中的引用
+    MODULE_CALL = "module_call"  # 模块调用
+    CLASS_INHERIT = "class_inherit"  # 类继承
 
 
 @dataclass
@@ -310,6 +318,7 @@ class SymbolNode:
     visibility: VisibilityTypes = VisibilityTypes.DEFAULT  # 可见性，由AI推断后填充
     symbol_type: SymbolType = SymbolType.DEFAULT
     description: str = ""   # 对外功能描述
+    parameters: Dict[str, str] = field(default_factory=dict)  # 函数参数 {参数名: 参数描述}，仅FUNCTION类型使用
     
     def to_dict(self) -> Dict[str, Any]:
         """将符号节点转换为字典表示"""
@@ -317,21 +326,37 @@ class SymbolNode:
             "uid": self.uid,
             "symbol_name": self.symbol_name,
             "normalized_name": self.normalized_name,
-            "visibility": self.visibility.value,
+            "visibility": self.visibility.value if isinstance(self.visibility, VisibilityTypes) else self.visibility,
             "description": self.description,
-            "symbol_type": self.symbol_type.value
+            "symbol_type": self.symbol_type.value,
+            "parameters": self.parameters
         }
     
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> 'SymbolNode':
         """从字典创建符号节点"""
+        visibility_value = data.get("visibility", VisibilityTypes.DEFAULT)
+        if isinstance(visibility_value, str):
+            try:
+                visibility_value = VisibilityTypes(visibility_value)
+            except ValueError:
+                visibility_value = VisibilityTypes.DEFAULT
+        
+        symbol_type_value = data.get("symbol_type", SymbolType.DEFAULT)
+        if isinstance(symbol_type_value, str):
+            try:
+                symbol_type_value = SymbolType(symbol_type_value)
+            except ValueError:
+                symbol_type_value = SymbolType.DEFAULT
+        
         return SymbolNode(
             uid=data.get("uid", 0),
             symbol_name=data.get("symbol_name", ""),
             normalized_name=data.get("normalized_name", ""),
-            visibility=data.get("visibility", VisibilityTypes.DEFAULT),
+            visibility=visibility_value,
             description=data.get("description", ""),
-            symbol_type=data.get("symbol_type", SymbolType.DEFAULT)
+            symbol_type=symbol_type_value,
+            parameters=data.get("parameters", {})
         )
     
     def __repr__(self):
@@ -339,12 +364,15 @@ class SymbolNode:
     
     def is_normalized(self) -> bool:
         """检查符号是否已经规范化（包含规范化名称和可见性）"""
-        return bool(self.normalized_name and self.visibility is not VisibilityTypes.DEFAULT)
+        return bool(self.normalized_name and self.visibility != VisibilityTypes.DEFAULT)
     
     def update_normalized_info_from_str(self, normalized_name: str, visibility: str) -> None:
         """直接从str更新规范化信息, 主要在ai进行文本填充后使用"""
         self.normalized_name = normalized_name
-        self.visibility = VisibilityTypes(visibility)
+        try:
+            self.visibility = VisibilityTypes(visibility)
+        except ValueError:
+            self.visibility = VisibilityTypes.DEFAULT
 
     def update_normalized_info(self, normalized_name: str, visibility: VisibilityTypes) -> None:
         """更新规范化信息"""
@@ -353,9 +381,44 @@ class SymbolNode:
 
 
 @dataclass
+class SymbolReference:
+    """符号引用记录类，用于记录符号的使用位置"""
+    ref_symbol_name: str = ""  # 引用的符号名称
+    ref_type: ReferenceType = ReferenceType.BEHAVIOR_REF  # 引用类型
+    source_uid: int = 0  # 引用源节点的UID
+    line_number: int = 0  # 引用所在行号
+    context: str = ""  # 引用上下文信息（可选）
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """将符号引用转换为字典表示"""
+        return {
+            "ref_symbol_name": self.ref_symbol_name,
+            "ref_type": self.ref_type.value,
+            "source_uid": self.source_uid,
+            "line_number": self.line_number,
+            "context": self.context
+        }
+    
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> 'SymbolReference':
+        """从字典创建符号引用"""
+        return SymbolReference(
+            ref_symbol_name=data.get("ref_symbol_name", ""),
+            ref_type=ReferenceType(data.get("ref_type", ReferenceType.BEHAVIOR_REF.value)),
+            source_uid=data.get("source_uid", 0),
+            line_number=data.get("line_number", 0),
+            context=data.get("context", "")
+        )
+    
+    def __repr__(self):
+        return f"SymbolReference(ref={self.ref_symbol_name}, type={self.ref_type}, uid={self.source_uid})"
+
+
+@dataclass
 class FileSymbolTable:
-    """文件符号表类"""
-    symbols: Dict[str, SymbolNode] = field(default_factory=dict)  # key为symbol_name
+    """文件符号表类，包含符号声明表和符号使用表"""
+    symbols: Dict[str, SymbolNode] = field(default_factory=dict)  # key为symbol_name，符号声明表
+    symbol_references: List[SymbolReference] = field(default_factory=list)  # 符号使用表
     
     def to_dict(self) -> Dict[str, Any]:
         """将文件符号表转换为字典表示"""
@@ -363,23 +426,44 @@ class FileSymbolTable:
         for name, symbol in self.symbols.items():
             symbols_dict[name] = symbol.to_dict()
         
-        return symbols_dict
+        references_list = []
+        for ref in self.symbol_references:
+            references_list.append(ref.to_dict())
+        
+        return {
+            "symbols": symbols_dict,
+            "symbol_references": references_list
+        }
     
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> 'FileSymbolTable':
         """从字典创建文件符号表"""
         symbols = {}
+        references = []
         
-        for name, symbol_dict in data.items():
-            symbol_node = SymbolNode.from_dict(symbol_dict)
-            symbols[name] = symbol_node
+        # 处理旧格式：直接是 symbols 字典
+        if "symbols" not in data and "symbol_references" not in data:
+            # 旧格式，data 本身就是 symbols 字典
+            for name, symbol_dict in data.items():
+                symbol_node = SymbolNode.from_dict(symbol_dict)
+                symbols[name] = symbol_node
+        else:
+            # 新格式
+            for name, symbol_dict in data.get("symbols", {}).items():
+                symbol_node = SymbolNode.from_dict(symbol_dict)
+                symbols[name] = symbol_node
+            
+            for ref_dict in data.get("symbol_references", []):
+                ref = SymbolReference.from_dict(ref_dict)
+                references.append(ref)
         
         return FileSymbolTable(
-            symbols=symbols
+            symbols=symbols,
+            symbol_references=references
         )
     
     def __repr__(self):
-        return f"FileSymbolTable(symbols_count={len(self.symbols)})"
+        return f"FileSymbolTable(symbols_count={len(self.symbols)}, references_count={len(self.symbol_references)})"
     
     def add_symbol(self, symbol: SymbolNode) -> None:
         """添加符号"""
@@ -411,3 +495,15 @@ class FileSymbolTable:
                 unnormalized_symbols[name] = symbol
         
         return unnormalized_symbols
+    
+    def add_reference(self, reference: SymbolReference) -> None:
+        """添加符号引用"""
+        self.symbol_references.append(reference)
+    
+    def get_references_by_symbol(self, symbol_name: str) -> List[SymbolReference]:
+        """获取指定符号的所有引用"""
+        return [ref for ref in self.symbol_references if ref.ref_symbol_name == symbol_name]
+    
+    def get_references_by_type(self, ref_type: ReferenceType) -> List[SymbolReference]:
+        """获取指定类型的所有引用"""
+        return [ref for ref in self.symbol_references if ref.ref_type == ref_type]
