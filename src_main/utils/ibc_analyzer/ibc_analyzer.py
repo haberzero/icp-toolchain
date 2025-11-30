@@ -43,34 +43,9 @@ def analyze_ibc_code(text: str) -> Tuple[bool, Optional[Dict], Optional[Dict]]:
         symbol_table = symbol_gen.extract_symbols()
         
         return True, ast_dict, symbol_table
-    
-    except (LexerError, IbcParserError) as e:
-        # 如果异常还没有行内容信息，尝试从text中提取
-        if not e.line_content and e.line_num > 0:
-            lines = text.split('\n')
-            if 0 < e.line_num <= len(lines):
-                line_content = lines[e.line_num - 1].rstrip()
-                # 打印错误信息
-                if isinstance(e, LexerError):
-                    print(f"词法分析错误: {e.message}")
-                    print(f"  行号: {e.line_num}")
-                    print(f"  内容: {line_content}")
-                else:
-                    print(f"语法分析错误: {e.message}")
-                    print(f"  行号: {e.line_num}")
-                    print(f"  内容: {line_content}")
-        else:
-            # 如果已经有行内容，直接打印
-            error_type = "词法分析错误" if isinstance(e, LexerError) else "语法分析错误"
-            print(f"{error_type}: {e.message}")
-            if e.line_num > 0:
-                print(f"  行号: {e.line_num}")
-            if e.line_content:
-                print(f"  内容: {e.line_content}")
-        return False, None, None
-    
+
     except IbcAnalyzerError as e:
-        # 其他IbcAnalyzerError类型的异常，尝试补全行内容
+        # 根据行号，从text原始文本中提取行内容
         if not e.line_content and e.line_num > 0:
             lines = text.split('\n')
             if 0 < e.line_num <= len(lines):
