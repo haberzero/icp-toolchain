@@ -3,7 +3,7 @@ from typedef.ibc_data_types import IbcKeywords, IbcTokenType, Token, IbcBaseAstN
 
 from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
-from utils.ibc_analyzer.ibc_symbol_gen import IbcSymbolAnalyzer
+from utils.ibc_analyzer.ibc_symbol_analyzer import IbcSymbolAnalyzer
 
 from typedef.ibc_data_types import IbcBaseAstNode
 from typedef.exception_types import IbcAnalyzerError, LexerError, IbcParserError

@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
-from utils.ibc_analyzer.ibc_symbol_gen import IbcSymbolAnalyzer
+from utils.ibc_analyzer.ibc_symbol_analyzer import IbcSymbolAnalyzer
 from typedef.ibc_data_types import (
     SymbolNode, SymbolType, FileSymbolTable, SymbolReference, 
     ReferenceType, VisibilityTypes
