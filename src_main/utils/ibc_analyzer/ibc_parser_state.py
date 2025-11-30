@@ -492,7 +492,8 @@ class ClassDeclState(BaseState):
         """创建类节点"""
         uid = self.uid_generator.gen_uid()
         line_num = self.current_token.line_num if self.current_token else 0
-        self.inh_params = {self.parent_class: self.inherit_desc}
+        if self.parent_class:
+            self.inh_params = {self.parent_class: self.inherit_desc}
         class_node = ClassNode(
             uid=uid,
             parent_uid=self.parent_uid,
