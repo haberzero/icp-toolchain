@@ -6,7 +6,7 @@ IBC符号提取模块
 from typing import Dict, Optional
 from typedef.ibc_data_types import (
     IbcBaseAstNode, ClassNode, FunctionNode, VariableNode,
-    SymbolNode, SymbolType, FileSymbolTable
+    VisibilityTypes, SymbolNode, SymbolType, FileSymbolTable
 )
 
 
@@ -55,7 +55,7 @@ class IbcSymbolGenerator:
                 uid=uid,
                 symbol_name=node.identifier,
                 normalized_name="",  # 留空，后续由AI推断填充
-                visibility=None,  # 留空，后续由AI推断填充
+                visibility=VisibilityTypes.DEFAULT,  # Default，后续由AI推断填充
                 description=node.external_desc,
                 symbol_type=SymbolType.CLASS
             )
@@ -64,7 +64,7 @@ class IbcSymbolGenerator:
                 uid=uid,
                 symbol_name=node.identifier,
                 normalized_name="",  # 留空，后续由AI推断填充
-                visibility=None,  # 留空，后续由AI推断填充
+                visibility=VisibilityTypes.DEFAULT,  # Default，后续由AI推断填充
                 description=node.external_desc,
                 symbol_type=SymbolType.FUNCTION
             )
@@ -73,7 +73,7 @@ class IbcSymbolGenerator:
                 uid=uid,
                 symbol_name=node.identifier,
                 normalized_name="",  # 留空，后续由AI推断填充
-                visibility=None,  # 留空，后续由AI推断填充
+                visibility=VisibilityTypes.DEFAULT,  # Default，后续由AI推断填充
                 description=node.external_desc,
                 symbol_type=SymbolType.VARIABLE
             )
