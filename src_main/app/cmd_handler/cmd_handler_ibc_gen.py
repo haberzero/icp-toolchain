@@ -664,13 +664,13 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             print(f"{Colors.WARNING}警告: 读取配置文件失败: {e}，使用默认语言python{Colors.ENDC}")
             return 'python'
     
-    def _format_symbols_for_prompt(self, symbols: Dict[str, SymbolNode]) -> str:
+    def _format_symbols_for_prompt(self, symbols: Dict[int, SymbolNode]) -> str:
         """格式化符号列表用于提示词"""
         lines = []
-        for symbol_name, symbol in symbols.items():
+        for uid, symbol in symbols.items():
             symbol_type = symbol.symbol_type.value if symbol.symbol_type else '未知'
             description = symbol.description if symbol.description else '无描述'
-            lines.append(f"- {symbol_name} ({symbol_type}, 描述: {description})")
+            lines.append(f"- {symbol.symbol_name} ({symbol_type}, 描述: {description})")
         return '\n'.join(lines)
     
     def _parse_symbol_normalizer_response(self, response: str) -> Dict[str, Dict[str, str]]:
@@ -770,7 +770,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             lines.append(f"来自文件：{dep_file}")
             
             has_visible_symbols = False
-            for symbol_name, symbol in dep_symbol_table.symbols.items():
+            for uid, symbol in dep_symbol_table.symbols.items():
                 # 检查符号可见性
                 # 1. 如果未规范化，也列出来（供生成时参考）
                 # 2. 如果已规范化，仅列出对外可见的符号
@@ -797,7 +797,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                         symbol_type_label = '未知'
                     
                     description = symbol.description if symbol.description else '无描述'
-                    lines.append(f"- {symbol_type_label} {symbol_name}")
+                    lines.append(f"- {symbol_type_label} {symbol.symbol_name}")
                     lines.append(f"  描述：{description}")
                     
                     if symbol.normalized_name:

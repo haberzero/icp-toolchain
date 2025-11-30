@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
-from utils.ibc_analyzer.ibc_symbol_analyzer import IbcSymbolAnalyzer
+from utils.ibc_analyzer.ibc_symbol_processor import IbcSymbolProcessor
 from typedef.ibc_data_types import (
     SymbolNode, SymbolType, FileSymbolTable, SymbolReference, 
     ReferenceType, VisibilityTypes
@@ -174,7 +174,7 @@ class UserManager():
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
         
-        symbol_gen = IbcSymbolAnalyzer(ast_dict)
+        symbol_gen = IbcSymbolProcessor(ast_dict)
         symbol_table = symbol_gen.process_symbols()
         
         all_symbols = symbol_table.get_all_symbols()
@@ -230,7 +230,7 @@ func 登录(
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
         
-        symbol_gen = IbcSymbolAnalyzer(ast_dict)
+        symbol_gen = IbcSymbolProcessor(ast_dict)
         symbol_table = symbol_gen.process_symbols()
         
         func1 = symbol_table.get_symbol("计算总价")
@@ -276,7 +276,7 @@ class ConfigManager():
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
         
-        symbol_gen = IbcSymbolAnalyzer(ast_dict)
+        symbol_gen = IbcSymbolProcessor(ast_dict)
         symbol_table = symbol_gen.process_symbols()
         
         all_symbols = symbol_table.get_all_symbols()
@@ -319,7 +319,7 @@ def test_behavior_references_extraction():
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
         
-        symbol_gen = IbcSymbolAnalyzer(ast_dict)
+        symbol_gen = IbcSymbolProcessor(ast_dict)
         symbol_table = symbol_gen.process_symbols()
         
         behavior_refs = symbol_table.get_references_by_type(ReferenceType.BEHAVIOR_REF)
@@ -361,7 +361,7 @@ class DataProcessor():
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
         
-        symbol_gen = IbcSymbolAnalyzer(ast_dict)
+        symbol_gen = IbcSymbolProcessor(ast_dict)
         symbol_table = symbol_gen.process_symbols()
         
         module_refs = symbol_table.get_references_by_type(ReferenceType.MODULE_CALL)
@@ -402,7 +402,7 @@ class AdminManager(UserManager: 用户管理器):
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
         
-        symbol_gen = IbcSymbolAnalyzer(ast_dict)
+        symbol_gen = IbcSymbolProcessor(ast_dict)
         symbol_table = symbol_gen.process_symbols()
         
         inherit_refs = symbol_table.get_references_by_type(ReferenceType.CLASS_INHERIT)
@@ -445,7 +445,7 @@ class DataProcessor(BaseProcessor: 基础处理器):
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
         
-        symbol_gen = IbcSymbolAnalyzer(ast_dict)
+        symbol_gen = IbcSymbolProcessor(ast_dict)
         symbol_table = symbol_gen.process_symbols()
         
         # 序列化
@@ -515,7 +515,7 @@ class UserService(BaseService: 基础服务类):
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
         
-        symbol_gen = IbcSymbolAnalyzer(ast_dict)
+        symbol_gen = IbcSymbolProcessor(ast_dict)
         symbol_table = symbol_gen.process_symbols()
         
         all_symbols = symbol_table.get_all_symbols()

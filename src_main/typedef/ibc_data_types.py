@@ -417,14 +417,15 @@ class SymbolReference:
 @dataclass
 class FileSymbolTable:
     """文件符号表类，包含符号声明表和符号使用表"""
-    symbols: Dict[str, SymbolNode] = field(default_factory=dict)  # key为symbol_name，符号声明表
+    symbols: Dict[int, SymbolNode] = field(default_factory=dict)  # key为uid，符号声明表
+    symbol_name_to_uid: Dict[str, int] = field(default_factory=dict)  # 符号名到uid的映射
     symbol_references: List[SymbolReference] = field(default_factory=list)  # 符号使用表
     
     def to_dict(self) -> Dict[str, Any]:
         """将文件符号表转换为字典表示"""
         symbols_dict = {}
-        for name, symbol in self.symbols.items():
-            symbols_dict[name] = symbol.to_dict()
+        for uid, symbol in self.symbols.items():
+            symbols_dict[str(uid)] = symbol.to_dict()
         
         references_list = []
         for ref in self.symbol_references:
@@ -432,6 +433,7 @@ class FileSymbolTable:
         
         return {
             "symbols": symbols_dict,
+            "symbol_name_to_uid": self.symbol_name_to_uid,
             "symbol_references": references_list
         }
     
@@ -440,25 +442,25 @@ class FileSymbolTable:
         """从字典创建文件符号表"""
         symbols = {}
         references = []
+        symbol_name_to_uid = {}
         
-        # 处理旧格式：直接是 symbols 字典
-        if "symbols" not in data and "symbol_references" not in data:
-            # 旧格式，data 本身就是 symbols 字典
-            for name, symbol_dict in data.items():
-                symbol_node = SymbolNode.from_dict(symbol_dict)
-                symbols[name] = symbol_node
-        else:
-            # 新格式
-            for name, symbol_dict in data.get("symbols", {}).items():
-                symbol_node = SymbolNode.from_dict(symbol_dict)
-                symbols[name] = symbol_node
-            
-            for ref_dict in data.get("symbol_references", []):
-                ref = SymbolReference.from_dict(ref_dict)
-                references.append(ref)
+        # 加载符号表（以uid为索引）
+        for uid_str, symbol_dict in data.get("symbols", {}).items():
+            uid = int(uid_str)
+            symbol_node = SymbolNode.from_dict(symbol_dict)
+            symbols[uid] = symbol_node
+        
+        # 加载symbol_name_to_uid映射
+        symbol_name_to_uid = data.get("symbol_name_to_uid", {})
+        
+        # 加载符号引用
+        for ref_dict in data.get("symbol_references", []):
+            ref = SymbolReference.from_dict(ref_dict)
+            references.append(ref)
         
         return FileSymbolTable(
             symbols=symbols,
+            symbol_name_to_uid=symbol_name_to_uid,
             symbol_references=references
         )
     
@@ -467,32 +469,53 @@ class FileSymbolTable:
     
     def add_symbol(self, symbol: SymbolNode) -> None:
         """添加符号"""
-        self.symbols[symbol.symbol_name] = symbol
+        self.symbols[symbol.uid] = symbol
+        self.symbol_name_to_uid[symbol.symbol_name] = symbol.uid
     
     def get_symbol(self, symbol_name: str) -> Optional[SymbolNode]:
-        """获取符号"""
-        return self.symbols.get(symbol_name)
+        """根据符号名获取符号"""
+        uid = self.symbol_name_to_uid.get(symbol_name)
+        if uid is None:
+            return None
+        return self.symbols.get(uid)
+    
+    def get_symbol_by_uid(self, uid: int) -> Optional[SymbolNode]:
+        """根据uid获取符号"""
+        return self.symbols.get(uid)
     
     def remove_symbol(self, symbol_name: str) -> None:
         """移除符号"""
-        if symbol_name in self.symbols:
-            del self.symbols[symbol_name]
+        uid = self.symbol_name_to_uid.get(symbol_name)
+        if uid is not None:
+            if uid in self.symbols:
+                del self.symbols[uid]
+            del self.symbol_name_to_uid[symbol_name]
     
     def has_symbol(self, symbol_name: str) -> bool:
         """检查是否包含指定符号"""
-        return symbol_name in self.symbols
+        return symbol_name in self.symbol_name_to_uid
     
-    def get_all_symbols(self) -> Dict[str, SymbolNode]:
-        """获取所有符号"""
+    def get_all_symbols(self) -> Dict[int, SymbolNode]:
+        """获取所有符号（按uid索引）"""
         return self.symbols
     
-    def get_unnormalized_symbols(self) -> Dict[str, SymbolNode]:
+    def get_symbols_by_name(self) -> Dict[str, SymbolNode]:
+        """获取所有符号（按symbol_name索引）
+        
+        注意：返回的字典是一个新的字典，不会影响内部数据结构
+        """
+        result = {}
+        for uid, symbol in self.symbols.items():
+            result[symbol.symbol_name] = symbol
+        return result
+    
+    def get_unnormalized_symbols(self) -> Dict[int, SymbolNode]:
         """获取所有未规范化的符号"""
         unnormalized_symbols = {}
         
-        for name, symbol in self.symbols.items():
+        for uid, symbol in self.symbols.items():
             if not symbol.is_normalized():
-                unnormalized_symbols[name] = symbol
+                unnormalized_symbols[uid] = symbol
         
         return unnormalized_symbols
     

@@ -32,9 +32,9 @@ class IbcSymbolFuncs:
     def _build_symbol_mapping(self) -> Dict[str, str]:
         """构建符号名映射"""
         mapping = {}
-        for symbol_name, symbol in self.symbol_table.get_all_symbols().items():
+        for uid, symbol in self.symbol_table.get_all_symbols().items():
             if symbol.normalized_name:
-                mapping[symbol_name] = symbol.normalized_name
+                mapping[symbol.symbol_name] = symbol.normalized_name
         return mapping
     
     def replace_symbols_in_ast(self) -> None:

@@ -10,7 +10,7 @@ from typedef.ibc_data_types import (
 )
 
 
-class IbcSymbolAnalyzer:
+class IbcSymbolProcessor:
     """
     IBC符号生成器，负责从AST提取符号信息
     
@@ -37,13 +37,13 @@ class IbcSymbolAnalyzer:
         """
         symbol_table = FileSymbolTable()
         
-        # 第一步：提取符号声明
+        # 提取符号声明
         for uid, node in self.ast_dict.items():
             symbol = self._create_symbol_from_node(uid, node)
             if symbol:
                 symbol_table.add_symbol(symbol)
         
-        # 第二步：提取符号使用
+        # 提取符号使用
         for uid, node in self.ast_dict.items():
             references = self._extract_references_from_node(uid, node)
             for ref in references:
@@ -141,3 +141,127 @@ class IbcSymbolAnalyzer:
                     ))
         
         return references
+    
+    # ==================== 符号表修改方法 ====================
+    
+    def update_symbol_normalized_name(
+        self, 
+        symbol_table: FileSymbolTable, 
+        symbol_uid: int, 
+        normalized_name: str
+    ) -> bool:
+        """
+        更新符号的规范化名称
+        
+        Args:
+            symbol_table: 符号表
+            symbol_uid: 符号UID
+            normalized_name: 规范化名称
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        symbol = symbol_table.get_symbol_by_uid(symbol_uid)
+        if symbol is None:
+            return False
+        
+        symbol.normalized_name = normalized_name
+        return True
+    
+    def update_symbol_visibility(
+        self, 
+        symbol_table: FileSymbolTable, 
+        symbol_uid: int, 
+        visibility: VisibilityTypes
+    ) -> bool:
+        """
+        更新符号的可见性
+        
+        Args:
+            symbol_table: 符号表
+            symbol_uid: 符号UID
+            visibility: 可见性
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        symbol = symbol_table.get_symbol_by_uid(symbol_uid)
+        if symbol is None:
+            return False
+        
+        symbol.visibility = visibility
+        return True
+    
+    def update_symbol_normalized_info(
+        self,
+        symbol_table: FileSymbolTable,
+        symbol_uid: int,
+        normalized_name: str,
+        visibility: VisibilityTypes
+    ) -> bool:
+        """
+        同时更新符号的规范化名称和可见性
+        
+        Args:
+            symbol_table: 符号表
+            symbol_uid: 符号UID
+            normalized_name: 规范化名称
+            visibility: 可见性
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        symbol = symbol_table.get_symbol_by_uid(symbol_uid)
+        if symbol is None:
+            return False
+        
+        symbol.normalized_name = normalized_name
+        symbol.visibility = visibility
+        return True
+    
+    def add_symbol_reference_to_behavior(
+        self,
+        symbol_table: FileSymbolTable,
+        behavior_uid: int,
+        ref_symbol_name: str,
+        line_number: int = 0,
+        context: str = ""
+    ) -> bool:
+        """
+        向BehaviorStepNode添加新的符号引用
+        这个方法用于添加隐式符号引用，即通过AI智能解析后添加的引用
+        
+        Args:
+            symbol_table: 符号表
+            behavior_uid: BehaviorStepNode的UID
+            ref_symbol_name: 引用的符号名称
+            line_number: 行号（可选）
+            context: 上下文信息（可选）
+            
+        Returns:
+            bool: 添加是否成功
+        """
+        # 验证behavior节点存在
+        if behavior_uid not in self.ast_dict:
+            return False
+        
+        node = self.ast_dict[behavior_uid]
+        if not isinstance(node, BehaviorStepNode):
+            return False
+        
+        # 向AST节点添加符号引用
+        if ref_symbol_name not in node.symbol_refs:
+            node.symbol_refs.append(ref_symbol_name)
+        
+        # 向符号表添加符号引用记录
+        ref = SymbolReference(
+            ref_symbol_name=ref_symbol_name,
+            ref_type=ReferenceType.BEHAVIOR_REF,
+            source_uid=behavior_uid,
+            line_number=line_number if line_number > 0 else node.line_number,
+            context=context if context else node.content
+        )
+        symbol_table.add_reference(ref)
+        
+        return True
+
