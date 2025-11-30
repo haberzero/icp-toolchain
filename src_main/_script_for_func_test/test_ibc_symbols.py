@@ -19,7 +19,7 @@ from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
 from utils.ibc_analyzer.ibc_symbol_processor import IbcSymbolProcessor
 from typedef.ibc_data_types import (
-    SymbolNode, SymbolType, FileSymbolTable, SymbolReference, 
+    SymbolNode, SymbolType, FileSymbolTable, SymbolRefNode, 
     ReferenceType, VisibilityTypes
 )
 
@@ -79,7 +79,7 @@ def test_symbol_reference_basics():
     
     try:
         # 创建引用
-        ref = SymbolReference(
+        ref = SymbolRefNode(
             ref_symbol_name="json.dumps",
             ref_type=ReferenceType.BEHAVIOR_REF,
             source_uid=10,
@@ -89,7 +89,7 @@ def test_symbol_reference_basics():
         
         # 序列化/反序列化
         ref_dict = ref.to_dict()
-        ref2 = SymbolReference.from_dict(ref_dict)
+        ref2 = SymbolRefNode.from_dict(ref_dict)
         
         assert ref2.ref_symbol_name == ref.ref_symbol_name
         assert ref2.ref_type == ref.ref_type
@@ -121,7 +121,7 @@ def test_file_symbol_table_basics():
         table.add_symbol(symbol1)
         
         # 添加引用
-        ref1 = SymbolReference(
+        ref1 = SymbolRefNode(
             ref_symbol_name="BaseManager",
             ref_type=ReferenceType.CLASS_INHERIT,
             source_uid=1, line_number=1

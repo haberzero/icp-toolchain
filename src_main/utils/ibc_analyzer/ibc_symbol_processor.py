@@ -6,7 +6,7 @@ IBC符号提取模块
 from typing import Dict, Optional
 from typedef.ibc_data_types import (
     IbcBaseAstNode, ClassNode, FunctionNode, VariableNode, ModuleNode, BehaviorStepNode,
-    VisibilityTypes, SymbolNode, SymbolType, FileSymbolTable, SymbolReference, ReferenceType
+    VisibilityTypes, SymbolNode, SymbolType, FileSymbolTable, SymbolRefNode, ReferenceType
 )
 
 
@@ -93,7 +93,7 @@ class IbcSymbolProcessor:
         
         return None
     
-    def _extract_references_from_node(self, uid: int, node: IbcBaseAstNode) -> list[SymbolReference]:
+    def _extract_references_from_node(self, uid: int, node: IbcBaseAstNode) -> list[SymbolRefNode]:
         """
         从AST节点提取符号引用
         
@@ -109,7 +109,7 @@ class IbcSymbolProcessor:
         # 1. 从BehaviorStepNode提取行为描述中的符号引用
         if isinstance(node, BehaviorStepNode):
             for ref_name in node.symbol_refs:
-                references.append(SymbolReference(
+                references.append(SymbolRefNode(
                     ref_symbol_name=ref_name,
                     ref_type=ReferenceType.BEHAVIOR_REF,
                     source_uid=uid,
@@ -120,7 +120,7 @@ class IbcSymbolProcessor:
         # 2. 从ModuleNode提取模块调用
         elif isinstance(node, ModuleNode):
             if node.identifier:  # 模块名称本身就是一个引用
-                references.append(SymbolReference(
+                references.append(SymbolRefNode(
                     ref_symbol_name=node.identifier,
                     ref_type=ReferenceType.MODULE_CALL,
                     source_uid=uid,
@@ -132,7 +132,7 @@ class IbcSymbolProcessor:
         elif isinstance(node, ClassNode):
             for parent_class, inherit_desc in node.inh_params.items():
                 if parent_class:  # 确保父类名不为空
-                    references.append(SymbolReference(
+                    references.append(SymbolRefNode(
                         ref_symbol_name=parent_class,
                         ref_type=ReferenceType.CLASS_INHERIT,
                         source_uid=uid,
@@ -254,7 +254,7 @@ class IbcSymbolProcessor:
             node.symbol_refs.append(ref_symbol_name)
         
         # 向符号表添加符号引用记录
-        ref = SymbolReference(
+        ref = SymbolRefNode(
             ref_symbol_name=ref_symbol_name,
             ref_type=ReferenceType.BEHAVIOR_REF,
             source_uid=behavior_uid,
