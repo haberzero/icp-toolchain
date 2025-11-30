@@ -19,7 +19,7 @@ from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
 from utils.ibc_analyzer.ibc_symbol_processor import IbcSymbolProcessor
 from typedef.ibc_data_types import (
-    SymbolNode, SymbolType, FileSymbolTable, SymbolRefNode, 
+    SymbolNode, SymbolType, FileSymbolTable, SymbolRefInfo, 
     ReferenceType, VisibilityTypes
 )
 
@@ -71,7 +71,7 @@ def test_symbol_node_basics():
         return False
 
 
-def test_symbol_reference_basics():
+def test_symbol_ref_node_basics():
     """测试SymbolReference基本功能"""
     print("=" * 60)
     print("测试 SymbolReference 基本功能")
@@ -79,7 +79,7 @@ def test_symbol_reference_basics():
     
     try:
         # 创建引用
-        ref = SymbolRefNode(
+        ref = SymbolRefInfo(
             ref_symbol_name="json.dumps",
             ref_type=ReferenceType.BEHAVIOR_REF,
             source_uid=10,
@@ -89,7 +89,7 @@ def test_symbol_reference_basics():
         
         # 序列化/反序列化
         ref_dict = ref.to_dict()
-        ref2 = SymbolRefNode.from_dict(ref_dict)
+        ref2 = SymbolRefInfo.from_dict(ref_dict)
         
         assert ref2.ref_symbol_name == ref.ref_symbol_name
         assert ref2.ref_type == ref.ref_type
@@ -121,7 +121,7 @@ def test_file_symbol_table_basics():
         table.add_symbol(symbol1)
         
         # 添加引用
-        ref1 = SymbolRefNode(
+        ref1 = SymbolRefInfo(
             ref_symbol_name="BaseManager",
             ref_type=ReferenceType.CLASS_INHERIT,
             source_uid=1, line_number=1
@@ -130,14 +130,14 @@ def test_file_symbol_table_basics():
         
         # 验证
         assert table.has_symbol("UserManager")
-        assert len(table.symbol_references) == 1
+        assert len(table.symbol_ref_nodes) == 1
         
         # 序列化/反序列化
         table_dict = table.to_dict()
         table2 = FileSymbolTable.from_dict(table_dict)
         
         assert len(table2.symbols) == 1
-        assert len(table2.symbol_references) == 1
+        assert len(table2.symbol_ref_nodes) == 1
         
         print("\n[通过] FileSymbolTable 基本功能测试通过\n")
         return True
@@ -456,7 +456,7 @@ class DataProcessor(BaseProcessor: 基础处理器):
         
         # 验证
         assert len(restored_table.symbols) == len(symbol_table.symbols)
-        assert len(restored_table.symbol_references) == len(symbol_table.symbol_references)
+        assert len(restored_table.symbol_ref_nodes) == len(symbol_table.symbol_ref_nodes)
         
         # 验证符号
         for name in symbol_table.symbols.keys():
@@ -466,12 +466,12 @@ class DataProcessor(BaseProcessor: 基础处理器):
             assert original.symbol_type == restored.symbol_type
         
         # 验证引用
-        for orig_ref, rest_ref in zip(symbol_table.symbol_references, restored_table.symbol_references):
+        for orig_ref, rest_ref in zip(symbol_table.symbol_ref_nodes, restored_table.symbol_ref_nodes):
             assert orig_ref.ref_symbol_name == rest_ref.ref_symbol_name
             assert orig_ref.ref_type == rest_ref.ref_type
         
         print(f"\n符号数: {len(table_dict['symbols'])}")
-        print(f"引用数: {len(table_dict['symbol_references'])}")
+        print(f"引用数: {len(table_dict['symbol_ref_nodes'])}")
         print("\n[通过] 符号表序列化测试通过\n")
         return True
     except Exception as e:
@@ -520,7 +520,7 @@ class UserService(BaseService: 基础服务类):
         
         all_symbols = symbol_table.get_all_symbols()
         print(f"  提取符号数: {len(all_symbols)}")
-        print(f"  提取引用数: {len(symbol_table.symbol_references)}")
+        print(f"  提取引用数: {len(symbol_table.symbol_ref_nodes)}")
         
         # 步骤2: 验证初始状态
         print("\n步骤2: 验证符号初始状态...")
@@ -552,7 +552,7 @@ class UserService(BaseService: 基础服务类):
         # 步骤5: 序列化
         print("\n步骤5: 序列化符号表...")
         table_dict = symbol_table.to_dict()
-        print(f"  序列化完成，符号数: {len(table_dict['symbols'])}, 引用数: {len(table_dict['symbol_references'])}")
+        print(f"  序列化完成，符号数: {len(table_dict['symbols'])}, 引用数: {len(table_dict['symbol_ref_nodes'])}")
         
         # 步骤6: 反序列化并验证
         print("\n步骤6: 反序列化并验证...")
@@ -604,7 +604,7 @@ if __name__ == "__main__":
     test_groups = [
         ("数据类型基础测试", [
             ("SymbolNode基本功能", test_symbol_node_basics),
-            ("SymbolReference基本功能", test_symbol_reference_basics),
+            ("SymbolReference基本功能", test_symbol_ref_node_basics),
             ("FileSymbolTable基本功能", test_file_symbol_table_basics),
         ]),
         ("符号提取测试", [

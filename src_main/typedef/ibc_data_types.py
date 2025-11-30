@@ -370,47 +370,12 @@ class SymbolNode:
         self.normalized_name = normalized_name
         self.visibility = visibility
 
-
-@dataclass
-class SymbolRefNode:
-    """符号引用记录类，用于记录符号的使用位置"""
-    ref_symbol_name: str = ""  # 引用的符号名称
-    ref_type: ReferenceType = ReferenceType.BEHAVIOR_REF  # 引用类型
-    source_uid: int = 0  # 引用源节点的UID
-    line_number: int = 0  # 引用所在行号
-    context: str = ""  # 引用上下文信息（可选）
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """将符号引用转换为字典表示"""
-        return {
-            "ref_symbol_name": self.ref_symbol_name,
-            "ref_type": self.ref_type.value,
-            "source_uid": self.source_uid,
-            "line_number": self.line_number,
-            "context": self.context
-        }
-    
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'SymbolRefNode':
-        """从字典创建符号引用"""
-        return SymbolRefNode(
-            ref_symbol_name=data.get("ref_symbol_name", ""),
-            ref_type=ReferenceType(data.get("ref_type", ReferenceType.BEHAVIOR_REF.value)),
-            source_uid=data.get("source_uid", 0),
-            line_number=data.get("line_number", 0),
-            context=data.get("context", "")
-        )
-    
-    def __repr__(self):
-        return f"SymbolReference(ref={self.ref_symbol_name}, type={self.ref_type}, uid={self.source_uid})"
-
-
 @dataclass
 class FileSymbolTable:
     """文件符号表类，包含符号声明表和符号使用表"""
-    symbols: Dict[int, SymbolNode] = field(default_factory=dict)  # key为uid，符号声明表
     symbol_name_to_uid: Dict[str, int] = field(default_factory=dict)  # 符号名到uid的映射
-    symbol_references: List[SymbolRefNode] = field(default_factory=list)  # 符号使用表
+    symbols: Dict[int, SymbolNode] = field(default_factory=dict)  # key为uid，符号声明表
+    symbol_ref_nodes: Dict[int, SymbolRefInfo] = field(default_factory=dict)  # 符号使用表
     
     def to_dict(self) -> Dict[str, Any]:
         """将文件符号表转换为字典表示"""
@@ -418,14 +383,14 @@ class FileSymbolTable:
         for uid, symbol in self.symbols.items():
             symbols_dict[str(uid)] = symbol.to_dict()
         
-        references_list = []
-        for ref in self.symbol_references:
-            references_list.append(ref.to_dict())
+        symbols_ref_dict = {}
+        for uid, ref_node in self.symbol_ref_nodes.items():
+            symbols_ref_dict[str(uid)] = ref_node.to_dict()
         
         return {
-            "symbols": symbols_dict,
             "symbol_name_to_uid": self.symbol_name_to_uid,
-            "symbol_references": references_list
+            "symbols": symbols_dict,
+            "symbol_ref_nodes": symbols_ref_dict
         }
     
     @staticmethod
@@ -445,18 +410,18 @@ class FileSymbolTable:
         symbol_name_to_uid = data.get("symbol_name_to_uid", {})
         
         # 加载符号引用
-        for ref_dict in data.get("symbol_references", []):
-            ref = SymbolRefNode.from_dict(ref_dict)
+        for ref_dict in data.get("symbol_ref_nodes", []):
+            ref = SymbolRefInfo.from_dict(ref_dict)
             references.append(ref)
         
         return FileSymbolTable(
             symbols=symbols,
             symbol_name_to_uid=symbol_name_to_uid,
-            symbol_references=references
+            symbol_ref_nodes=references
         )
     
     def __repr__(self):
-        return f"FileSymbolTable(symbols_count={len(self.symbols)}, references_count={len(self.symbol_references)})"
+        return f"FileSymbolTable(symbols_count={len(self.symbols)}, references_count={len(self.symbol_ref_nodes)})"
     
     def add_symbol(self, symbol: SymbolNode) -> None:
         """添加符号"""
@@ -509,15 +474,3 @@ class FileSymbolTable:
                 unnormalized_symbols[uid] = symbol
         
         return unnormalized_symbols
-    
-    def add_reference(self, reference: SymbolRefNode) -> None:
-        """添加符号引用"""
-        self.symbol_references.append(reference)
-    
-    def get_references_by_symbol(self, symbol_name: str) -> List[SymbolRefNode]:
-        """获取指定符号的所有引用"""
-        return [ref for ref in self.symbol_references if ref.ref_symbol_name == symbol_name]
-    
-    def get_references_by_type(self, ref_type: ReferenceType) -> List[SymbolRefNode]:
-        """获取指定类型的所有引用"""
-        return [ref for ref in self.symbol_references if ref.ref_type == ref_type]

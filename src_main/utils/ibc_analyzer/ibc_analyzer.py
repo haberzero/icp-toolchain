@@ -6,8 +6,7 @@ from utils.ibc_analyzer.ibc_parser import IbcParser
 from utils.ibc_analyzer.ibc_symbol_processor import IbcSymbolProcessor
 
 from typedef.ibc_data_types import IbcBaseAstNode
-from typedef.exception_types import IbcAnalyzerError, LexerError, IbcParserError
-
+from typedef.exception_types import IbcAnalyzerError
 
 
 def analyze_ibc_code(text: str) -> Tuple[bool, Optional[Dict], Optional[Dict]]:
