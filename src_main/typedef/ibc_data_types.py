@@ -200,7 +200,7 @@ class SymbolNode:
             "uid": self.uid,
             "symbol_name": self.symbol_name,
             "normalized_name": self.normalized_name,
-            "visibility": self.visibility.value if isinstance(self.visibility, VisibilityTypes) else self.visibility,
+            "visibility": self.visibility.value,
             "description": self.description,
             "symbol_type": self.symbol_type.value,
             "parameters": self.parameters
@@ -249,7 +249,7 @@ class SymbolNode:
 class FileSymbolTable(dict):
     """文件符号表类，直接继承dict，以符号名为key，SymbolNode为value"""
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> Dict[str, SymbolNode]:
         """将文件符号表转换为字典表示"""
         symbols_dict = {}
         for symbol_name, symbol in self.items():
@@ -274,18 +274,13 @@ class FileSymbolTable(dict):
     
     def add_symbol(self, symbol: SymbolNode) -> None:
         """添加符号"""
+        if symbol.symbol_name in self:
+            print(f"警告: 符号名 {symbol.symbol_name} 已存在，将被覆盖")
         self[symbol.symbol_name] = symbol
     
     def get_symbol(self, symbol_name: str) -> Optional[SymbolNode]:
         """根据符号名获取符号"""
         return self.get(symbol_name)
-    
-    def get_symbol_by_uid(self, uid: int) -> Optional[SymbolNode]:
-        """根据uid获取符号（兼容旧代码，遍历查找）"""
-        for symbol in self.values():
-            if symbol.uid == uid:
-                return symbol
-        return None
     
     def remove_symbol(self, symbol_name: str) -> None:
         """移除符号"""
