@@ -110,21 +110,8 @@ class IbcDataStore:
         Returns:
             AstNode: 创建的节点对象
         """
-        class_type = node_dict.get("_class_type", "AstNode")
-        
-        # 根据类型创建相应的节点对象
-        if class_type == "ModuleNode":
-            return ModuleNode.from_dict(node_dict)
-        elif class_type == "ClassNode":
-            return ClassNode.from_dict(node_dict)
-        elif class_type == "FunctionNode":
-            return FunctionNode.from_dict(node_dict)
-        elif class_type == "VariableNode":
-            return VariableNode.from_dict(node_dict)
-        elif class_type == "BehaviorStepNode":
-            return BehaviorStepNode.from_dict(node_dict)
-        else:
-            return IbcBaseAstNode.from_dict(node_dict)
+        return IbcBaseAstNode.from_dict(node_dict)
+
     
     def get_current_ast(self) -> Dict[int, IbcBaseAstNode]:
         """获取当前的AST字典"""
