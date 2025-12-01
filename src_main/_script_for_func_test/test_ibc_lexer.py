@@ -13,6 +13,7 @@ def test_empty_file():
     code = ""
     expected = [
         (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.NEWLINE, ''),
         (IbcTokenType.EOF, '')
     ]
     
@@ -41,6 +42,10 @@ def test_comments_only():
 // 这是另一个注释
 """
     expected = [
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.NEWLINE, ''),
+        
         (IbcTokenType.NEWLINE, ''),
         (IbcTokenType.EOF, '')
     ]

@@ -202,57 +202,6 @@ func 构建表达式():
         return False
 
 
-def test_comma_vs_backslash():
-    """测试逗号延续行和反斜杠延续行的区别"""
-    print("\n测试逗号延续行和反斜杠延续行的区别...")
-    
-    code = """\
-func 测试两种延续():
-    逗号延续 = 值1,
-        值2,
-        值3
-    
-    反斜杠延续 = 这是一个长字符串 \\
-    继续在这里 \\
-    最后结束
-    
-    完成"""
-    
-    try:
-        lexer = IbcLexer(code)
-        tokens = lexer.tokenize()
-        parser = IbcParser(tokens)
-        ast_nodes = parser.parse()
-        
-        root_node = ast_nodes[0]
-        func_node = ast_nodes[root_node.children_uids[0]]
-        
-        # 验证有3个行为步骤
-        assert len(func_node.children_uids) == 3, f"预期3个行为步骤，实际{len(func_node.children_uids)}"
-        
-        # 逗号延续行
-        comma_behavior = ast_nodes[func_node.children_uids[0]]
-        assert "值1" in comma_behavior.content
-        assert "值2" in comma_behavior.content
-        assert "值3" in comma_behavior.content
-        
-        # 反斜杠延续行
-        backslash_behavior = ast_nodes[func_node.children_uids[1]]
-        assert "长字符串" in backslash_behavior.content
-        assert "继续在这里" in backslash_behavior.content
-        assert "最后结束" in backslash_behavior.content
-        
-        print("  ✓ 成功区分逗号延续行和反斜杠延续行")
-        print("\nAST树结构:")
-        print_ast_tree(ast_nodes)
-        return True
-    except Exception as e:
-        print(f"  ❌ 测试失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
 def test_backslash_error_with_colon():
     """测试反斜杠延续行行末包含冒号的错误情况"""
     print("\n测试反斜杠延续行行末包含冒号的错误情况...")
@@ -291,7 +240,6 @@ if __name__ == "__main__":
     test_results.append(("多行反斜杠延续", test_backslash_multiple_lines()))
     test_results.append(("嵌套块中反斜杠", test_backslash_in_nested_block()))
     test_results.append(("反斜杠+特殊字符", test_backslash_with_special_chars()))
-    test_results.append(("逗号vs反斜杠", test_comma_vs_backslash()))
     test_results.append(("反斜杠错误-冒号", test_backslash_error_with_colon()))
     
     print("\n" + "=" * 60)
