@@ -11,7 +11,7 @@ from typing import Dict, Any
 from typedef.ibc_data_types import (
     IbcBaseAstNode, AstNodeType, ModuleNode, ClassNode, 
     FunctionNode, VariableNode, BehaviorStepNode,
-    SymbolNode, FileSymbolTable
+    SymbolNode, FileSymbolTable, VisibilityTypes
 )
 from typedef.cmd_data_types import Colors
 
@@ -243,7 +243,7 @@ class IbcDataStore:
         file_path: str,
         symbol_name: str,
         normalized_name: str,
-        visibility: str
+        visibility: VisibilityTypes
     ) -> bool:
         """
         更新符号的规范化信息
@@ -253,7 +253,7 @@ class IbcDataStore:
             file_path: 文件相对路径
             symbol_name: 符号名称
             normalized_name: 规范化名称
-            visibility: 可见性
+            visibility: 可见性枚举类型
             
         Returns:
             bool: 更新是否成功

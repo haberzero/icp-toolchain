@@ -98,10 +98,15 @@ def test_ast_basic_persistence():
     # 保存AST到文件
     print("\n2. 保存AST到文件...")
     ast_manager = get_ibc_data_store()
-    test_file_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), 
-        "test_ast_output.json"
+    
+    # 使用_dev_temp目录
+    dev_temp_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "_dev_temp"
     )
+    os.makedirs(dev_temp_dir, exist_ok=True)
+    
+    test_file_path = os.path.join(dev_temp_dir, "test_ast_output.json")
     
     success = ast_manager.save_ast_to_file(ast_dict, test_file_path)
     if not success:
@@ -227,10 +232,15 @@ class User():
     # 2. 保存AST到文件
     print("\n2. 保存AST到文件...")
     ast_manager = get_ibc_data_store()
-    save_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "user_management_ast.json"
+    
+    # 使用_dev_temp目录
+    dev_temp_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "_dev_temp"
     )
+    os.makedirs(dev_temp_dir, exist_ok=True)
+    
+    save_path = os.path.join(dev_temp_dir, "user_management_ast.json")
     
     success = ast_manager.save_ast_to_file(ast_dict, save_path)
     if not success:
