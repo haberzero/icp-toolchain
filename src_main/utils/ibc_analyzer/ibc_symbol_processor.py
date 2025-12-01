@@ -6,7 +6,7 @@ IBC符号提取模块
 from typing import Dict, Optional
 from typedef.ibc_data_types import (
     IbcBaseAstNode, ClassNode, FunctionNode, VariableNode, ModuleNode, BehaviorStepNode,
-    VisibilityTypes, SymbolNode, SymbolType, FileSymbolTable, SymbolRefInfo, ReferenceType
+    VisibilityTypes, SymbolNode, SymbolType, FileSymbolTable
 )
 
 
@@ -21,10 +21,10 @@ class IbcSymbolProcessor:
     
     def process_symbols(self) -> FileSymbolTable:
         """
-        从AST中提取符号信息，包括符号声明和符号使用
+        从AST中提取符号信息
         
         Returns:
-            FileSymbolTable: 文件符号表对象，包含所有提取的符号声明和符号使用
+            FileSymbolTable: 文件符号表对象，包含所有提取的符号声明
 
         注意：
         - normalized_name (规范化名称)和visibility (可见性)在符号提取时不填充,
@@ -85,7 +85,7 @@ class IbcSymbolProcessor:
     def update_symbol_normalized_name(
         self, 
         symbol_table: FileSymbolTable, 
-        symbol_uid: int, 
+        symbol_name: str, 
         normalized_name: str
     ) -> bool:
         """
@@ -93,13 +93,13 @@ class IbcSymbolProcessor:
         
         Args:
             symbol_table: 符号表
-            symbol_uid: 符号UID
+            symbol_name: 符号名称
             normalized_name: 规范化名称
             
         Returns:
             bool: 更新是否成功
         """
-        symbol = symbol_table.get_symbol_by_uid(symbol_uid)
+        symbol = symbol_table.get_symbol(symbol_name)
         if symbol is None:
             return False
         
@@ -109,7 +109,7 @@ class IbcSymbolProcessor:
     def update_symbol_visibility(
         self, 
         symbol_table: FileSymbolTable, 
-        symbol_uid: int, 
+        symbol_name: str, 
         visibility: VisibilityTypes
     ) -> bool:
         """
@@ -117,13 +117,13 @@ class IbcSymbolProcessor:
         
         Args:
             symbol_table: 符号表
-            symbol_uid: 符号UID
+            symbol_name: 符号名称
             visibility: 可见性
             
         Returns:
             bool: 更新是否成功
         """
-        symbol = symbol_table.get_symbol_by_uid(symbol_uid)
+        symbol = symbol_table.get_symbol(symbol_name)
         if symbol is None:
             return False
         
@@ -133,7 +133,7 @@ class IbcSymbolProcessor:
     def update_symbol_normalized_info(
         self,
         symbol_table: FileSymbolTable,
-        symbol_uid: int,
+        symbol_name: str,
         normalized_name: str,
         visibility: VisibilityTypes
     ) -> bool:
@@ -142,64 +142,18 @@ class IbcSymbolProcessor:
         
         Args:
             symbol_table: 符号表
-            symbol_uid: 符号UID
+            symbol_name: 符号名称
             normalized_name: 规范化名称
             visibility: 可见性
             
         Returns:
             bool: 更新是否成功
         """
-        symbol = symbol_table.get_symbol_by_uid(symbol_uid)
+        symbol = symbol_table.get_symbol(symbol_name)
         if symbol is None:
             return False
         
         symbol.normalized_name = normalized_name
         symbol.visibility = visibility
-        return True
-    
-    def add_symbol_ref_node_to_behavior(
-        self,
-        symbol_table: FileSymbolTable,
-        behavior_uid: int,
-        ref_symbol_name: str,
-        line_number: int = 0,
-        context: str = ""
-    ) -> bool:
-        """
-        向BehaviorStepNode添加新的符号引用
-        这个方法用于添加隐式符号引用，即通过AI智能解析后添加的引用
-        
-        Args:
-            symbol_table: 符号表
-            behavior_uid: BehaviorStepNode的UID
-            ref_symbol_name: 引用的符号名称
-            line_number: 行号（可选）
-            context: 上下文信息（可选）
-            
-        Returns:
-            bool: 添加是否成功
-        """
-        # 验证behavior节点存在
-        if behavior_uid not in self.ast_dict:
-            return False
-        
-        node = self.ast_dict[behavior_uid]
-        if not isinstance(node, BehaviorStepNode):
-            return False
-        
-        # 向AST节点添加符号引用
-        if ref_symbol_name not in node.symbol_refs:
-            node.symbol_refs.append(ref_symbol_name)
-        
-        # 向符号表添加符号引用记录
-        ref = SymbolRefInfo(
-            ref_symbol_name=ref_symbol_name,
-            ref_type=ReferenceType.BEHAVIOR_REF,
-            source_uid=behavior_uid,
-            line_number=line_number if line_number > 0 else node.line_number,
-            context=context if context else node.content
-        )
-        symbol_table.add_reference(ref)
-        
         return True
 

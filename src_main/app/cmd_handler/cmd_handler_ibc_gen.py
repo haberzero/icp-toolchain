@@ -763,14 +763,14 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             # 加载依赖文件的符号表
             dep_symbol_table = ibc_data_store.load_file_symbols(work_ibc_dir_path, dep_file)
             
-            if not dep_symbol_table.symbols:
+            if len(dep_symbol_table) == 0:
                 # TODO: 不应该直接continue 虽然理论上来说不应该进入这里
                 continue
             
             lines.append(f"来自文件：{dep_file}")
             
             has_visible_symbols = False
-            for uid, symbol in dep_symbol_table.symbols.items():
+            for symbol_name, symbol in dep_symbol_table.items():
                 # 检查符号可见性
                 # 1. 如果未规范化，也列出来（供生成时参考）
                 # 2. 如果已规范化，仅列出对外可见的符号

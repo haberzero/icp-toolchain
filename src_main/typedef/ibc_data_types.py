@@ -1,7 +1,7 @@
 from enum import Enum
 import enum
 from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 
 
 # ====== Lexer 模块 数据类型定义 ======
@@ -70,24 +70,30 @@ class IbcBaseAstNode:
     
     def to_dict(self) -> Dict[str, Any]:
         """将节点转换为字典表示"""
-        return {
-            "uid": self.uid,
-            "parent_uid": self.parent_uid,
-            "children_uids": self.children_uids,
-            "node_type": self.node_type.value if self.node_type else None,
-            "line_number": self.line_number
-        }
+        result = {}
+        for f in fields(self):
+            value = getattr(self, f.name)
+            if isinstance(value, Enum):
+                result[f.name] = value.value
+            else:
+                result[f.name] = value
+        return result
     
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'IbcBaseAstNode':
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'IbcBaseAstNode':
         """从字典创建节点"""
-        return IbcBaseAstNode(
-            uid=data.get("uid", 0),
-            parent_uid=data.get("parent_uid", 0),
-            children_uids=data.get("children_uids", []),
-            node_type=AstNodeType(data["node_type"]) if data.get("node_type") else AstNodeType.DEFAULT,
-            line_number=data.get("line_number", 0)
-        )
+        init_kwargs = {}
+        for f in fields(cls):
+            if f.name not in data:
+                continue
+            value = data[f.name]
+            if f.type is AstNodeType:
+                value = AstNodeType(value) if value else AstNodeType.DEFAULT
+            elif hasattr(f.type, '__origin__') and f.type.__origin__ is list:
+                # 简单处理 List[T]
+                value = list(value) if value else []
+            init_kwargs[f.name] = value
+        return cls(**init_kwargs)
 
     def __repr__(self):
         return f"AstNode(uid={self.uid}, type={self.node_type})"
@@ -105,31 +111,9 @@ class IbcBaseAstNode:
 
 @dataclass
 class ModuleNode(IbcBaseAstNode):
-    """Module节点类"""
+    """模块节点类"""
     identifier: str = ""
     content: str = ""
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """将节点转换为字典表示"""
-        result = super().to_dict()
-        result.update({
-            "identifier": self.identifier,
-            "content": self.content
-        })
-        return result
-    
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'ModuleNode':
-        """从字典创建节点"""
-        return ModuleNode(
-            uid=data.get("uid", 0),
-            parent_uid=data.get("parent_uid", 0),
-            children_uids=data.get("children_uids", []),
-            node_type=AstNodeType(data["node_type"]) if data.get("node_type") else AstNodeType.MODULE,
-            line_number=data.get("line_number", 0),
-            identifier=data.get("identifier", ""),
-            content=data.get("content", "")
-        )
 
     def __repr__(self):
         return f"ModuleNode(uid={self.uid}, identifier={self.identifier})"
@@ -137,37 +121,11 @@ class ModuleNode(IbcBaseAstNode):
 
 @dataclass
 class ClassNode(IbcBaseAstNode):
-    """Class节点类"""
+    """类节点类"""
     identifier: str = ""
     external_desc: str = ""
     intent_comment: str = ""
     inh_params: Dict[str, str] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """将节点转换为字典表示"""
-        result = super().to_dict()
-        result.update({
-            "identifier": self.identifier,
-            "external_desc": self.external_desc,
-            "intent_comment": self.intent_comment,
-            "params": self.inh_params
-        })
-        return result
-    
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'ClassNode':
-        """从字典创建节点"""
-        return ClassNode(
-            uid=data.get("uid", 0),
-            parent_uid=data.get("parent_uid", 0),
-            children_uids=data.get("children_uids", []),
-            node_type=AstNodeType(data["node_type"]) if data.get("node_type") else AstNodeType.CLASS,
-            line_number=data.get("line_number", 0),
-            identifier=data.get("identifier", ""),
-            external_desc=data.get("external_desc", ""),
-            intent_comment=data.get("intent_comment", ""),
-            inh_params=data.get("params", {})
-        )
 
     def __repr__(self):
         return f"ClassNode(uid={self.uid}, identifier={self.identifier})"
@@ -175,37 +133,11 @@ class ClassNode(IbcBaseAstNode):
 
 @dataclass
 class FunctionNode(IbcBaseAstNode):
-    """Function节点类"""
+    """函数节点类"""
     identifier: str = ""
     external_desc: str = ""
     intent_comment: str = ""
     params: Dict[str, str] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """将节点转换为字典表示"""
-        result = super().to_dict()
-        result.update({
-            "identifier": self.identifier,
-            "external_desc": self.external_desc,
-            "intent_comment": self.intent_comment,
-            "params": self.params
-        })
-        return result
-    
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'FunctionNode':
-        """从字典创建节点"""
-        return FunctionNode(
-            uid=data.get("uid", 0),
-            parent_uid=data.get("parent_uid", 0),
-            children_uids=data.get("children_uids", []),
-            node_type=AstNodeType(data["node_type"]) if data.get("node_type") else AstNodeType.FUNCTION,
-            line_number=data.get("line_number", 0),
-            identifier=data.get("identifier", ""),
-            external_desc=data.get("external_desc", ""),
-            intent_comment=data.get("intent_comment", ""),
-            params=data.get("params", {})
-        )
 
     def __repr__(self):
         return f"FunctionNode(uid={self.uid}, identifier={self.identifier})"
@@ -213,37 +145,11 @@ class FunctionNode(IbcBaseAstNode):
 
 @dataclass
 class VariableNode(IbcBaseAstNode):
-    """Variable节点类"""
+    """变量节点类"""
     identifier: str = ""
     content: str = ""
     external_desc: str = ""
     intent_comment: str = ""
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """将节点转换为字典表示"""
-        result = super().to_dict()
-        result.update({
-            "identifier": self.identifier,
-            "content": self.content,
-            "external_desc": self.external_desc,
-            "intent_comment": self.intent_comment
-        })
-        return result
-    
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'VariableNode':
-        """从字典创建节点"""
-        return VariableNode(
-            uid=data.get("uid", 0),
-            parent_uid=data.get("parent_uid", 0),
-            children_uids=data.get("children_uids", []),
-            node_type=AstNodeType(data["node_type"]) if data.get("node_type") else AstNodeType.VARIABLE,
-            line_number=data.get("line_number", 0),
-            identifier=data.get("identifier", ""),
-            content=data.get("content", ""),
-            external_desc=data.get("external_desc", ""),
-            intent_comment=data.get("intent_comment", "")
-        )
 
     def __repr__(self):
         return f"VariableNode(uid={self.uid}, identifier={self.identifier})"
@@ -251,34 +157,10 @@ class VariableNode(IbcBaseAstNode):
 
 @dataclass
 class BehaviorStepNode(IbcBaseAstNode):
-    """BehaviorStep节点类"""
+    """行为步骤节点类"""
     content: str = ""
     symbol_refs: List[str] = field(default_factory=list)
     new_block_flag: bool = False
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """将节点转换为字典表示"""
-        result = super().to_dict()
-        result.update({
-            "content": self.content,
-            "symbol_refs": self.symbol_refs,
-            "new_block_flag": self.new_block_flag
-        })
-        return result
-    
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'BehaviorStepNode':
-        """从字典创建节点"""
-        return BehaviorStepNode(
-            uid=data.get("uid", 0),
-            parent_uid=data.get("parent_uid", 0),
-            children_uids=data.get("children_uids", []),
-            node_type=AstNodeType(data["node_type"]) if data.get("node_type") else AstNodeType.BEHAVIOR_STEP,
-            line_number=data.get("line_number", 0),
-            content=data.get("content", ""),
-            symbol_refs=data.get("symbol_refs", []),
-            new_block_flag=data.get("new_block_flag", False)
-        )
 
     def __repr__(self):
         return f"BehaviorStepNode(uid={self.uid})"
@@ -299,13 +181,6 @@ class SymbolType(Enum):
     CLASS = "class"
     FUNCTION = "func"
     VARIABLE = "var"
-
-
-class ReferenceType(Enum):
-    """符号引用类型枚举"""
-    BEHAVIOR_REF = "behavior_ref"  # 行为描述中的引用
-    MODULE_CALL = "module_call"  # 模块调用
-    CLASS_INHERIT = "class_inherit"  # 类继承
 
 
 @dataclass
@@ -370,107 +245,74 @@ class SymbolNode:
         self.normalized_name = normalized_name
         self.visibility = visibility
 
-@dataclass
-class FileSymbolTable:
-    """文件符号表类，包含符号声明表和符号使用表"""
-    symbol_name_to_uid: Dict[str, int] = field(default_factory=dict)  # 符号名到uid的映射
-    symbols: Dict[int, SymbolNode] = field(default_factory=dict)  # key为uid，符号声明表
-    symbol_ref_nodes: Dict[int, SymbolRefInfo] = field(default_factory=dict)  # 符号使用表
+
+class FileSymbolTable(dict):
+    """文件符号表类，直接继承dict，以符号名为key，SymbolNode为value"""
     
     def to_dict(self) -> Dict[str, Any]:
         """将文件符号表转换为字典表示"""
         symbols_dict = {}
-        for uid, symbol in self.symbols.items():
-            symbols_dict[str(uid)] = symbol.to_dict()
+        for symbol_name, symbol in self.items():
+            symbols_dict[symbol_name] = symbol.to_dict()
         
-        symbols_ref_dict = {}
-        for uid, ref_node in self.symbol_ref_nodes.items():
-            symbols_ref_dict[str(uid)] = ref_node.to_dict()
-        
-        return {
-            "symbol_name_to_uid": self.symbol_name_to_uid,
-            "symbols": symbols_dict,
-            "symbol_ref_nodes": symbols_ref_dict
-        }
+        return symbols_dict
     
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> 'FileSymbolTable':
         """从字典创建文件符号表"""
-        symbols = {}
-        references = []
-        symbol_name_to_uid = {}
+        symbol_table = FileSymbolTable()
         
-        # 加载符号表（以uid为索引）
-        for uid_str, symbol_dict in data.get("symbols", {}).items():
-            uid = int(uid_str)
+        # 直接加载符号字典（以符号名为索引）
+        for symbol_name, symbol_dict in data.items():
             symbol_node = SymbolNode.from_dict(symbol_dict)
-            symbols[uid] = symbol_node
+            symbol_table[symbol_name] = symbol_node
         
-        # 加载symbol_name_to_uid映射
-        symbol_name_to_uid = data.get("symbol_name_to_uid", {})
-        
-        # 加载符号引用
-        for ref_dict in data.get("symbol_ref_nodes", []):
-            ref = SymbolRefInfo.from_dict(ref_dict)
-            references.append(ref)
-        
-        return FileSymbolTable(
-            symbols=symbols,
-            symbol_name_to_uid=symbol_name_to_uid,
-            symbol_ref_nodes=references
-        )
+        return symbol_table
     
     def __repr__(self):
-        return f"FileSymbolTable(symbols_count={len(self.symbols)}, references_count={len(self.symbol_ref_nodes)})"
+        return f"FileSymbolTable(symbols_count={len(self)})"
     
     def add_symbol(self, symbol: SymbolNode) -> None:
         """添加符号"""
-        self.symbols[symbol.uid] = symbol
-        self.symbol_name_to_uid[symbol.symbol_name] = symbol.uid
+        self[symbol.symbol_name] = symbol
     
     def get_symbol(self, symbol_name: str) -> Optional[SymbolNode]:
         """根据符号名获取符号"""
-        uid = self.symbol_name_to_uid.get(symbol_name)
-        if uid is None:
-            return None
-        return self.symbols.get(uid)
+        return self.get(symbol_name)
     
     def get_symbol_by_uid(self, uid: int) -> Optional[SymbolNode]:
-        """根据uid获取符号"""
-        return self.symbols.get(uid)
+        """根据uid获取符号（兼容旧代码，遍历查找）"""
+        for symbol in self.values():
+            if symbol.uid == uid:
+                return symbol
+        return None
     
     def remove_symbol(self, symbol_name: str) -> None:
         """移除符号"""
-        uid = self.symbol_name_to_uid.get(symbol_name)
-        if uid is not None:
-            if uid in self.symbols:
-                del self.symbols[uid]
-            del self.symbol_name_to_uid[symbol_name]
+        if symbol_name in self:
+            del self[symbol_name]
     
     def has_symbol(self, symbol_name: str) -> bool:
         """检查是否包含指定符号"""
-        return symbol_name in self.symbol_name_to_uid
+        return symbol_name in self
     
-    def get_all_symbols(self) -> Dict[int, SymbolNode]:
-        """获取所有符号（按uid索引）"""
-        return self.symbols
+    def get_all_symbols(self) -> Dict[str, SymbolNode]:
+        """获取所有符号（按符号名索引）"""
+        return dict(self)
     
     def get_symbols_by_name(self) -> Dict[str, SymbolNode]:
         """获取所有符号（按symbol_name索引）
         
-        注意：返回的字典是一个新的字典，不会影响内部数据结构
+        注意：返回的字典是符号表的副本
         """
-        result = {}
-        for uid, symbol in self.symbols.items():
-            result[symbol.symbol_name] = symbol
-        return result
+        return dict(self)
     
-    def get_unnormalized_symbols(self) -> Dict[int, SymbolNode]:
+    def get_unnormalized_symbols(self) -> Dict[str, SymbolNode]:
         """获取所有未规范化的符号"""
         unnormalized_symbols = {}
         
-        for uid, symbol in self.symbols.items():
+        for symbol_name, symbol in self.items():
             if not symbol.is_normalized():
-                unnormalized_symbols[uid] = symbol
+                unnormalized_symbols[symbol_name] = symbol
         
         return unnormalized_symbols

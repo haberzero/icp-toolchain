@@ -2,12 +2,11 @@
 IBC符号系统完整测试套件
 
 测试范围：
-1. 符号数据类型（SymbolNode, SymbolReference, FileSymbolTable）
+1. 符号数据类型（SymbolNode, FileSymbolTable）
 2. 符号提取功能（从AST提取符号声明）
-3. 符号引用提取（行为引用、模块调用、类继承）
-4. 函数参数存储
-5. 符号表序列化/反序列化
-6. 符号规范化流程
+3. 函数参数存储
+4. 符号表序列化/反序列化
+5. 符号规范化流程
 """
 import sys
 import os
@@ -19,12 +18,10 @@ from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
 from utils.ibc_analyzer.ibc_symbol_processor import IbcSymbolProcessor
 from typedef.ibc_data_types import (
-    SymbolNode, SymbolType, FileSymbolTable, SymbolRefInfo, 
-    ReferenceType, VisibilityTypes
+    SymbolNode, SymbolType, FileSymbolTable, VisibilityTypes
 )
 
-
-# ==================== 数据类型基础测试 ====================
+# ==================== 数据类型基础测试 ======================================
 
 def test_symbol_node_basics():
     """测试SymbolNode基本功能"""
@@ -47,7 +44,7 @@ def test_symbol_node_basics():
         assert not symbol.is_normalized(), "新创建的符号应该未规范化"
         
         # 规范化
-        symbol.update_normalized_info_from_str("CalculateTotal", "public")
+        symbol.update_normalized_info("CalculateTotal", VisibilityTypes.PUBLIC)
         assert symbol.is_normalized(), "更新后应该已规范化"
         assert symbol.normalized_name == "CalculateTotal"
         assert symbol.visibility == VisibilityTypes.PUBLIC
@@ -71,84 +68,7 @@ def test_symbol_node_basics():
         return False
 
 
-def test_symbol_ref_node_basics():
-    """测试SymbolReference基本功能"""
-    print("=" * 60)
-    print("测试 SymbolReference 基本功能")
-    print("=" * 60)
-    
-    try:
-        # 创建引用
-        ref = SymbolRefInfo(
-            ref_symbol_name="json.dumps",
-            ref_type=ReferenceType.BEHAVIOR_REF,
-            source_uid=10,
-            line_number=5,
-            context="调用 json.dumps(data)"
-        )
-        
-        # 序列化/反序列化
-        ref_dict = ref.to_dict()
-        ref2 = SymbolRefInfo.from_dict(ref_dict)
-        
-        assert ref2.ref_symbol_name == ref.ref_symbol_name
-        assert ref2.ref_type == ref.ref_type
-        assert ref2.source_uid == ref.source_uid
-        
-        print("\n[通过] SymbolReference 基本功能测试通过\n")
-        return True
-    except Exception as e:
-        print(f"\n[失败] 测试失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def test_file_symbol_table_basics():
-    """测试FileSymbolTable基本功能"""
-    print("=" * 60)
-    print("测试 FileSymbolTable 基本功能")
-    print("=" * 60)
-    
-    try:
-        table = FileSymbolTable()
-        
-        # 添加符号
-        symbol1 = SymbolNode(
-            uid=1, symbol_name="UserManager",
-            symbol_type=SymbolType.CLASS, description="用户管理类"
-        )
-        table.add_symbol(symbol1)
-        
-        # 添加引用
-        ref1 = SymbolRefInfo(
-            ref_symbol_name="BaseManager",
-            ref_type=ReferenceType.CLASS_INHERIT,
-            source_uid=1, line_number=1
-        )
-        table.add_reference(ref1)
-        
-        # 验证
-        assert table.has_symbol("UserManager")
-        assert len(table.symbol_ref_nodes) == 1
-        
-        # 序列化/反序列化
-        table_dict = table.to_dict()
-        table2 = FileSymbolTable.from_dict(table_dict)
-        
-        assert len(table2.symbols) == 1
-        assert len(table2.symbol_ref_nodes) == 1
-        
-        print("\n[通过] FileSymbolTable 基本功能测试通过\n")
-        return True
-    except Exception as e:
-        print(f"\n[失败] 测试失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-# ==================== 符号提取测试 ====================
+# ==================== 符号提取测试 ======================================
 
 def test_basic_symbol_extraction():
     """测试基本符号提取"""
@@ -177,7 +97,7 @@ class UserManager():
         symbol_gen = IbcSymbolProcessor(ast_dict)
         symbol_table = symbol_gen.process_symbols()
         
-        all_symbols = symbol_table.get_all_symbols()
+        all_symbols = symbol_table.get_symbols_by_name()
         
         # 验证符号
         assert "userCount" in all_symbols
@@ -279,7 +199,7 @@ class ConfigManager():
         symbol_gen = IbcSymbolProcessor(ast_dict)
         symbol_table = symbol_gen.process_symbols()
         
-        all_symbols = symbol_table.get_all_symbols()
+        all_symbols = symbol_table.get_symbols_by_name()
         
         # 验证类和成员
         assert "ConfigManager" in all_symbols
@@ -291,129 +211,6 @@ class ConfigManager():
         assert all_symbols["加载配置"].description == "加载配置"
         
         print("\n[通过] 类成员符号提取测试通过\n")
-        return True
-    except Exception as e:
-        print(f"\n[失败] 测试失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-# ==================== 符号引用提取测试 ====================
-
-def test_behavior_references_extraction():
-    """测试行为引用提取"""
-    print("=" * 60)
-    print("测试行为引用提取")
-    print("=" * 60)
-    
-    code = """class UserManager():
-    func 添加用户(用户名, 密码):
-        验证 $用户名$ 和 $密码$ 格式
-        调用 $数据库.插入$($用户数据$)
-        返回成功"""
-    
-    try:
-        lexer = IbcLexer(code)
-        tokens = lexer.tokenize()
-        parser = IbcParser(tokens)
-        ast_dict = parser.parse()
-        
-        symbol_gen = IbcSymbolProcessor(ast_dict)
-        symbol_table = symbol_gen.process_symbols()
-        
-        behavior_refs = symbol_table.get_references_by_type(ReferenceType.BEHAVIOR_REF)
-        
-        ref_names = [ref.ref_symbol_name for ref in behavior_refs]
-        assert "用户名" in ref_names
-        assert "密码" in ref_names
-        assert "数据库.插入" in ref_names
-        assert "用户数据" in ref_names
-        
-        print(f"\n行为引用数: {len(behavior_refs)}")
-        print(f"引用列表: {ref_names}")
-        print("\n[通过] 行为引用提取测试通过\n")
-        return True
-    except Exception as e:
-        print(f"\n[失败] 测试失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def test_module_references_extraction():
-    """测试模块引用提取"""
-    print("=" * 60)
-    print("测试模块引用提取")
-    print("=" * 60)
-    
-    code = """module json: JSON处理库
-module requests: HTTP请求库
-module threading: 线程支持
-
-class DataProcessor():
-    func 处理数据():
-        执行处理"""
-    
-    try:
-        lexer = IbcLexer(code)
-        tokens = lexer.tokenize()
-        parser = IbcParser(tokens)
-        ast_dict = parser.parse()
-        
-        symbol_gen = IbcSymbolProcessor(ast_dict)
-        symbol_table = symbol_gen.process_symbols()
-        
-        module_refs = symbol_table.get_references_by_type(ReferenceType.MODULE_CALL)
-        
-        assert len(module_refs) == 3
-        ref_names = [ref.ref_symbol_name for ref in module_refs]
-        assert "json" in ref_names
-        assert "requests" in ref_names
-        assert "threading" in ref_names
-        
-        print(f"\n模块引用数: {len(module_refs)}")
-        print("\n[通过] 模块引用提取测试通过\n")
-        return True
-    except Exception as e:
-        print(f"\n[失败] 测试失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def test_class_inheritance_references_extraction():
-    """测试类继承引用提取"""
-    print("=" * 60)
-    print("测试类继承引用提取")
-    print("=" * 60)
-    
-    code = """class UserManager(BaseManager: 基础管理器):
-    func 添加用户():
-        执行添加
-
-class AdminManager(UserManager: 用户管理器):
-    func 删除用户():
-        执行删除"""
-    
-    try:
-        lexer = IbcLexer(code)
-        tokens = lexer.tokenize()
-        parser = IbcParser(tokens)
-        ast_dict = parser.parse()
-        
-        symbol_gen = IbcSymbolProcessor(ast_dict)
-        symbol_table = symbol_gen.process_symbols()
-        
-        inherit_refs = symbol_table.get_references_by_type(ReferenceType.CLASS_INHERIT)
-        
-        assert len(inherit_refs) == 2
-        ref_names = [ref.ref_symbol_name for ref in inherit_refs]
-        assert "BaseManager" in ref_names
-        assert "UserManager" in ref_names
-        
-        print(f"\n继承引用数: {len(inherit_refs)}")
-        print("\n[通过] 类继承引用提取测试通过\n")
         return True
     except Exception as e:
         print(f"\n[失败] 测试失败: {e}")
@@ -455,23 +252,16 @@ class DataProcessor(BaseProcessor: 基础处理器):
         restored_table = FileSymbolTable.from_dict(table_dict)
         
         # 验证
-        assert len(restored_table.symbols) == len(symbol_table.symbols)
-        assert len(restored_table.symbol_ref_nodes) == len(symbol_table.symbol_ref_nodes)
+        assert len(restored_table) == len(symbol_table)
         
         # 验证符号
-        for name in symbol_table.symbols.keys():
-            original = symbol_table.get_symbol(name)
-            restored = restored_table.get_symbol(name)
+        for symbol_name in symbol_table.keys():
+            original = symbol_table.get_symbol(symbol_name)
+            restored = restored_table.get_symbol(symbol_name)
             assert original.uid == restored.uid
             assert original.symbol_type == restored.symbol_type
         
-        # 验证引用
-        for orig_ref, rest_ref in zip(symbol_table.symbol_ref_nodes, restored_table.symbol_ref_nodes):
-            assert orig_ref.ref_symbol_name == rest_ref.ref_symbol_name
-            assert orig_ref.ref_type == rest_ref.ref_type
-        
-        print(f"\n符号数: {len(table_dict['symbols'])}")
-        print(f"引用数: {len(table_dict['symbol_ref_nodes'])}")
+        print(f"\n符号数: {len(table_dict)}")
         print("\n[通过] 符号表序列化测试通过\n")
         return True
     except Exception as e:
@@ -520,7 +310,6 @@ class UserService(BaseService: 基础服务类):
         
         all_symbols = symbol_table.get_all_symbols()
         print(f"  提取符号数: {len(all_symbols)}")
-        print(f"  提取引用数: {len(symbol_table.symbol_ref_nodes)}")
         
         # 步骤2: 验证初始状态
         print("\n步骤2: 验证符号初始状态...")
@@ -537,11 +326,12 @@ class UserService(BaseService: 基础服务类):
             "登出": ("Logout", "public")
         }
         
-        for symbol_name, (normalized_name, visibility) in normalization_map.items():
+        for symbol_name, (normalized_name, visibility_str) in normalization_map.items():
             symbol = symbol_table.get_symbol(symbol_name)
             if symbol:
-                symbol.update_normalized_info_from_str(normalized_name, visibility)
-                print(f"  - {symbol_name} -> {normalized_name} ({visibility})")
+                visibility = VisibilityTypes.PUBLIC if visibility_str == "public" else VisibilityTypes.PRIVATE
+                symbol.update_normalized_info(normalized_name, visibility)
+                print(f"  - {symbol_name} -> {normalized_name} ({visibility_str})")
         
         # 步骤4: 验证规范化结果
         print("\n步骤4: 验证规范化结果...")
@@ -552,7 +342,7 @@ class UserService(BaseService: 基础服务类):
         # 步骤5: 序列化
         print("\n步骤5: 序列化符号表...")
         table_dict = symbol_table.to_dict()
-        print(f"  序列化完成，符号数: {len(table_dict['symbols'])}, 引用数: {len(table_dict['symbol_ref_nodes'])}")
+        print(f"  序列化完成，符号数: {len(table_dict)}")
         
         # 步骤6: 反序列化并验证
         print("\n步骤6: 反序列化并验证...")
@@ -569,16 +359,6 @@ class UserService(BaseService: 基础服务类):
                     assert original.visibility == restored.visibility
         
         print("  数据一致性验证通过")
-        
-        # 验证引用
-        module_refs = symbol_table.get_references_by_type(ReferenceType.MODULE_CALL)
-        class_refs = symbol_table.get_references_by_type(ReferenceType.CLASS_INHERIT)
-        behavior_refs = symbol_table.get_references_by_type(ReferenceType.BEHAVIOR_REF)
-        
-        print(f"\n引用统计:")
-        print(f"  模块调用: {len(module_refs)}")
-        print(f"  类继承: {len(class_refs)}")
-        print(f"  行为引用: {len(behavior_refs)}")
         
         # 验证函数参数
         login_func = symbol_table.get_symbol("登录")
@@ -604,18 +384,11 @@ if __name__ == "__main__":
     test_groups = [
         ("数据类型基础测试", [
             ("SymbolNode基本功能", test_symbol_node_basics),
-            ("SymbolReference基本功能", test_symbol_ref_node_basics),
-            ("FileSymbolTable基本功能", test_file_symbol_table_basics),
         ]),
         ("符号提取测试", [
             ("基本符号提取", test_basic_symbol_extraction),
             ("函数参数提取", test_function_parameters_extraction),
             ("类成员符号提取", test_class_with_members_extraction),
-        ]),
-        ("符号引用提取测试", [
-            ("行为引用提取", test_behavior_references_extraction),
-            ("模块引用提取", test_module_references_extraction),
-            ("类继承引用提取", test_class_inheritance_references_extraction),
         ]),
         ("序列化与集成测试", [
             ("符号表序列化", test_symbol_table_serialization),
