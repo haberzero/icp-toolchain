@@ -87,29 +87,32 @@ class IbcLexer:
         return
     
     def _tokenize_line_with_refs(self, content_line: str) -> None:
-        """处理包含符号引用的行"""
-        parts: list[str] = content_line.split(sep='$')
-        
-        # 检查$符号数量是否为偶数
-        if len(parts) % 2 == 0:
-            raise LexerError(
-                message="Unexpected $ symbol usage, $ symbols must appear in pairs",
-                line_num=self.line_num
-            )
-        
-        # 处理过滤后的部分
-        for i, part in enumerate(parts):
-            if i % 2 == 1:
-                # 奇数索引是引用标识符，对纯空白内容弹出警告并跳过
-                if not parts[i].strip():
-                    print(f"Warning: Line {self.line_num}: Empty reference identifier between $$, will be removed")
-                    continue
+        """处理包含符号引用的行使用$作为起始标记，后续连续的非保留符号作为引用内容，包含 . 符号 """
+        i = 0
+        n = len(content_line)
+        special_chars = '(){}[],:\\'
+        while i < n:
+            char = content_line[i]
+            if char == '$':
+                i += 1
+                start = i
+                # 收集符号引用内容：直到遇到空白或保留符号为止，允许包含'.'
+                while i < n and (content_line[i] not in special_chars) and (not content_line[i].isspace()):
+                    i += 1
+                ref_content = content_line[start:i]
+                if ref_content.strip():
+                    # $符号不包含在token内容中
+                    self.tokens.append(Token(IbcTokenType.REF_IDENTIFIER, ref_content, self.line_num))
                 else:
-                    self.tokens.append(Token(IbcTokenType.REF_IDENTIFIER, part, self.line_num))
+                    print(f"Warning: Line {self.line_num}: Empty reference identifier after $, will be removed")
+                # 不消耗分隔符，继续由常规文本分词处理
             else:
-                # 偶数索引是普通文本
-                if part.strip():
-                    self._tokenize_text_part(part)
+                start = i
+                while i < n and content_line[i] != '$':
+                    i += 1
+                text_part = content_line[start:i]
+                if text_part.strip():
+                    self._tokenize_text_part(text_part)
     
     def _tokenize_text_part(self, text: str):
         r"""对文本部分进行分词：识别 ( ) { } [ ] , : \ 等特殊符号
