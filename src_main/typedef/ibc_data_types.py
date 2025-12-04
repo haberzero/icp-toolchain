@@ -151,6 +151,7 @@ class VariableNode(IbcBaseAstNode):
     content: str = ""
     external_desc: str = ""
     intent_comment: str = ""
+    type_ref: str = ""  # 变量类型引用，存储变量描述中的$引用（只允许一个）
 
     def __repr__(self):
         return f"VariableNode(uid={self.uid}, identifier={self.identifier})"

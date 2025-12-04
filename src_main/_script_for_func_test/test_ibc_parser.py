@@ -46,6 +46,8 @@ def print_ast_tree(ast_nodes: dict, uid: int = 0, indent: int = 0) -> None:
         print(f"{prefix}Var: {node.identifier} (uid={node.uid})")
         if node.content:
             print(f"{prefix}  - 描述: {node.content}")
+        if node.type_ref:
+            print(f"{prefix}  - 类型引用: {node.type_ref}")
     elif isinstance(node, BehaviorStepNode):
         print(f"{prefix}Behavior: {node.content[:50]}... (uid={node.uid})")
         if node.symbol_refs:
@@ -1420,6 +1422,92 @@ def test_param_type_ref_multiple_error():
             return False
 
 
+def test_var_type_ref():
+    """测试变量类型引用"""
+    print("\n测试 var_type_ref 函数...")
+    
+    code = """module logger: 日志模块
+module database: 数据库模块
+
+var userCount: 当前在线用户数量
+var logger: 日志实例，类型为 $logger.Logger
+var dbConnection: 数据库连接对象 $database.Connection
+var config"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        
+        # 统计有效节点
+        modules = []
+        variables = []
+        for uid in root_node.children_uids:
+            node = ast_nodes[uid]
+            if isinstance(node, ModuleNode):
+                modules.append(node)
+            elif isinstance(node, VariableNode):
+                variables.append(node)
+        
+        assert len(modules) == 2, f"预期2个模块，实际{len(modules)}"
+        assert len(variables) == 4, f"预期4个变量，实际{len(variables)}"
+        
+        # 查找带类型引用的变量
+        logger_var = None
+        db_var = None
+        for var in variables:
+            if var.identifier == "logger":
+                logger_var = var
+            elif var.identifier == "dbConnection":
+                db_var = var
+        
+        assert logger_var is not None, "找不到logger变量"
+        assert db_var is not None, "找不到dbConnection变量"
+        
+        # 验证类型引用
+        assert logger_var.type_ref == "logger.Logger", f"预期logger类型引用为'logger.Logger'，实际为'{logger_var.type_ref}'"
+        assert db_var.type_ref == "database.Connection", f"预期dbConnection类型引用为'database.Connection'，实际为'{db_var.type_ref}'"
+        
+        # 验证描述中包含类型引用内容
+        assert "logger.Logger" in logger_var.content, f"描述中应包含类型引用: {logger_var.content}"
+        assert "database.Connection" in db_var.content, f"描述中应包含类型引用: {db_var.content}"
+        
+        print("  ✓ 成功解析变量类型引用")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_var_type_ref_error():
+    """测试变量类型引用错误：一个变量多个引用"""
+    print("\n测试 var_type_ref_error 函数...")
+    
+    code = """var data: 类型为 $type1.A 或者 $type2.B"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        print("  ❌ 测试失败: 应该抛出异常但没有")
+        return False
+    except Exception as e:
+        if "can only contain one symbol reference" in str(e):
+            print(f"  ✓ 正确捕获到异常")
+            return True
+        else:
+            print(f"  ❌ 测试失败: 异常消息不正确: {e}")
+            return False
+
+
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("开始测试 Intent Behavior Code 解析器...")
@@ -1463,6 +1551,10 @@ if __name__ == "__main__":
         test_results.append(("顶层行为描述", test_top_level_behavior()))
         test_results.append(("顶层行为带代码块", test_top_level_behavior_with_block()))
         test_results.append(("顶层和函数混合", test_top_level_with_func()))
+        
+        # 变量类型引用测试
+        test_results.append(("变量类型引用", test_var_type_ref()))
+        test_results.append(("变量多引用错误", test_var_type_ref_error()))
         
         print("\n" + "=" * 60)
         print("测试结果汇总")

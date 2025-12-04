@@ -214,12 +214,15 @@ var <变量2>[: 描述2]
 - 变量名必须是合法标识符
 - 描述内容为可选项，如提供则不应超过20个汉字
 - 描述内容必须简洁
+- 描述中可以使用 `$` 符号引用来标注变量类型，每个变量描述只允许一个符号引用
 
 **示例**：
 
 ```intent_behavior_code
 var userCount: 当前在线用户数量
 var config
+var logger: 日志实例，类型为 $logger.Logger
+var dbConnection: 数据库连接对象 $database.Connection
 ```
 
 **错误示例**：
@@ -233,6 +236,12 @@ var userCount = 0
 // 禁止使用的语法！！！
 var userCount, config
 // 解析出错
+```
+
+```intent_behavior_code
+// 禁止使用的语法！！！
+var data: 类型为 $type1.A 或者 $type2.B
+// 多个符号引用，解析出错
 ```
 
 ### 7. 符号引用 ($)
@@ -427,7 +436,7 @@ description: 线程安全的配置管理器，支持多数据源和热重载
 class ConfigManager():
     var configData: 当前配置数据
     var configPath: 主配置文件路径
-    var rwLock: 读写锁对象
+    var rwLock: 读写锁对象，类型为 $threading.RLock
     
     description: 初始化配置管理器
     func __init__(配置文件路径: 字符串路径，支持相对和绝对路径):
@@ -462,7 +471,7 @@ description:
 class ApiClient():
     var baseUrl: API服务基础地址
     var timeout: 请求超时时间
-    var session: HTTP会话对象
+    var session: HTTP会话对象，类型为 $requests.Session
     
     description: 发送GET请求到指定接口
     @ 异步函数
