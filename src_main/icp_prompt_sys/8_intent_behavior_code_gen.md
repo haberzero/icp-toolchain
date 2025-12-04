@@ -25,7 +25,7 @@
 **语法模板**：
 
 ```intent_behavior_code
-module 模块名[: 模块来源和用途描述]
+module 模块路径[: 模块来源和用途描述]
 ```
 
 **规则**：
@@ -33,14 +33,28 @@ module 模块名[: 模块来源和用途描述]
 - 必须出现在文件顶部
 - `module` 关键字只在行开头被认为是关键字
 - 描述内容说明模块来源（内置库、第三方库等），为可选项
-- 模块名必须是合法标识符
+- 模块路径使用点号 `.` 分隔，遵循 `目录.子目录.文件名` 的形式
+- 相对路径：直接从当前项目根目录开始，如 `utils.logger` 表示 `utils/logger.ibc`
+- 绝对路径：从项目根目录开始，如 `src.core.engine` 表示 `src/core/engine.ibc`
+- 模块名不包含 `.ibc` 扩展名
 
 **示例**：
 
 ```intent_behavior_code
+module utils.logger: 日志工具模块
+module config.settings: 配置管理模块
+module database.connection.pool: 数据库连接池
+module threading: Python系统线程库
 module requests: Python第三方HTTP请求库
-module threading: 系统线程库
-module utils
+```
+
+**路径对应关系**：
+
+```
+module utils.logger          →  utils/logger.ibc
+module config.settings       →  config/settings.ibc  
+module database.conn.pool    →  database/conn/pool.ibc
+module core                  →  core.ibc
 ```
 
 ### 2. 函数定义 (func)
@@ -390,8 +404,8 @@ func 处理业务逻辑(
 
 ```intent_behavior_code
 // 文件顶部的模块引用（可选，允许多个）
-module <模块名1>[: 模块描述]
-module <模块名2>[: 模块描述]
+module <目录.文件名1>[: 模块描述]
+module <目录.文件名2.模块名>[: 模块描述]
 
 // 顶层行为描述（可选，用于脚本式代码）
 // 直接在文件顶层书写的执行逻辑，不需要在函数内

@@ -63,12 +63,14 @@ def print_ast_tree(ast_nodes: dict, uid: int = 0, indent: int = 0) -> None:
 
 
 def test_module_declaration():
-    """测试模块声明"""
+    """测试模块声明，包括带路径分隔符的模块"""
     print("测试 module_declaration 函数...")
     
-    code = """module requests: Python第三方HTTP请求库
-module threading: 系统线程库
-module utils"""
+    code = """module utils.logger: 日志工具模块
+module config.settings: 配置管理模块
+module database.connection.pool: 数据库连接池
+module threading: Python系统线程库
+module requests"""
     
     try:
         lexer = IbcLexer(code)
@@ -79,25 +81,36 @@ module utils"""
         # 验证根节点的子节点数量
         root_node = ast_nodes[0]
         
-        # 验证第一个模块
-        module1 = ast_nodes[root_node.children_uids[0]]
-        assert isinstance(module1, ModuleNode), "预期为ModuleNode"
-        assert module1.identifier == "requests", f"预期标识符为'requests'，实际为'{module1.identifier}'"
-        assert module1.content == "Python第三方HTTP请求库", f"预期内容不匹配"
+        # 统计模块节点
+        modules = []
+        for uid in root_node.children_uids:
+            node = ast_nodes[uid]
+            if isinstance(node, ModuleNode):
+                modules.append(node)
         
-        # 验证第二个模块
-        module2 = ast_nodes[root_node.children_uids[1]]
-        assert isinstance(module2, ModuleNode), "预期为ModuleNode"
-        assert module2.identifier == "threading", f"预期标识符为'threading'"
-        assert module2.content == "系统线程库", f"预期内容不匹配"
+        assert len(modules) == 5, f"预期5个模块，实际{len(modules)}"
         
-        # 验证第三个模块（无描述）
-        module3 = ast_nodes[root_node.children_uids[2]]
-        assert isinstance(module3, ModuleNode), "预期为ModuleNode"
-        assert module3.identifier == "utils", f"预期标识符为'utils'"
-        assert module3.content == "", f"预期内容为空"
+        # 验证第一个模块（带路径分隔符）
+        assert modules[0].identifier == "utils.logger", f"预期标识符为'utils.logger'，实际为'{modules[0].identifier}'"
+        assert modules[0].content == "日志工具模块", f"预期内容不匹配"
         
-        print("  ✓ 成功解析模块声明")
+        # 验证第二个模块（带路径分隔符）
+        assert modules[1].identifier == "config.settings", f"预期标识符为'config.settings'"
+        assert modules[1].content == "配置管理模块", f"预期内容不匹配"
+        
+        # 验证第三个模块（多层级路径分隔符）
+        assert modules[2].identifier == "database.connection.pool", f"预期标识符为'database.connection.pool'"
+        assert modules[2].content == "数据库连接池", f"预期内容不匹配"
+        
+        # 验证第四个模块（不带路径分隔符）
+        assert modules[3].identifier == "threading", f"预期标识符为'threading'"
+        assert modules[3].content == "Python系统线程库", f"预期内容不匹配"
+        
+        # 验证第五个模块（无描述）
+        assert modules[4].identifier == "requests", f"预期标识符为'requests'"
+        assert modules[4].content == "", f"预期内容为空"
+        
+        print("  ✓ 成功解析模块声明（包括带路径分隔符的模块）")
         print("\nAST树结构:")
         print_ast_tree(ast_nodes)
         return True
