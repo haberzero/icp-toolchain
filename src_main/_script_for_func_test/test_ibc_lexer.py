@@ -291,12 +291,12 @@ func test():
         return False
 
 def test_symbol_reference():
-    """测试符号引用"""
+    """测试符号引用（新语法：单$起始）"""
     print("测试 symbol_reference 函数...")
     
     code = """\
 func 发送请求(请求数据):
-    当 重试计数 < $maxRetries$:"""
+    当 重试计数 < $maxRetries:"""
     expected = [
         (IbcTokenType.KEYWORDS, IbcKeywords.FUNC.value),
         (IbcTokenType.IDENTIFIER, '发送请求'),
@@ -333,13 +333,13 @@ func 发送请求(请求数据):
         return False
 
 def test_multiple_symbol_references():
-    """测试多个符号引用"""
+    """测试多个符号引用（新语法：单$起始）"""
     print("测试 multiple_symbol_references 函数...")
     
     code = """\
 func test():
-    $httpClient.post$(请求数据)
-    $记录错误$("配置加载失败: " + 异常信息)"""
+    $httpClient.post(请求数据)
+    $记录错误(\"\u914d置加载失败: \" + 异常信息)"""
     expected = [
         (IbcTokenType.KEYWORDS, IbcKeywords.FUNC.value),
         (IbcTokenType.IDENTIFIER, 'test'),
@@ -355,9 +355,9 @@ func test():
         (IbcTokenType.NEWLINE, ''),
         (IbcTokenType.REF_IDENTIFIER, '记录错误'),
         (IbcTokenType.LPAREN, '('),
-        (IbcTokenType.IDENTIFIER, '"配置加载失败'),
+        (IbcTokenType.IDENTIFIER, '\"\u914d置加载失败'),
         (IbcTokenType.COLON, ':'),
-        (IbcTokenType.IDENTIFIER, ' " + 异常信息'),
+        (IbcTokenType.IDENTIFIER, ' \" + 异常信息'),
         (IbcTokenType.RPAREN, ')'),
         (IbcTokenType.NEWLINE, ''),
         (IbcTokenType.DEDENT, ''),
@@ -386,29 +386,12 @@ def test_error_cases():
     """测试错误情况"""
     print("测试 error_cases 函数...")
     
-    # 测试1: 不成对的$符号
-    print("  1. 测试不成对的$符号:")
-    code1 = """\
-func test():
-    var ref = $unclosed_ref"""
-    try:
-        lexer = IbcLexer(code1)
-        tokens = lexer.tokenize()
-        # 应该抛出LexerError异常
-        print("    ❌ 测试失败: 应该抛出异常但没有")
-        return False
-    except LexerError as e:
-        print("    ✓ 成功检测到不成对的$符号")
-    except Exception as e:
-        print(f"    ❌ 测试失败: {e}")
-        return False
-    
-    # 测试2: Tab缩进
-    print("  2. 测试Tab缩进:")
-    code2 = """func test():
+    # 测试1: Tab缩进
+    print("  1. 测试Tab缩进:")
+    code1 = """func test():
 \tvar tab_indented"""
     try:
-        lexer = IbcLexer(code2)
+        lexer = IbcLexer(code1)
         tokens = lexer.tokenize()
         # 应该抛出LexerError异常
         print("    ❌ 测试失败: 应该抛出异常但没有")
@@ -419,31 +402,14 @@ func test():
         print(f"    ❌ 测试失败: {e}")
         return False
     
-    # 测试3: 缩进不是4的倍数（测试3已失效，最新的逻辑是只会打印警告并且trunc至4的倍数，而不会直接干涉报错）
-#     print("  3. 测试缩进不是4的倍数:")
-#     code3 = """func test():
-#  var invalid_indent"""
-#     try:
-#         lexer = IbcLexer(code3)
-#         tokens = lexer.tokenize()
-#         # 应该抛出LexerError异常
-#         print("    ❌ 测试失败: 应该抛出异常但没有")
-#         return False
-#     except LexerError as e:
-#         print("    ✓ 成功检测到缩进不是4的倍数")
-#     except Exception as e:
-#         print(f"    ❌ 测试失败: {e}")
-#         return False
-    
-    # 测试4: 空的符号引用
-    print("  4. 测试空的符号引用:")
-    code4 = """func test():
-    var ref = $$"""
+    # 测试2: 空的符号引用
+    print("  2. 测试空的符号引用:")
+    code2 = """func test():
+    var ref = $ """
     try:
-        lexer = IbcLexer(code4)
+        lexer = IbcLexer(code2)
         tokens = lexer.tokenize()
         # 这种情况只是警告，不会返回空列表，应该有token
-        # assert len(tokens) > 0, "预期返回token列表但实际为空"
         print("    ✓ 成功处理空的符号引用")
     except Exception as e:
         print(f"    ❌ 测试失败: {e}")

@@ -268,13 +268,13 @@ class AuthService():
 
 
 def test_symbol_reference():
-    """测试符号引用"""
+    """测试符号引用（新语法：单$起始）"""
     print("\n测试 symbol_reference 函数...")
     
     code = """func 发送请求(请求数据):
     var maxRetries: 最大重试次数
-    当 重试计数 < $maxRetries$:
-        尝试发送 $httpClient.post$(请求数据)"""
+    当 重试计数 < $maxRetries:
+        尝试发送 $httpClient.post(请求数据)"""
     
     try:
         lexer = IbcLexer(code)
@@ -333,7 +333,7 @@ class ConfigManager():
         获取 self.rwLock 的写锁
         尝试:
             文件内容 = 读取文件(self.configPath)
-            self.configData = $json.parse$(文件内容)
+            self.configData = $json.parse(文件内容)
         捕获 异常:
             记录错误信息
         最后:
@@ -696,15 +696,15 @@ def test_continuation_line_with_indent():
 
 
 def test_continuation_line_with_symbol_refs():
-    """测试延续行中的符号引用"""
+    """测试延续行中的符号引用（新语法：单$起始）"""
     print("\n测试 continuation_line_with_symbol_refs 函数...")
     
     code = """func 调用API():
-    请求结果 = 调用 $httpClient.post$ 使用参数,
+    请求结果 = 调用 $httpClient.post 使用参数,
         url,
         data,
         headers
-    处理 $请求结果$"""
+    处理 $请求结果"""
     
     try:
         lexer = IbcLexer(code)
@@ -774,16 +774,16 @@ def test_continuation_line_error_misalignment():
 
 
 def test_paren_continuation():
-    """测试小括号延续行"""
+    """测试小括号延续行（新语法：单$起始）"""
     print("\n测试 paren_continuation 函数...")
     
     code = """func 调用API():
-    请求结果 = $httpClient.post$(
+    请求结果 = $httpClient.post(
         url,
         data,
         headers
     )
-    处理 $请求结果$"""
+    处理 $请求结果"""
     
     try:
         lexer = IbcLexer(code)
@@ -1136,6 +1136,290 @@ def test_param_desc_bracket_types():
         return False
 
 
+def test_param_type_ref_single():
+    """测试参数类型引用：单个参数"""
+    print("\n测试 param_type_ref_single 函数...")
+    
+    code = """module utils.logger: 日志工具模块
+
+func 处理业务逻辑(
+    数据, 
+    日志器: 由外部传入实例，其类型为 $logger.Logger
+    ):
+    验证结果 = 验证数据(数据)"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        # 查找函数节点
+        func_node = None
+        for uid, node in ast_nodes.items():
+            if isinstance(node, FunctionNode):
+                func_node = node
+                break
+        
+        assert func_node is not None, "未找到函数节点"
+        assert func_node.identifier == "处理业务逻辑", f"函数名不匹配: {func_node.identifier}"
+        
+        # 验证参数
+        assert "数据" in func_node.params
+        assert "日志器" in func_node.params
+        
+        # 验证类型引用
+        assert "日志器" in func_node.param_type_refs, "缺少日志器的类型引用"
+        assert func_node.param_type_refs["日志器"] == "logger.Logger", \
+            f"类型引用不匹配: {func_node.param_type_refs['日志器']}"
+        assert "数据" not in func_node.param_type_refs, "数据参数不应有类型引用"
+        
+        print("  ✓ 成功解析单个参数类型引用")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_param_type_ref_multiple():
+    """测试参数类型引用：多个参数"""
+    print("\n测试 param_type_ref_multiple 函数...")
+    
+    code = """module config.types: 配置类型定义
+
+func 初始化系统(
+    配置: 系统配置对象 $config.types.SystemConfig,
+    日志器: 日志实例 $logger.Logger,
+    数据库连接):
+    执行初始化操作"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        # 查找函数节点
+        func_node = None
+        for uid, node in ast_nodes.items():
+            if isinstance(node, FunctionNode):
+                func_node = node
+                break
+        
+        assert func_node is not None, "未找到函数节点"
+        
+        # 验证参数数量
+        assert len(func_node.params) == 3, f"预期3个参数，实际{len(func_node.params)}"
+        
+        # 验证类型引用
+        assert "配置" in func_node.param_type_refs
+        assert func_node.param_type_refs["配置"] == "config.types.SystemConfig"
+        assert "日志器" in func_node.param_type_refs
+        assert func_node.param_type_refs["日志器"] == "logger.Logger"
+        assert "数据库连接" not in func_node.param_type_refs  # 没有类型引用
+        
+        print("  ✓ 成功解析多个参数类型引用")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_top_level_behavior():
+    """测试顶层行为描述：简单行为步骤"""
+    print("\n测试 top_level_behavior 函数...")
+    
+    code = '''module logging: 日志库
+module config: 配置模块
+
+初始化日志系统()
+加载配置文件($config.load)
+记录信息 "系统已启动"'''
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        
+        # 验证有两个模块和三个行为步骤（注意：可能有空节点）
+        # 统计有效节点：模块和非空行为
+        modules = []
+        behaviors = []
+        for uid in root_node.children_uids:
+            node = ast_nodes[uid]
+            if isinstance(node, ModuleNode):
+                modules.append(node)
+            elif isinstance(node, BehaviorStepNode) and node.content.strip():
+                behaviors.append(node)
+        
+        assert len(modules) == 2, f"预期2个模块，实际{len(modules)}"
+        assert len(behaviors) == 3, f"预期3个行为步骤，实际{len(behaviors)}"
+        
+        # 验证行为内容
+        assert "初始化" in behaviors[0].content, f"缺少'初始化': {behaviors[0].content}"
+        assert "config.load" in behaviors[1].symbol_refs, f"缺少符号引用: {behaviors[1].symbol_refs}"
+        assert "记录信息" in behaviors[2].content, f"缺少'记录信息': {behaviors[2].content}"
+        
+        print("  ✓ 成功解析顶层行为描述")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_top_level_behavior_with_block():
+    """测试顶层行为描述带代码块：条件判断"""
+    print("\n测试 top_level_behavior_with_block 函数...")
+    
+    code = """module os: 系统操作库
+
+检查文件路径 = "./config.json"
+
+如果 $os.path.exists(检查文件路径):
+    读取配置 = 打开文件(检查文件路径)
+    解析配置内容
+    记录 "配置已加载"
+
+否则:
+    记录 "配置文件不存在"
+
+输出最终结果"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        
+        # 应该有：1个模块 + 1个赋值行为 + 1个条件行为(带代码块) + 1个否则行为(带代码块) + 1个最终输出
+        assert len(root_node.children_uids) >= 4, f"预期至少4个子节点，实际{len(root_node.children_uids)}"
+        
+        # 查找条件判断节点
+        condition_node = None
+        for uid in root_node.children_uids:
+            node = ast_nodes[uid]
+            if isinstance(node, BehaviorStepNode) and "如果" in node.content and node.new_block_flag:
+                condition_node = node
+                break
+        
+        assert condition_node is not None, "找不到条件判断节点"
+        assert condition_node.new_block_flag, "条件判断应该有new_block_flag"
+        assert len(condition_node.children_uids) > 0, "条件判断应该有子节点"
+        
+        # 验证条件块中有多个行为
+        assert len(condition_node.children_uids) >= 3, f"条件块应该有至少3个行为步骤"
+        
+        print("  ✓ 成功解析顶层行为描述带代码块")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_top_level_with_func():
+    """测试顶层和函数混合使用"""
+    print("\n测试 top_level_with_func 函数...")
+    
+    code = """module utils: 工具模块
+
+初始化全局配置()
+
+func 处理数据(数据):
+    验证数据格式
+    返回处理结果
+
+调用处理函数 = $处理数据("test")
+输出结果"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        
+        # 统计有效节点
+        modules = []
+        funcs = []
+        behaviors = []
+        for uid in root_node.children_uids:
+            node = ast_nodes[uid]
+            if isinstance(node, ModuleNode):
+                modules.append(node)
+            elif isinstance(node, FunctionNode):
+                funcs.append(node)
+            elif isinstance(node, BehaviorStepNode) and node.content.strip():
+                behaviors.append(node)
+        
+        # 应该有：1个模块 + 1个函数 + 3个顶层行为
+        assert len(modules) == 1, f"预期1个模块，实际{len(modules)}"
+        assert len(funcs) == 1, f"预期1个函数，实际{len(funcs)}"
+        assert len(behaviors) == 3, f"预期3个顶层行为，实际{len(behaviors)}"
+        
+        # 验证第一个行为
+        assert "初始化" in behaviors[0].content, f"缺少'初始化': {behaviors[0].content}"
+        
+        # 验证函数
+        assert funcs[0].identifier == "处理数据", f"函数名不匹配: {funcs[0].identifier}"
+        
+        # 验证后两个行为中有符号引用
+        has_func_ref = any("处理数据" in b.symbol_refs for b in behaviors)
+        assert has_func_ref, f"缺少符号引用处理数据"
+        
+        print("  ✓ 成功解析顶层和函数混合使用")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_param_type_ref_multiple_error():
+    """测试参数类型引用错误：一个参数多个引用"""
+    print("\n测试 param_type_ref_multiple_error 函数...")
+    
+    code = """func 测试函数(
+    参数: 这是 $type1.A 或者 $type2.B
+    ):
+    执行操作"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        print("  ❌ 测试失败: 应该抛出异常但没有")
+        return False
+    except Exception as e:
+        if "can only contain one symbol reference" in str(e):
+            print(f"  ✓ 正确捕获到异常")
+            return True
+        else:
+            print(f"  ❌ 测试失败: 异常消息不正确: {e}")
+            return False
+
+
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("开始测试 Intent Behavior Code 解析器...")
@@ -1169,6 +1453,16 @@ if __name__ == "__main__":
         test_results.append(("参数描述嵌套括号", test_param_desc_with_nested_parens()))
         test_results.append(("参数描述多逗号", test_param_desc_with_multiple_commas()))
         test_results.append(("参数描述各种括号", test_param_desc_bracket_types()))
+        
+        # 参数类型引用测试
+        test_results.append(("单个参数类型引用", test_param_type_ref_single()))
+        test_results.append(("多个参数类型引用", test_param_type_ref_multiple()))
+        test_results.append(("参数多引用错误", test_param_type_ref_multiple_error()))
+        
+        # 顶层行为描述测试
+        test_results.append(("顶层行为描述", test_top_level_behavior()))
+        test_results.append(("顶层行为带代码块", test_top_level_behavior_with_block()))
+        test_results.append(("顶层和函数混合", test_top_level_with_func()))
         
         print("\n" + "=" * 60)
         print("测试结果汇总")

@@ -543,8 +543,10 @@ class FuncDeclState(BaseState):
         self.state_type = ParserState.FUNC_DECL
         self.func_name = ""
         self.params: Dict[str, str] = {}
+        self.param_type_refs: Dict[str, str] = {}  # 存储参数描述中的符号引用
         self.current_param_name = ""
         self.current_param_desc = ""
+        self.current_param_type_ref = ""  # 当前参数的类型引用
         self.sub_state = FuncDeclSubState.EXPECTING_FUNC_NAME
         self.pop_flag = False
         self.pass_in_token_flag = False
@@ -639,7 +641,18 @@ class FuncDeclState(BaseState):
 
         elif self.sub_state == FuncDeclSubState.EXPECTING_PARAM_DESC:
             # 参数描述是贪婪式解析：冒号后所有内容都是描述，直到遇到换行
-            if token.type == IbcTokenType.NEWLINE:
+            if token.type == IbcTokenType.REF_IDENTIFIER:
+                # 处理符号引用
+                if self.current_param_type_ref:
+                    # 已经有一个符号引用，报错
+                    raise IbcParserError(
+                        message=f"FuncDeclState: Parameter description can only contain one symbol reference, but got multiple",
+                        line_num=token.line_num
+                    )
+                self.current_param_type_ref = token.value.strip()
+                # 将引用内容也加入描述中
+                self.current_param_desc += token.value
+            elif token.type == IbcTokenType.NEWLINE:
                 # 参数描述结束，检查行末是否有逗号
                 desc_stripped = self.current_param_desc.strip()
                 if desc_stripped and desc_stripped[-1] == ",":
@@ -647,6 +660,8 @@ class FuncDeclState(BaseState):
                     self.current_param_desc = desc_stripped[:-1].strip()
                     if self.current_param_name not in self.params:
                         self.params[self.current_param_name] = self.current_param_desc
+                        if self.current_param_type_ref:
+                            self.param_type_refs[self.current_param_name] = self.current_param_type_ref
                     else:
                         raise IbcParserError(
                     message=f"FuncDeclState: Got an duplicate parameter definitions",
@@ -654,6 +669,7 @@ class FuncDeclState(BaseState):
                 )
                     self.current_param_name = ""
                     self.current_param_desc = ""
+                    self.current_param_type_ref = ""
                     self.paren_count = 0
                     self.sub_state = FuncDeclSubState.EXPECTING_PARAM_NAME
                 else:
@@ -661,6 +677,8 @@ class FuncDeclState(BaseState):
                     self.current_param_desc = desc_stripped
                     if self.current_param_name not in self.params:
                         self.params[self.current_param_name] = self.current_param_desc
+                        if self.current_param_type_ref:
+                            self.param_type_refs[self.current_param_name] = self.current_param_type_ref
                     else:
                         raise IbcParserError(
                     message=f"FuncDeclState: Got an duplicate parameter definitions",
@@ -668,6 +686,7 @@ class FuncDeclState(BaseState):
                 )
                     self.current_param_name = ""
                     self.current_param_desc = ""
+                    self.current_param_type_ref = ""
                     self.paren_count = 0
                     self.sub_state = FuncDeclSubState.EXPECTING_RPAREN
             elif token.type == IbcTokenType.LPAREN:
@@ -687,6 +706,8 @@ class FuncDeclState(BaseState):
                     self.current_param_desc = desc_stripped
                     if self.current_param_name not in self.params:
                         self.params[self.current_param_name] = self.current_param_desc
+                        if self.current_param_type_ref:
+                            self.param_type_refs[self.current_param_name] = self.current_param_type_ref
                     else:
                         raise IbcParserError(
                     message=f"FuncDeclState: Got an duplicate parameter definitions",
@@ -694,6 +715,7 @@ class FuncDeclState(BaseState):
                 )
                     self.current_param_name = ""
                     self.current_param_desc = ""
+                    self.current_param_type_ref = ""
                     self.paren_count = 0
                     self.sub_state = FuncDeclSubState.EXPECTING_COLON
             elif token.type == IbcTokenType.COMMA:
@@ -713,6 +735,8 @@ class FuncDeclState(BaseState):
                     self.current_param_desc = desc_stripped[:-1].strip()
                 if self.current_param_name not in self.params:
                     self.params[self.current_param_name] = self.current_param_desc
+                    if self.current_param_type_ref:
+                        self.param_type_refs[self.current_param_name] = self.current_param_type_ref
                 else:
                     raise IbcParserError(
                     message=f"FuncDeclState: Got an duplicate parameter definitions",
@@ -720,6 +744,7 @@ class FuncDeclState(BaseState):
                 )
                 self.current_param_name = ""
                 self.current_param_desc = ""
+                self.current_param_type_ref = ""
                 self.paren_count = 0
                 self.sub_state = FuncDeclSubState.EXPECTING_PARAM_NAME
             else:
@@ -779,7 +804,8 @@ class FuncDeclState(BaseState):
             node_type=AstNodeType.FUNCTION,
             line_number=line_num,
             identifier=self.func_name,
-            params=self.params
+            params=self.params,
+            param_type_refs=self.param_type_refs
         )
         
         self.ast_node_dict[uid] = func_node

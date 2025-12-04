@@ -138,6 +138,7 @@ class FunctionNode(IbcBaseAstNode):
     external_desc: str = ""
     intent_comment: str = ""
     params: Dict[str, str] = field(default_factory=dict)
+    param_type_refs: Dict[str, str] = field(default_factory=dict)  # 参数类型引用 {参数名: 符号引用内容}，存储参数描述中的$引用
 
     def __repr__(self):
         return f"FunctionNode(uid={self.uid}, identifier={self.identifier})"

@@ -276,14 +276,23 @@ class IbcParser:
             self.state_stack.append((state_obj, self.last_ast_node.uid))
 
         elif isinstance(self.last_ast_node, BehaviorStepNode):
-            if not isinstance(self.state_stack[-1][0], (FuncContentState, BehaviorStepState)):
+            # 行为步骤后的缩进：允许在函数内或顶层
+            current_state_obj = self.state_stack[-1][0]
+            # 允许在FuncContentState、TopLevelState或BehaviorStepState中
+            if not isinstance(current_state_obj, (FuncContentState, TopLevelState, BehaviorStepState)):
                 raise IbcParserError(
-                    message="Behavior step must be inside a function",
+                    message="Behavior step can only be inside a function or at top level",
                     line_num=token.line_num
                 )
 
             if self.last_ast_node.new_block_flag:
-                state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
+                # 根据当前状态决定压入的父节点
+                if isinstance(current_state_obj, TopLevelState):
+                    # 顶层行为步骤后的代码块，父节点是当前behavior节点
+                    state_obj = TopLevelState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
+                else:
+                    # 函数内的行为步骤后的代码块
+                    state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
                 self.state_stack.append((state_obj, self.last_ast_node.uid))
             else:
                 raise IbcParserError(
