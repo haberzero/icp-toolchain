@@ -502,16 +502,13 @@ class ApiClient():
         抛出异常 "请求失败，超过最大重试次数"
 ```
 
-### 示例3：Python脚本式代码（顶层行为描述）
+### 示例3：脚本式代码（顶层直接书写行为描述）
 
 ```intent_behavior_code
 module argparse: 命令行参数解析库
 module logging: 日志记录库
 module config: 配置文件处理模块
 module processor: 数据处理模块
-
-description: 数据批处理脚本，用于处理命令行指定的数据文件
-@ 脚本式执行，支持配置文件和命令行参数
 
 // 顶层行为描述：直接在模块级别定义的执行逻辑
 初始化日志系统($logging.basicConfig)
