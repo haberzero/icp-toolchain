@@ -444,7 +444,7 @@ class ClassDeclState(BaseState):
                 )
                 
         elif self.sub_state == ClassDeclSubState.EXPECTING_INH_CLASS:
-            if token.type == IbcTokenType.IDENTIFIER:
+            if token.type in (IbcTokenType.REF_IDENTIFIER, IbcTokenType.IDENTIFIER):
                 self.parent_class = token.value.strip()
                 self.sub_state = ClassDeclSubState.EXPECTING_INH_COLON
             elif token.type == IbcTokenType.RPAREN:

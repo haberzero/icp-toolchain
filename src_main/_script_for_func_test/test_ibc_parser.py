@@ -1521,6 +1521,37 @@ def test_var_type_ref_error():
             return False
 
 
+def test_class_inheritance_with_dollar():
+    """测试类继承使用 $ 前缀的父类符号"""
+    print("\n测试 class_inheritance_with_dollar 函数...")
+    
+    code = """class UserManager($base.BaseManager: 使用公共基类管理生命周期):
+    var users: 用户数据字典"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        class_node = ast_nodes[root_node.children_uids[0]]
+        
+        assert isinstance(class_node, ClassNode), "预期为ClassNode"
+        assert class_node.identifier == "UserManager", f"类名不匹配"
+        assert "base.BaseManager" in class_node.inh_params, "缺少$前缀父类继承信息"
+        assert class_node.inh_params["base.BaseManager"] == "使用公共基类管理生命周期", "继承描述不匹配"
+        
+        print("  ✓ 成功解析$前缀的类继承")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("开始测试 Intent Behavior Code 解析器...")
@@ -1533,6 +1564,7 @@ if __name__ == "__main__":
         test_results.append(("变量声明", test_variable_declaration()))
         test_results.append(("函数声明", test_function_declaration()))
         test_results.append(("类声明", test_class_declaration()))
+        test_results.append(("类继承$前缀", test_class_inheritance_with_dollar()))
         test_results.append(("描述和意图注释", test_description_and_intent()))
         test_results.append(("符号引用", test_symbol_reference()))
         test_results.append(("复杂示例", test_complex_example()))
