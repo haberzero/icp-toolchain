@@ -182,6 +182,16 @@ class VarDeclState(BaseState):
                         line_num=token.line_num
                     )
                 self.sub_state = VarDeclSubState.EXPECTING_VAR_DESC
+            elif token.type == IbcTokenType.EQUAL:
+                # = 等号也可以作为变量定义的停止符，= 之后的内容随同 = 一起被存储到变量描述中
+                if self.is_multi_var_line:
+                    raise IbcParserError(
+                        message=f"VarDeclState: Multiple variable declaration in one line does not allow description",
+                        line_num=token.line_num
+                    )
+                # = 本身作为描述的起始，加入描述中
+                self.current_var_desc = "="
+                self.sub_state = VarDeclSubState.EXPECTING_VAR_DESC
             elif token.type == IbcTokenType.COMMA:
                 # 单行内多变量，不允许描述；逗号表示继续收集下一个变量名
                 self.is_multi_var_line = True
@@ -213,7 +223,7 @@ class VarDeclState(BaseState):
                 self.pop_flag = True
             else:
                 raise IbcParserError(
-                    message=f"VarDeclState: Expecting colon, comma, or new line but got {token.type}",
+                    message=f"VarDeclState: Expecting colon, equal, comma, or new line but got {token.type}",
                     line_num=token.line_num
                 )
         

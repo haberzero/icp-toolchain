@@ -17,6 +17,7 @@ class IbcTokenType(Enum):
     RBRACKET = "RBRACKET"  # 右方括号 ]
     COMMA = "COMMA"  # 逗号 ,
     COLON = "COLON"  # 冒号 :
+    EQUAL = "EQUAL"  # 等号 =
     BACKSLASH = "BACKSLASH"  # 反斜杠 \
     REF_IDENTIFIER = "REF_IDENTIFIER"  # 符号引用
     INDENT = "INDENT"  # 缩进

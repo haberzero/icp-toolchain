@@ -1437,6 +1437,50 @@ def test_param_type_ref_multiple_error():
             return False
 
 
+def test_var_with_equal_sign():
+    """测试变量定义使用 = 等号作为停止符"""
+    print("\n测试 var_with_equal_sign 函数...")
+    
+    code = """var total = 0
+var count = 10
+var name: 用户姓名"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        
+        # 验证变量节点
+        var_dict = {}  # {name: description}
+        for uid in root_node.children_uids:
+            var_node = ast_nodes[uid]
+            if isinstance(var_node, VariableNode):
+                var_dict[var_node.identifier] = var_node.content
+        
+        assert "total" in var_dict, "缺少total变量"
+        assert "count" in var_dict, "缺少count变量"
+        assert "name" in var_dict, "缺少name变量"
+        
+        # 验证描述：= 号后的内容应该包含 = 号本身
+        # 注意：由于 lexer 会保留空格，所以 = 后可能有多余空格
+        assert var_dict["total"].startswith("=") and "0" in var_dict["total"], f"total的描述不匹配: {var_dict['total']}"
+        assert var_dict["count"].startswith("=") and "10" in var_dict["count"], f"count的描述不匹配: {var_dict['count']}"
+        assert var_dict["name"] == "用户姓名", f"name的描述不匹配: {var_dict['name']}"
+        
+        print("  ✓ 成功解析变量定义使用 = 等号")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def test_var_type_ref():
     """测试变量类型引用"""
     print("\n测试 var_type_ref 函数...")
@@ -1602,6 +1646,7 @@ if __name__ == "__main__":
         # 变量类型引用测试
         test_results.append(("变量类型引用", test_var_type_ref()))
         test_results.append(("变量多引用错误", test_var_type_ref_error()))
+        test_results.append(("变量 = 等号语法", test_var_with_equal_sign()))
         
         print("\n" + "=" * 60)
         print("测试结果汇总")
