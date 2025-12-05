@@ -40,7 +40,7 @@ def test_backslash_with_symbol_refs():
     
     code = """\
 func 处理用户数据():
-    结果 = 调用 $userService$.getUserInfo 传递参数 \\
+    结果 = 调用 $userService.getUserInfo 传递参数 \\
     用户ID, 详细信息标志, 权限级别
     
     返回 结果"""
@@ -65,7 +65,7 @@ func 处理用户数据():
         assert "权限级别" in behavior1.content
         
         # 验证符号引用
-        assert "userService" in behavior1.symbol_refs
+        assert "userService.getUserInfo" in behavior1.symbol_refs
         
         print("  ✓ 成功解析反斜杠延续行中的符号引用")
         print("\nAST树结构:")

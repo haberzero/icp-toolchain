@@ -131,7 +131,9 @@ func 计算订单总价(商品列表: 包含价格信息的商品对象数组, �
         (IbcTokenType.COLON, ':'),
         (IbcTokenType.NEWLINE, ''),
         (IbcTokenType.INDENT, ''),
-        (IbcTokenType.IDENTIFIER, '初始化 总价 = 0'),
+        (IbcTokenType.IDENTIFIER, '初始化 总价 '),
+        (IbcTokenType.EQUAL, '='),
+        (IbcTokenType.IDENTIFIER, ' 0'),
         (IbcTokenType.NEWLINE, ''),
         (IbcTokenType.DEDENT, ''),
         (IbcTokenType.NEWLINE, ''),
@@ -419,7 +421,7 @@ def test_error_cases():
 
 
 def test_bracket_and_backslash_symbols():
-    r"""测试符号 token 也即 () {} [] \\"""
+    r"""测试符号 token 也即 () {} [] \\ ="""
     print("测试 bracket_and_backslash_symbols 函数...")
     
     code = """func test():
@@ -435,14 +437,18 @@ def test_bracket_and_backslash_symbols():
         (IbcTokenType.COLON, ':'),
         (IbcTokenType.NEWLINE, ''),
         (IbcTokenType.INDENT, ''),
-        (IbcTokenType.IDENTIFIER, 'dict = '),
+        (IbcTokenType.IDENTIFIER, 'dict '),
+        (IbcTokenType.EQUAL, '='),
+        (IbcTokenType.IDENTIFIER, ' '),
         (IbcTokenType.LBRACE, '{'),
         (IbcTokenType.IDENTIFIER, 'key'),
         (IbcTokenType.COLON, ':'),
         (IbcTokenType.IDENTIFIER, ' value'),
         (IbcTokenType.RBRACE, '}'),
         (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.IDENTIFIER, 'list = '),
+        (IbcTokenType.IDENTIFIER, 'list '),
+        (IbcTokenType.EQUAL, '='),
+        (IbcTokenType.IDENTIFIER, ' '),
         (IbcTokenType.LBRACKET, '['),
         (IbcTokenType.IDENTIFIER, 'item1'),
         (IbcTokenType.COMMA, ','),
@@ -475,6 +481,92 @@ def test_bracket_and_backslash_symbols():
     except Exception as e:
         print(f"  ❌ 测试失败: {e}")
         return False
+
+def test_equal_sign_in_var_declaration():
+    """测试变量声明中的等号"""
+    print("测试 equal_sign_in_var_declaration 函数...")
+    
+    code = """var total = 0
+var count = 10
+var name: 用户姓名"""
+    expected = [
+        (IbcTokenType.KEYWORDS, IbcKeywords.VAR.value),
+        (IbcTokenType.IDENTIFIER, 'total '),
+        (IbcTokenType.EQUAL, '='),
+        (IbcTokenType.IDENTIFIER, ' 0'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.KEYWORDS, IbcKeywords.VAR.value),
+        (IbcTokenType.IDENTIFIER, 'count '),
+        (IbcTokenType.EQUAL, '='),
+        (IbcTokenType.IDENTIFIER, ' 10'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.KEYWORDS, IbcKeywords.VAR.value),
+        (IbcTokenType.IDENTIFIER, 'name'),
+        (IbcTokenType.COLON, ':'),
+        (IbcTokenType.IDENTIFIER, ' 用户姓名'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.EOF, '')
+    ]
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        
+        for i, (actual_token, expected_token) in enumerate(zip(tokens, expected)):
+            expected_type, expected_value = expected_token
+            assert actual_token.type == expected_type and actual_token.value == expected_value, \
+                f"Token {i} 不匹配: 预期 Token({expected_type}, '{expected_value}', _) 实际 {actual_token}"
+        
+        print("  ✓ 成功处理变量声明中的等号")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        return False
+
+
+def test_equal_sign_with_symbol_ref():
+    """测试等号与符号引用结合"""
+    print("测试 equal_sign_with_symbol_ref 函数...")
+    
+    code = """func test():
+    result = $httpClient.get(url)"""
+    expected = [
+        (IbcTokenType.KEYWORDS, IbcKeywords.FUNC.value),
+        (IbcTokenType.IDENTIFIER, 'test'),
+        (IbcTokenType.LPAREN, '('),
+        (IbcTokenType.RPAREN, ')'),
+        (IbcTokenType.COLON, ':'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.INDENT, ''),
+        (IbcTokenType.IDENTIFIER, 'result '),
+        (IbcTokenType.EQUAL, '='),
+        (IbcTokenType.IDENTIFIER, ' '),
+        (IbcTokenType.REF_IDENTIFIER, 'httpClient.get'),
+        (IbcTokenType.LPAREN, '('),
+        (IbcTokenType.IDENTIFIER, 'url'),
+        (IbcTokenType.RPAREN, ')'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.DEDENT, ''),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.EOF, '')
+    ]
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        
+        for i, (actual_token, expected_token) in enumerate(zip(tokens, expected)):
+            expected_type, expected_value = expected_token
+            assert actual_token.type == expected_type and actual_token.value == expected_value, \
+                f"Token {i} 不匹配: 预期 Token({expected_type}, '{expected_value}', _) 实际 {actual_token}"
+        
+        print("  ✓ 成功处理等号与符号引用结合")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        return False
+
 
 if __name__ == "__main__":
     print("\n开始测试 Intent Behavior Code 词法分析器...\n")
@@ -510,6 +602,12 @@ if __name__ == "__main__":
         print()
         
         test_results.append(("特殊符号", test_bracket_and_backslash_symbols()))
+        print()
+        
+        test_results.append(("变量等号语法", test_equal_sign_in_var_declaration()))
+        print()
+        
+        test_results.append(("等号符号引用", test_equal_sign_with_symbol_ref()))
         print()
         
         test_results.append(("错误情况", test_error_cases()))
