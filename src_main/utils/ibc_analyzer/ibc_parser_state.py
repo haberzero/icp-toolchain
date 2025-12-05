@@ -143,7 +143,7 @@ class ModuleDeclState(BaseState):
 # 变量声明的子状态枚举
 class VarDeclSubState(Enum):
     EXPECTING_VAR_NAME = "EXPECTING_VAR_NAME"
-    EXPECTING_COLON = "EXPECTING_COLON"
+    EXPECTING_COLON_OR_COMMA = "EXPECTING_COLON_OR_COMMA"
     EXPECTING_VAR_DESC = "EXPECTING_VAR_DESC"
 
 class VarDeclState(BaseState):
@@ -159,6 +159,7 @@ class VarDeclState(BaseState):
         self.current_var_type_ref = ""  # 当前变量的类型引用
         self.sub_state = VarDeclSubState.EXPECTING_VAR_NAME
         self.pop_flag = False
+        self.is_multi_var_line = False
 
     def process_token(self, token: Token) -> None:
         self.current_token = token
@@ -166,18 +167,24 @@ class VarDeclState(BaseState):
         if self.sub_state == VarDeclSubState.EXPECTING_VAR_NAME:
             if token.type == IbcTokenType.IDENTIFIER:
                 self.current_var_name = token.value.strip()
-                self.sub_state = VarDeclSubState.EXPECTING_COLON
+                self.sub_state = VarDeclSubState.EXPECTING_COLON_OR_COMMA
             else:
                 raise IbcParserError(
                     message=f"VarDeclState: Expecting variable name but got {token.type}",
                     line_num=token.line_num
                 )
                 
-        elif self.sub_state == VarDeclSubState.EXPECTING_COLON:
+        elif self.sub_state == VarDeclSubState.EXPECTING_COLON_OR_COMMA:
             if token.type == IbcTokenType.COLON:
+                if self.is_multi_var_line:
+                    raise IbcParserError(
+                        message=f"VarDeclState: Multiple variable declaration in one line does not allow description",
+                        line_num=token.line_num
+                    )
                 self.sub_state = VarDeclSubState.EXPECTING_VAR_DESC
-            elif token.type == IbcTokenType.NEWLINE:
-                # 无描述内容直接结束
+            elif token.type == IbcTokenType.COMMA:
+                # 单行内多变量，不允许描述；逗号表示继续收集下一个变量名
+                self.is_multi_var_line = True
                 self.current_var_desc = ""
                 if self.current_var_name not in self.variables:
                     self.variables[self.current_var_name] = self.current_var_desc
@@ -188,11 +195,25 @@ class VarDeclState(BaseState):
                     )
                 self.current_var_name = ""
                 self.current_var_desc = ""
+                self.sub_state = VarDeclSubState.EXPECTING_VAR_NAME
+            elif token.type == IbcTokenType.NEWLINE:
+                # 行结束，若是多变量场景或单变量无描述，最后一个变量加入并弹出
+                self.current_var_desc = ""
+                if self.current_var_name:
+                    if self.current_var_name not in self.variables:
+                        self.variables[self.current_var_name] = self.current_var_desc
+                    else:
+                        raise IbcParserError(
+                            message=f"VarDeclState: Got an duplicate var definitions",
+                            line_num=token.line_num
+                        )
+                self.current_var_name = ""
+                self.current_var_desc = ""
                 self._create_variable_nodes()
                 self.pop_flag = True
             else:
                 raise IbcParserError(
-                    message=f"VarDeclState: Expecting colon or new line but got {token.type}",
+                    message=f"VarDeclState: Expecting colon, comma, or new line but got {token.type}",
                     line_num=token.line_num
                 )
         

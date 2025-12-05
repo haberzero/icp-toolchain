@@ -126,7 +126,7 @@ def test_variable_declaration():
     print("\n测试 variable_declaration 函数...")
     
     code = """var userCount: 当前在线用户数量
-var config"""
+var config, cache"""
     
     try:
         lexer = IbcLexer(code)
@@ -145,10 +145,12 @@ var config"""
         
         assert "userCount" in var_dict, "缺少userCount变量"
         assert "config" in var_dict, "缺少config变量"
+        assert "cache" in var_dict, "缺少cache变量"
         
         # 验证描述
         assert var_dict["userCount"] == "当前在线用户数量", f"userCount的描述不匹配: {var_dict['userCount']}"
         assert var_dict["config"] == "", f"config应该没有描述: {var_dict['config']}"
+        assert var_dict["cache"] == "", f"cache应该没有描述: {var_dict['cache']}"
         
         print("  ✓ 成功解析变量声明")
         print("\nAST树结构:")
