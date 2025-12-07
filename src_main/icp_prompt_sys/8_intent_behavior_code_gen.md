@@ -301,7 +301,7 @@ func 发送请求(请求数据):
 已有的工程文件结构参考：
 ```json
 {
-  "proj_root": {
+  "proj_root_dict": {
     "utils": {
       "logger": "日志工具模块",
       "validator": "数据验证工具模块"

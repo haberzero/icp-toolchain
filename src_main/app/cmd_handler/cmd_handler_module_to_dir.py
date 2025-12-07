@@ -140,7 +140,7 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             return False
 
         # 检查key的存在性以及key内容的匹配，以及检查是否有其它多余字段
-        required_key = "proj_root"
+        required_key = "proj_root_dict"
         if required_key not in json_dict:
             print(f"{Colors.FAIL}错误: AI返回的内容缺少关键字段: {required_key}{Colors.ENDC}")
             return False
@@ -154,7 +154,7 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
                 return False
         
         # 检查目录结构中的所有键是否包含'.'（疑似后缀名或非法命名）
-        def _has_dot_in_keys(node, path="proj_root"):
+        def _has_dot_in_keys(node, path="proj_root_dict"):
             if isinstance(node, dict):
                 for k, v in node.items():
                     current_path = f"{path}/{k}" if path else k
@@ -166,7 +166,7 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
                             return True
             return False
         
-        if _has_dot_in_keys(json_dict[required_key], "proj_root"):
+        if _has_dot_in_keys(json_dict[required_key], "proj_root_dict"):
             return False
         
         return True

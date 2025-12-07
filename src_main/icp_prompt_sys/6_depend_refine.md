@@ -48,7 +48,7 @@
    - 说明: 包含基本的模块依赖描述
    - 结构示意:
          {
-         "proj_root": {
+         "proj_root_dict": {
             "src": {
                "main": {
                "main_loop": "调用物理计算核心"

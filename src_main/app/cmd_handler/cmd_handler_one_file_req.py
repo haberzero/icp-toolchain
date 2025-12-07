@@ -66,7 +66,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
 
         # 使用前序依赖分析的结果，生成最终的目录内容文件
         dir_content_dict = {
-            "proj_root": self.final_dir_json_dict['proj_root'],
+            "proj_root_dict": self.final_dir_json_dict['proj_root_dict'],
             "dependent_relation": self.dependent_relation_dict
         }
         
@@ -104,8 +104,8 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             return
 
         # 检查是否包含必要的节点
-        if "proj_root" not in final_dir_json_dict or "dependent_relation" not in final_dir_json_dict:
-            print(f"  {Colors.FAIL}错误: 最终目录结构缺少必要的节点(proj_root或dependent_relation){Colors.ENDC}")
+        if "proj_root_dict" not in final_dir_json_dict or "dependent_relation" not in final_dir_json_dict:
+            print(f"  {Colors.FAIL}错误: 最终目录结构缺少必要的节点(proj_root_dict或dependent_relation){Colors.ENDC}")
             return
         
         # 从dependent_relation中获取文件创建顺序, 可以认为列表中靠近 index=0 的文件其层级低且被其它文件依赖
@@ -229,7 +229,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             str: 完整的用户提示词，失败时返回空字符串
         """
         # 获取dir_json中的文件描述
-        file_description = DirJsonFuncs.get_file_description(self.final_dir_json_dict['proj_root'], icp_json_file_path)
+        file_description = DirJsonFuncs.get_file_description(self.final_dir_json_dict['proj_root_dict'], icp_json_file_path)
         if not file_description:
             print(f"  {Colors.FAIL}错误: 无法获取文件描述: {icp_json_file_path}{Colors.ENDC}")
             return ""

@@ -62,15 +62,15 @@ class DirJsonFuncs:
     @staticmethod
     def ensure_all_files_in_dependent_relation(json_content: Dict) -> bool:
         """
-        确保proj_root下的所有文件都在dependent_relation中有对应的条目
+        确保proj_root_dict下的所有文件都在dependent_relation中有对应的条目
         如果没有，则添加一个空的依赖列表
         返回是否进行了修改
         """
-        proj_root = json_content.get("proj_root", {})
+        proj_root_dict = json_content.get("proj_root_dict", {})
         dependent_relation = json_content.get("dependent_relation", {})
         
-        # 收集proj_root下的所有文件路径
-        proj_root_paths = set()
+        # 收集proj_root_dict下的所有文件路径
+        proj_root_dict_paths = set()
         def _collect_paths(node, current_path=""):
             if isinstance(node, dict):
                 for key, value in node.items():
@@ -79,11 +79,11 @@ class DirJsonFuncs:
                         _collect_paths(value, new_path)
                     elif isinstance(value, str):
                         # 只有当值是字符串时，才认为key是文件路径
-                        proj_root_paths.add(new_path)
+                        proj_root_dict_paths.add(new_path)
         
-        _collect_paths(proj_root)
+        _collect_paths(proj_root_dict)
         dependent_files = set(dependent_relation.keys())
-        missing_files = proj_root_paths - dependent_files
+        missing_files = proj_root_dict_paths - dependent_files
         
         # 为缺失的文件添加空的依赖列表
         modified = False
@@ -236,7 +236,7 @@ class DirJsonFuncs:
     @staticmethod
     def _collect_paths(node: Any, current_path: str = "", paths: Optional[Set[str]] = None) -> Set[str]:
         """
-        收集proj_root中的所有路径
+        收集proj_root_dict中的所有路径
         """
         if paths is None:
             paths = set()
@@ -253,13 +253,13 @@ class DirJsonFuncs:
         return paths
 
     @staticmethod
-    def get_file_description(proj_root_content: Dict, file_path: str) -> str:
+    def get_file_description(proj_root_dict_content: Dict, file_path: str) -> str:
         """
         获取文件描述
-        从proj_root_content结构中根据文件路径获取对应的文件描述
+        从proj_root_dict_content结构中根据文件路径获取对应的文件描述
         """
         keys = file_path.split('/')
-        current = proj_root_content
+        current = proj_root_dict_content
         
         for key in keys[:-1]:  # 遍历目录部分
             if key in current and isinstance(current[key], dict):
@@ -274,18 +274,18 @@ class DirJsonFuncs:
         return ""
 
     @staticmethod
-    def get_all_file_paths(proj_root: Dict[str, Any]) -> List[str]:
+    def get_all_file_paths(proj_root_dict: Dict[str, Any]) -> List[str]:
         """
-        获取proj_root中的所有文件路径列表，按字母顺序排序
+        获取proj_root_dict中的所有文件路径列表，按字母顺序排序
         返回: 文件路径列表
         """
-        paths = DirJsonFuncs._collect_paths(proj_root)
+        paths = DirJsonFuncs._collect_paths(proj_root_dict)
         return list(paths)
 
     @staticmethod
-    def validate_dependent_paths(dependent_relation: Dict[str, Any], proj_root: Dict[str, Any]) -> tuple[bool, List[str]]:
+    def validate_dependent_paths(dependent_relation: Dict[str, Any], proj_root_dict: Dict[str, Any]) -> tuple[bool, List[str]]:
         """
-        检查dependent_relation中的依赖路径是否都存在于proj_root中
+        检查dependent_relation中的依赖路径是否都存在于proj_root_dict中
         返回: (是否有效, 错误信息列表)
         """
         errors = []
@@ -294,14 +294,14 @@ class DirJsonFuncs:
             errors.append("dependent_relation 不是有效的字典类型")
             return False, errors
             
-        # 收集proj_root中的所有路径
-        proj_root_paths = DirJsonFuncs._collect_paths(proj_root)
+        # 收集proj_root_dict中的所有路径
+        proj_root_dict_paths = DirJsonFuncs._collect_paths(proj_root_dict)
         
         # 检查dependent_relation中的依赖路径
         for dep_key, dep_value in dependent_relation.items():
             # 检查依赖项路径是否存在
-            if dep_key not in proj_root_paths:
-                errors.append(f"dependent_relation 中的键 '{dep_key}' 在 proj_root 中不存在")
+            if dep_key not in proj_root_dict_paths:
+                errors.append(f"dependent_relation 中的键 '{dep_key}' 在 proj_root_dict 中不存在")
 
             # 检查依赖项的值是否为列表
             if not isinstance(dep_value, list):
@@ -310,7 +310,7 @@ class DirJsonFuncs:
 
             # 检查依赖项中的被依赖路径是否存在
             for sub_dep_key in dep_value:
-                if sub_dep_key not in proj_root_paths:
-                    errors.append(f"dependent_relation 中 '{dep_key}' 依赖的路径 '{sub_dep_key}' 在 proj_root 中不存在")
+                if sub_dep_key not in proj_root_dict_paths:
+                    errors.append(f"dependent_relation 中 '{dep_key}' 依赖的路径 '{sub_dep_key}' 在 proj_root_dict 中不存在")
         
         return len(errors) == 0, errors

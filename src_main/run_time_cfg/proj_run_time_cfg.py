@@ -15,7 +15,7 @@ class ProjRunTimeCfg:
         return cls._instance
 
     def __init__(self):
-        if not hasattr(self, 'proj_root'):
+        if not hasattr(self, 'proj_root_dict'):
             self.proj_work_dir_path = ""
 
     def set_work_dir_path(self, new_path):

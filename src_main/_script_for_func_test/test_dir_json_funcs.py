@@ -69,7 +69,7 @@ def test_ensure_all_files_in_dependent_relation():
     
     # 测试用例: 包含文件但缺少依赖关系条目的JSON
     json_content = {
-        "proj_root": {
+        "proj_root_dict": {
             "src": {
                 "models": {
                     "Heptagon": "管理正七边形几何属性与边界检测",
@@ -243,7 +243,7 @@ def test_collect_paths():
     """测试路径收集功能"""
     print("测试 collect_paths 函数...")
     
-    proj_root = {
+    proj_root_dict = {
         "src": {
             "models": {
                 "Heptagon": "管理正七边形几何属性与边界检测",
@@ -258,7 +258,7 @@ def test_collect_paths():
         }
     }
     
-    paths = DirJsonFuncs._collect_paths(proj_root)
+    paths = DirJsonFuncs._collect_paths(proj_root_dict)
     expected_paths = {
         "src/models/Heptagon",
         "src/models/Ball",
@@ -274,7 +274,7 @@ def test_validate_dependent_paths():
     """测试依赖路径验证功能"""
     print("测试 validate_dependent_paths 函数...")
     
-    proj_root = {
+    proj_root_dict = {
         "src": {
             "models": {
                 "Heptagon": "管理正七边形几何属性与边界检测",
@@ -294,7 +294,7 @@ def test_validate_dependent_paths():
         ]
     }
     
-    result, _ = DirJsonFuncs.validate_dependent_paths(valid_dependent_relation, proj_root)
+    result, _ = DirJsonFuncs.validate_dependent_paths(valid_dependent_relation, proj_root_dict)
     assert result, "依赖路径应该有效"
     print("  ✓ 成功验证了有效的依赖路径")
     
@@ -305,7 +305,7 @@ def test_validate_dependent_paths():
         ]
     }
     
-    result, _ = DirJsonFuncs.validate_dependent_paths(invalid_dependent_relation, proj_root)
+    result, _ = DirJsonFuncs.validate_dependent_paths(invalid_dependent_relation, proj_root_dict)
     assert not result, "依赖路径应该无效"
     print("  ✓ 成功检测到无效的依赖路径")
 

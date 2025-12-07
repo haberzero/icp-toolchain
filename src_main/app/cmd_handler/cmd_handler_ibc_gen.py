@@ -105,8 +105,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             return
         
         final_dir_json_dict = json.loads(final_dir_structure_str)
-        if "proj_root" not in final_dir_json_dict or "dependent_relation" not in final_dir_json_dict:
-            print(f"  {Colors.FAIL}错误: IBC目录结构缺少必要的节点(proj_root或dependent_relation){Colors.ENDC}")
+        if "proj_root_dict" not in final_dir_json_dict or "dependent_relation" not in final_dir_json_dict:
+            print(f"  {Colors.FAIL}错误: IBC目录结构缺少必要的节点(proj_root_dict或dependent_relation){Colors.ENDC}")
             return
         
         # 读取用户需求
@@ -152,7 +152,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         # 存储实例变量供后续使用
         self.dir_json_dict = final_dir_json_dict
-        self.proj_root_json_str = json.dumps(final_dir_json_dict['proj_root'], indent=2, ensure_ascii=False)
+        self.proj_root_dict_json_str = json.dumps(final_dir_json_dict['proj_root_dict'], indent=2, ensure_ascii=False)
         self.dependent_relation = dependent_relation
         self.file_creation_order_list = file_creation_order_list
         self.user_requirements_str = user_requirements_str
@@ -497,7 +497,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt_str = user_prompt_template_str
         user_prompt_str = user_prompt_str.replace('USER_REQUIREMENTS_PLACEHOLDER', self.user_requirements_str)
         user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_str)
-        user_prompt_str = user_prompt_str.replace('PROJECT_STRUCTURE_PLACEHOLDER', self.proj_root_json_str)
+        user_prompt_str = user_prompt_str.replace('PROJECT_STRUCTURE_PLACEHOLDER', self.proj_root_dict_json_str)
         user_prompt_str = user_prompt_str.replace('CURRENT_FILE_PATH_PLACEHOLDER', icp_json_file_path)
         user_prompt_str = user_prompt_str.replace('CLASS_CONTENT_PLACEHOLDER', class_content if class_content else '无')
         user_prompt_str = user_prompt_str.replace('FUNC_CONTENT_PLACEHOLDER', func_content if func_content else '无')

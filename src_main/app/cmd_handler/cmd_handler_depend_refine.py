@@ -237,12 +237,12 @@ class CmdHandlerDependRefine(BaseCmdHandler):
             print(f"AI返回内容: {cleaned_json_str}")
             return False, {}
         
-        # 检查新JSON内容是否包含proj_root和dependent_relation节点
-        if "proj_root" not in new_json_dict or "dependent_relation" not in new_json_dict:
+        # 检查新JSON内容是否包含proj_root_dict和dependent_relation节点
+        if "proj_root_dict" not in new_json_dict or "dependent_relation" not in new_json_dict:
             print(f"{Colors.WARNING}警告: 生成的JSON结构不符合要求，缺少必需的根节点{Colors.ENDC}")
             return False, {}
         
-        # 确保dependent_relation中包含proj_root下的所有文件路径
+        # 确保dependent_relation中包含proj_root_dict下的所有文件路径
         DirJsonFuncs.ensure_all_files_in_dependent_relation(new_json_dict)
         
         # 检测循环依赖

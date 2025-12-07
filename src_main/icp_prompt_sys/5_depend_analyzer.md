@@ -72,7 +72,7 @@
 
       ```json
       {
-        "proj_root": {
+        "proj_root_dict": {
           "src": {
             "modules": {
               "user_controller": "处理用户请求与路由",
@@ -95,7 +95,7 @@
 
       ```json
       {
-        "proj_root": {
+        "proj_root_dict": {
           "src": {
             "modules": {
               "user_controller": "处理用户请求与路由",
@@ -135,7 +135,7 @@
 
       ```json
       {
-        "proj_root": {
+        "proj_root_dict": {
           "pipeline": {
             "ingest": {
               "ingest": "数据源读取主模块",
@@ -159,7 +159,7 @@
 
       ```json
       {
-        "proj_root": {
+        "proj_root_dict": {
           "pipeline": {
             "ingest": {
               "ingest": "数据源读取主模块",

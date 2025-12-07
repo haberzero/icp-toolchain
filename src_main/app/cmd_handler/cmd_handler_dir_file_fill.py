@@ -256,7 +256,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             print(f"{Colors.WARNING}警告: 生成的JSON包含非字符串类型的叶子节点，正在重新生成...{Colors.ENDC}")
             return False, {}
 
-        # 检查并确保 proj_root 下有主入口文件
+        # 检查并确保 proj_root_dict 下有主入口文件
         if not self._ensure_main_entry_file(new_json_dict):
             print(f"{Colors.WARNING}警告: 目录结构中的主入口文件检查/填充未成功，正在重新生成...{Colors.ENDC}")
             return False, {}
@@ -264,14 +264,14 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         return True, new_json_dict
 
     def _ensure_main_entry_file(self, json_dict: Dict) -> bool:
-        """检查并确保proj_root下有主入口文件"""
+        """检查并确保proj_root_dict下有主入口文件"""
         import re
         
-        if "proj_root" not in json_dict:
+        if "proj_root_dict" not in json_dict:
             return False
         
-        proj_root = json_dict["proj_root"]
-        if not isinstance(proj_root, dict):
+        proj_root_dict = json_dict["proj_root_dict"]
+        if not isinstance(proj_root_dict, dict):
             return False
         
         # 常见主入口文件命名模式（不区分大小写）
@@ -292,9 +292,9 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             r'^Bootstrap$'
         ]
         
-        # 检查proj_root直接子节点是否有主入口文件
+        # 检查proj_root_dict直接子节点是否有主入口文件
         has_main_entry = False
-        for key, value in proj_root.items():
+        for key, value in proj_root_dict.items():
             # 只检查文件节点（值为字符串的节点）
             if isinstance(value, str):
                 # 使用正则表达式匹配
@@ -312,14 +312,14 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             main_file_name = 'main'
             
             # 如果 'main' 已经被用作目录名，尝试其他名称
-            if main_file_name in proj_root and isinstance(proj_root[main_file_name], dict):
+            if main_file_name in proj_root_dict and isinstance(proj_root_dict[main_file_name], dict):
                 for alt_name in ['app', 'index', 'run', 'start', 'launcher']:
-                    if alt_name not in proj_root or not isinstance(proj_root[alt_name], dict):
+                    if alt_name not in proj_root_dict or not isinstance(proj_root_dict[alt_name], dict):
                         main_file_name = alt_name
                         break
             
             # 添加主入口文件
-            proj_root[main_file_name] = "主入口程序，执行初始化并启动程序"
+            proj_root_dict[main_file_name] = "主入口程序，执行初始化并启动程序"
             print(f"{Colors.OKGREEN}未检测到主入口文件，已自动添加: {main_file_name}{Colors.ENDC}")
         
         return True

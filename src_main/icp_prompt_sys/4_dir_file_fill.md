@@ -37,7 +37,7 @@
    - 描述精炼: 功能描述≤50个字，用语精简准确，描述文件的功能/内容/作用目标
    - 需求对应: 每个文件必须直接对应需求模块
    - 主入口创建: 必须设置合理的主入口文件(main文件)
-   - 主入口独立: 主入口文件应该置于根目录(proj_root层级下)
+   - 主入口独立: 主入口文件应该置于根目录(proj_root_dict层级下)
 
 3. **格式约束**：
    - JSON规范: 严格遵循JSON语法规则
@@ -74,12 +74,12 @@
 4. **示例说明**：
    1. Web应用目录填充前后对比:
       - 格式类型: json
-      - 说明: 填充前仅包含目录；填充后仅新增字符串叶子节点（文件描述），目录结构键不变；主入口文件位于proj_root
+      - 说明: 填充前仅包含目录；填充后仅新增字符串叶子节点（文件描述），目录结构键不变；主入口文件位于proj_root_dict
       - 填充前:
 
       ```json
       {
-        "proj_root": {
+        "proj_root_dict": {
           "src": {
             "modules": {}
           },
@@ -93,7 +93,7 @@
 
       ```json
       {
-        "proj_root": {
+        "proj_root_dict": {
           "src": {
             "modules": {
               "user_controller": "处理用户请求与路由",
@@ -119,7 +119,7 @@
 
       ```json
       {
-        "proj_root": {
+        "proj_root_dict": {
           "pipeline": {
             "ingest": {},
             "process": {},
@@ -133,7 +133,7 @@
 
       ```json
       {
-        "proj_root": {
+        "proj_root_dict": {
           "pipeline": {
             "ingest": {
               "reader": "数据源读取",

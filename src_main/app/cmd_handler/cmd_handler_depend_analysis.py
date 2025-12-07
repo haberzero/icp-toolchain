@@ -124,7 +124,7 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         self.old_json_dict = json.loads(dir_with_files_str)
         
         # 生成完整路径列表
-        file_paths = DirJsonFuncs.get_all_file_paths(self.old_json_dict.get("proj_root", {}))
+        file_paths = DirJsonFuncs.get_all_file_paths(self.old_json_dict.get("proj_root_dict", {}))
         file_paths_text = "\n".join(file_paths)
 
         # 读取用户提示词模板
@@ -168,19 +168,19 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             return False
         
         # 检查新JSON内容是否包含必需的根节点
-        if "proj_root" not in new_json_dict or "dependent_relation" not in new_json_dict:
-            print(f"{Colors.WARNING}警告: 生成的JSON缺少必需的根节点 proj_root 或 dependent_relation{Colors.ENDC}")
+        if "proj_root_dict" not in new_json_dict or "dependent_relation" not in new_json_dict:
+            print(f"{Colors.WARNING}警告: 生成的JSON缺少必需的根节点 proj_root_dict 或 dependent_relation{Colors.ENDC}")
             return False
         
-        # 检查proj_root结构是否与原始结构一致
-        if not DirJsonFuncs.compare_structure(self.old_json_dict["proj_root"], new_json_dict["proj_root"]):
-            print(f"{Colors.WARNING}警告: proj_root结构与原始结构不一致{Colors.ENDC}")
+        # 检查proj_root_dict结构是否与原始结构一致
+        if not DirJsonFuncs.compare_structure(self.old_json_dict["proj_root_dict"], new_json_dict["proj_root_dict"]):
+            print(f"{Colors.WARNING}警告: proj_root_dict结构与原始结构不一致{Colors.ENDC}")
             return False
             
-        # 检查dependent_relation中的依赖路径是否都存在于proj_root中
-        is_valid, validation_errors = DirJsonFuncs.validate_dependent_paths(new_json_dict["dependent_relation"], new_json_dict["proj_root"])
+        # 检查dependent_relation中的依赖路径是否都存在于proj_root_dict中
+        is_valid, validation_errors = DirJsonFuncs.validate_dependent_paths(new_json_dict["dependent_relation"], new_json_dict["proj_root_dict"])
         if not is_valid:
-            print(f"{Colors.WARNING}警告: 生成的 dependent_relation 出现了 proj_root 下不存在的路径{Colors.ENDC}")
+            print(f"{Colors.WARNING}警告: 生成的 dependent_relation 出现了 proj_root_dict 下不存在的路径{Colors.ENDC}")
             print(f"{Colors.WARNING}具体错误如下:{Colors.ENDC}")
             for error in validation_errors:
                 print(f"  - {error}")

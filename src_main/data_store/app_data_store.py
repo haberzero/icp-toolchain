@@ -28,7 +28,7 @@ class AppDataStore:
             if os.path.exists(self.app_data_json_path):
                 with open(self.app_data_json_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    return data.get("proj_root", "")
+                    return data.get("proj_root_dict", "")
         except (json.JSONDecodeError, IOError) as e:
             print(f"读取历史数据文件失败: {e}")
         return ""
@@ -41,7 +41,7 @@ class AppDataStore:
                 
             # 保存路径到JSON文件
             with open(self.app_data_json_path, 'w', encoding='utf-8') as f:
-                json.dump({"proj_root": path}, f, ensure_ascii=False, indent=2)
+                json.dump({"proj_root_dict": path}, f, ensure_ascii=False, indent=2)
         except IOError as e:
             print(f"保存{path}到文件失败: {e}")
             
