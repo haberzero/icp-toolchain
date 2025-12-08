@@ -2,6 +2,10 @@
 
 本仓库是一个实现 Intent Code Protocol 所定义的工程结构的具体命令行工具。可用于从最初始的编程需求开始，逐步生成一个符合ICP规范的完整的代码工程
 
+ICP规范文档参见：
+
+[Intent Code Protocol Github 仓库页](https://github.com/haberzero/intent-code-protocol) 
+
 ## 版本定义以及仓库状态
 
 v0.0.1 - 初始版本，demo状态，仅包含一个基本可用的命令行应用以及相关的命令执行器
