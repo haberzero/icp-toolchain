@@ -154,6 +154,58 @@ class IbcDataStore:
             print(f"    {Colors.WARNING}警告: 保存verify文件失败: {e}{Colors.ENDC}")
             return False
     
+    def update_ibc_verify_code(self, ibc_root_path: str, file_path: str) -> bool:
+        """更新单个文件的IBC校验码
+        
+        Args:
+            ibc_root_path: IBC根目录路径
+            file_path: 文件路径
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        from libs.ibc_funcs import IbcFuncs
+        
+        ibc_file = self.get_ibc_file_path(ibc_root_path, file_path)
+        verify_file = self.get_verify_file_path(ibc_root_path, file_path)
+        
+        if not os.path.exists(ibc_file):
+            return False
+        
+        try:
+            ibc_content = self.load_ibc_code(ibc_file)
+            if not ibc_content:
+                return False
+            
+            current_ibc_md5 = IbcFuncs.calculate_text_md5(ibc_content)
+            
+            verify_data = self.load_verify_data(verify_file)
+            verify_data['ibc_verify_code'] = current_ibc_md5
+            
+            return self.save_verify_data(verify_file, verify_data)
+        except Exception as e:
+            print(f"    {Colors.WARNING}警告: 更新ibc文件MD5失败: {file_path}, {e}{Colors.ENDC}")
+            return False
+    
+    def update_all_ibc_verify_codes(self, ibc_root_path: str, file_paths: List[str]) -> None:
+        """批量更新所有IBC文件的校验码
+        
+        Args:
+            ibc_root_path: IBC根目录路径
+            file_paths: 文件路径列表
+        """
+        success_count = 0
+        fail_count = 0
+        
+        for file_path in file_paths:
+            if self.update_ibc_verify_code(ibc_root_path, file_path):
+                success_count += 1
+            else:
+                fail_count += 1
+        
+        if fail_count > 0:
+            print(f"    {Colors.WARNING}警告: {fail_count} 个文件更新失败{Colors.ENDC}")
+    
     # ==================== 符号表数据管理 ====================
     def get_symbols_file_path(self, ibc_root_path: str, file_path: str) -> str:
         """获取文件对应的symbols.json路径"""

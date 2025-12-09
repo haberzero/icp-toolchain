@@ -75,7 +75,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 return
         
         # 所有文件处理完毕，统一更新ibc文件的MD5值
-        self._update_all_ibc_verify_codes()
+        print(f"  {Colors.OKBLUE}开始更新ibc文件校验码...{Colors.ENDC}")
+        ibc_data_store = get_ibc_data_store()
+        ibc_data_store.update_all_ibc_verify_codes(self.work_ibc_dir_path, self.file_creation_order_list)
+        print(f"  {Colors.OKGREEN}ibc文件校验码更新完毕{Colors.ENDC}")
         
         print(f"{Colors.OKGREEN}半自然语言行为描述代码生成完毕!{Colors.ENDC}")
     
@@ -260,7 +263,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                     need_update_flag_dict[potential_dependent] = True
                     # 递归传播
                     self._propagate_update_to_dependents(potential_dependent, need_update_flag_dict)
-    
     
     def _create_single_ibc_file(self, icp_json_file_path: str) -> bool:
         """为单个文件生成IBC代码（包含重试机制）
@@ -499,15 +501,16 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 continue
             
             # 解析响应
-            normalized_symbols = self._parse_symbol_normalizer_response(response_content)
+            normalized_symbols = IbcFuncs.parse_symbol_normalizer_response(response_content)
             if normalized_symbols:
-                return normalized_symbols
-            
-            print(f"    {Colors.WARNING}警告: AI返回的符号规范化结果为空{Colors.ENDC}")
+                return True, normalized_symbols
+            else:
+                print(f"    {Colors.WARNING}警告: AI返回的符号规范化结果为空{Colors.ENDC}")
+                continue
         
         # 达到最大重试次数
         print(f"    {Colors.FAIL}符号规范化失败：AI未能返回有效结果（已重试{max_attempts}次）{Colors.ENDC}")
-        return None
+        return False, {}
 
     def _build_user_prompt_for_symbol_normalizer(self, icp_json_file_path: str, symbols: Dict[str, SymbolNode], ibc_code: str) -> str:
         """
@@ -566,76 +569,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             lines.append(f"- {symbol.symbol_name} ({symbol_type}, 描述: {description})")
         return '\n'.join(lines)
         
-    def _parse_symbol_normalizer_response(self, response: str) -> Dict[str, Dict[str, str]]:
-        """解析符号规范化AI的响应"""
-        try:
-            # 清理代码块标记
-            cleaned_response = ICPChatHandler.clean_code_block_markers(response)
-            
-            # 解析JSON
-            result = json.loads(cleaned_response)
-            
-            # 有效的可见性值列表
-            valid_visibilities = [v.value for v in VisibilityTypes]
-            
-            # 验证结果格式
-            validated_result = {}
-            for symbol_name, symbol_data in result.items():
-                if 'normalized_name' in symbol_data and 'visibility' in symbol_data:
-                    # 验证normalized_name符合标识符规范
-                    if self._validate_identifier(symbol_data['normalized_name']):
-                        # 验证visibility是预定义值
-                        if symbol_data['visibility'] in valid_visibilities:
-                            validated_result[symbol_name] = symbol_data
-                        else:
-                            print(f"    {Colors.WARNING}警告: 符号 {symbol_name} 的可见性值无效: {symbol_data['visibility']}，使用默认值{Colors.ENDC}")
-                            # 仍然保留该符号，但使用默认可见性
-                            symbol_data['visibility'] = 'file_local'
-                            validated_result[symbol_name] = symbol_data
-                    else:
-                        print(f"    {Colors.WARNING}警告: 符号 {symbol_name} 的规范化名称无效: {symbol_data['normalized_name']}{Colors.ENDC}")
-            
-            return validated_result
-            
-        except json.JSONDecodeError as e:
-            print(f"    {Colors.FAIL}错误: 解析AI响应JSON失败: {e}{Colors.ENDC}")
-            return {}
-        except Exception as e:
-            print(f"    {Colors.FAIL}错误: 处理AI响应失败: {e}{Colors.ENDC}")
-            return {}
-    
-    def _validate_identifier(self, identifier: str) -> bool:
-        """验证标识符是否符合规范"""
-        if not identifier:
-            return False
-        # 标识符必须以字母或下划线开头，仅包含字母、数字、下划线
-        pattern = r'^[a-zA-Z_][a-zA-Z0-9_]*$'
-        return re.match(pattern, identifier) is not None
 
-    def _update_all_ibc_verify_codes(self):
-        """统一更新所有ibc文件的MD5校验码到verify文件中"""
-        print(f"  {Colors.OKBLUE}开始更新ibc文件校验码...{Colors.ENDC}")
-        
-        ibc_data_store = get_ibc_data_store()
-        
-        for file_path in self.file_creation_order_list:
-            ibc_file = ibc_data_store.get_ibc_file_path(self.work_ibc_dir_path, file_path)
-            verify_file = ibc_data_store.get_verify_file_path(self.work_ibc_dir_path, file_path)
-            
-            if os.path.exists(ibc_file):
-                try:
-                    ibc_content = ibc_data_store.load_ibc_code(ibc_file)
-                    if ibc_content:
-                        current_ibc_md5 = IbcFuncs.calculate_text_md5(ibc_content)
-                        
-                        verify_data = ibc_data_store.load_verify_data(verify_file)
-                        verify_data['ibc_verify_code'] = current_ibc_md5
-                        ibc_data_store.save_verify_data(verify_file, verify_data)
-                except Exception as e:
-                    print(f"    {Colors.WARNING}警告: 更新ibc文件MD5失败: {file_path}, {e}{Colors.ENDC}")
-        
-        print(f"  {Colors.OKGREEN}ibc文件校验码更新完毕{Colors.ENDC}")
-    
     def is_cmd_valid(self):
         return self._check_cmd_requirement() and self._check_ai_handler()
 
