@@ -21,6 +21,7 @@ from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code
 from libs.dir_json_funcs import DirJsonFuncs
+from libs.ibc_funcs import IbcFuncs
 
 
 class CmdHandlerIbcGen(BaseCmdHandler):
@@ -73,6 +74,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 print(f"{Colors.FAIL}文件 {file_path} 处理失败，退出运行{Colors.ENDC}")
                 return
         
+        # 所有文件处理完毕，统一更新ibc文件的MD5值
+        self._update_all_ibc_verify_codes()
+        
         print(f"{Colors.OKGREEN}半自然语言行为描述代码生成完毕!{Colors.ENDC}")
     
     def _build_pre_execution_variables(self):
@@ -84,7 +88,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 final_dir_structure_str = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取目录结构失败: {e}{Colors.ENDC}")
-            return ""
+            return
         
         if not final_dir_structure_str:
             print(f"  {Colors.FAIL}错误: IBC目录结构内容为空{Colors.ENDC}")
@@ -129,9 +133,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         dependent_relation = final_dir_json_dict['dependent_relation']
         file_creation_order_list = DirJsonFuncs.build_file_creation_order(dependent_relation)
         
-        # 初始化更新状态
-        update_status = self._initialize_update_status(file_creation_order_list)
-        
         # 存储实例变量供后续使用
         self.dir_json_dict = final_dir_json_dict
         self.proj_root_dict_json_str = json.dumps(final_dir_json_dict['proj_root_dict'], indent=2, ensure_ascii=False)
@@ -140,7 +141,161 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self.user_requirements_str = user_requirements_str
         self.work_staging_dir_path = work_staging_dir_path
         self.work_ibc_dir_path = work_ibc_dir_path
-        self.update_status = update_status
+        
+        # 初始化更新状态 - 必须在实例变量设置后调用
+        self.need_update_flag_list = self._initialize_update_status(file_creation_order_list)
+
+    
+    def _initialize_update_status(self, file_list: List[str]) -> Dict[str, bool]:
+        """初始化更新状态字典
+        
+        根据以下逻辑标记文件是否需要更新：
+        1. 检查one_file_req的MD5值变化
+        2. 检查ibc文件是否存在
+        3. 检查依赖链中的变化（依赖传播）
+        
+        Args:
+            file_list: 按依赖顺序排列的文件列表
+            
+        Returns:
+            Dict[str, bool]: 文件路径到是否需要更新的映射
+        """
+        print(f"  {Colors.OKBLUE}开始检查文件更新状态...{Colors.ENDC}")
+        need_update_flag_list = {}
+        
+        # 第一阶段：检查one_file_req的MD5和ibc文件存在性
+        for file_path in file_list:
+            need_update = False
+            
+            # 构建文件路径
+            req_file = os.path.join(self.work_staging_dir_path, f"{file_path}_one_file_req.txt")
+            ibc_file = os.path.join(self.work_ibc_dir_path, f"{file_path}.ibc")
+            verify_file = os.path.join(self.work_ibc_dir_path, f"{file_path}_verify.json")
+            
+            # 检查one_file_req文件是否存在
+            if not os.path.exists(req_file):
+                print(f"    {Colors.WARNING}警告: one_file_req文件不存在: {file_path}{Colors.ENDC}")
+                need_update = True
+                need_update_flag_list[file_path] = need_update
+                continue
+            
+            # 读取one_file_req的当前MD5
+            try:
+                with open(req_file, 'r', encoding='utf-8') as f:
+                    req_content = f.read()
+                current_req_md5 = IbcFuncs.calculate_text_md5(req_content)
+            except Exception as e:
+                print(f"    {Colors.WARNING}警告: 读取one_file_req文件失败: {file_path}, {e}{Colors.ENDC}")
+                need_update = True
+                need_update_flag_list[file_path] = need_update
+                continue
+            
+            # 读取或创建verify.json文件
+            verify_data = self._load_or_create_verify_file(verify_file)
+            
+            # 检查one_file_req的MD5是否变化
+            saved_req_md5 = verify_data.get('one_file_req_verify_code', None)
+            if saved_req_md5 is None:
+                print(f"    {Colors.OKBLUE}首次生成: {file_path}{Colors.ENDC}")
+                need_update = True
+            elif saved_req_md5 != current_req_md5:
+                print(f"    {Colors.OKBLUE}one_file_req已变化: {file_path}{Colors.ENDC}")
+                need_update = True
+            
+            # 检查ibc文件是否存在
+            if not need_update and not os.path.exists(ibc_file):
+                print(f"    {Colors.OKBLUE}ibc文件不存在，需要生成: {file_path}{Colors.ENDC}")
+                need_update = True
+            
+            need_update_flag_list[file_path] = need_update
+            
+            # 更新one_file_req的MD5到verify文件
+            verify_data['one_file_req_verify_code'] = current_req_md5
+            self._save_verify_file(verify_file, verify_data)
+        
+        # 第二阶段：依赖链传播更新
+        # 按依赖顺序遍历（file_list已经是拓扑排序后的顺序）
+        for file_path in file_list:
+            if need_update_flag_list.get(file_path, False):
+                # 如果当前文件已标记需要更新，则所有依赖它的文件也需要更新
+                self._propagate_update_to_dependents(file_path, need_update_flag_list)
+            else:
+                # 检查ibc文件的MD5是否变化（用户可能手动修改了）
+                ibc_file = os.path.join(self.work_ibc_dir_path, f"{file_path}.ibc")
+                verify_file = os.path.join(self.work_ibc_dir_path, f"{file_path}_verify.json")
+                
+                if os.path.exists(ibc_file):
+                    try:
+                        with open(ibc_file, 'r', encoding='utf-8') as f:
+                            ibc_content = f.read()
+                        current_ibc_md5 = IbcFuncs.calculate_text_md5(ibc_content)
+                        
+                        verify_data = self._load_or_create_verify_file(verify_file)
+                        saved_ibc_md5 = verify_data.get('ibc_verify_code', None)
+                        
+                        if saved_ibc_md5 is not None and saved_ibc_md5 != current_ibc_md5:
+                            print(f"    {Colors.OKBLUE}ibc文件被手动修改: {file_path}，依赖它的文件需要更新{Colors.ENDC}")
+                            # 传播更新到依赖此文件的其他文件
+                            self._propagate_update_to_dependents(file_path, need_update_flag_list)
+                    except Exception as e:
+                        print(f"    {Colors.WARNING}警告: 检查ibc文件MD5失败: {file_path}, {e}{Colors.ENDC}")
+        
+        # 打印更新状态摘要
+        update_count = sum(1 for v in need_update_flag_list.values() if v)
+        print(f"  {Colors.OKGREEN}更新状态检查完成: {update_count}/{len(file_list)} 个文件需要更新{Colors.ENDC}")
+        
+        return need_update_flag_list
+    
+    def _load_or_create_verify_file(self, verify_file_path: str) -> Dict[str, str]:
+        """加载或创建verify.json文件
+        
+        Args:
+            verify_file_path: verify文件的完整路径
+            
+        Returns:
+            Dict[str, str]: verify数据字典
+        """
+        if os.path.exists(verify_file_path):
+            try:
+                with open(verify_file_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"    {Colors.WARNING}警告: 读取verify文件失败，将创建新文件: {e}{Colors.ENDC}")
+                return {}
+        else:
+            return {}
+    
+    def _save_verify_file(self, verify_file_path: str, verify_data: Dict[str, str]):
+        """保存verify.json文件
+        
+        Args:
+            verify_file_path: verify文件的完整路径
+            verify_data: 要保存的verify数据
+        """
+        try:
+            # 确保目录存在
+            os.makedirs(os.path.dirname(verify_file_path), exist_ok=True)
+            with open(verify_file_path, 'w', encoding='utf-8') as f:
+                json.dump(verify_data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"    {Colors.WARNING}警告: 保存verify文件失败: {e}{Colors.ENDC}")
+    
+    def _propagate_update_to_dependents(self, file_path: str, need_update_flag_list: Dict[str, bool]):
+        """将更新标记传播到所有依赖当前文件的文件
+        
+        Args:
+            file_path: 被依赖的文件路径
+            need_update_flag_list: 更新标记字典
+        """
+        # 遍历所有文件，找出依赖当前文件的文件
+        for potential_dependent, dependencies in self.dependent_relation.items():
+            if file_path in dependencies:
+                if not need_update_flag_list.get(potential_dependent, False):
+                    print(f"    {Colors.OKBLUE}依赖传播: {potential_dependent} 需要更新（因为依赖 {file_path}）{Colors.ENDC}")
+                    need_update_flag_list[potential_dependent] = True
+                    # 递归传播
+                    self._propagate_update_to_dependents(potential_dependent, need_update_flag_list)
+    
     
     def _create_single_ibc_file(self, icp_json_file_path: str) -> bool:
         """为单个文件生成IBC代码（包含重试机制）
@@ -154,7 +309,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         print(f"  {Colors.OKBLUE}正在处理文件: {icp_json_file_path}{Colors.ENDC}")
         
         # 检查是否需要更新
-        if not self._should_update_file(icp_json_file_path):
+        if not self.need_update_flag_list.get(icp_json_file_path, False):
             print(f"    {Colors.WARNING}文件及其依赖均未变化，跳过生成: {icp_json_file_path}{Colors.ENDC}")
             return True
         
@@ -188,7 +343,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             if not success or not ast_dict or not symbol_table:
                 print(f"    {Colors.WARNING}警告: IBC代码分析失败{Colors.ENDC}")
-                return None
+                return False
 
             # 保存IBC代码
             ibc_file_path = os.path.join(self.work_ibc_dir_path, f"{icp_json_file_path}.ibc")
@@ -209,58 +364,13 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             if not normalized_symbols_dict:
                 print(f"    {Colors.WARNING}警告: 符号规范化失败{Colors.ENDC}")
                 continue
+            
+            # 符号规范化成功，返回成功
+            return True
         
         # 达到最大重试次数
         print(f"  {Colors.FAIL}已达到最大重试次数({max_attempts})，跳过该文件{Colors.ENDC}")
         return False
-
-
-    
-    def _should_update_file(self, file_path: str) -> bool:
-        """检查文件是否需要更新"""
-        dependencies = self.dependent_relation.get(file_path, [])
-        for dep_file in dependencies:
-            if self.update_status.get(dep_file, False):
-                self.update_status[file_path] = True
-                print(f"    {Colors.OKBLUE}检测到依赖文件已更新，当前文件需要重新生成{Colors.ENDC}")
-                break
-        
-        return self.update_status.get(file_path, True)
-    
-    def _initialize_update_status(self, file_list: List[str]) -> Dict[str, bool]:
-        """初始化更新状态字典"""
-        update_status = {}
-        ibc_data_store = get_ibc_data_store()
-        
-        for file_path in file_list:
-            req_file = os.path.join(self.work_staging_dir_path, f"{file_path}_one_file_req.txt")
-            ibc_file = os.path.join(self.work_ibc_dir_path, f"{file_path}.ibc")
-            symbol_file = os.path.join(self.work_ibc_dir_path, f"{file_path}_symbols.json")
-            
-            if not os.path.exists(req_file) or not os.path.exists(ibc_file) or not os.path.exists(symbol_file):
-                update_status[file_path] = True
-                continue
-            
-            current_md5 = self._calculate_file_md5(req_file)
-            saved_symbol_table = ibc_data_store.load_file_symbols(self.work_ibc_dir_path, file_path)
-            
-            update_status[file_path] = (current_md5 != saved_symbol_table.file_md5)
-        
-        return update_status
-    
-    def _calculate_file_md5(self, file_path: str) -> str:
-        """计算文件MD5"""
-        if not os.path.exists(file_path):
-            return ""
-        
-        try:
-            with open(file_path, 'rb') as f:
-                file_hash = hashlib.md5()
-                while chunk := f.read(8192):
-                    file_hash.update(chunk)
-                return file_hash.hexdigest()
-        except Exception:
-            return ""
 
     def _build_user_prompt_for_ibc_generator(self, icp_json_file_path: str) -> str:
         """
@@ -380,7 +490,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         icp_json_file_path: str,
         symbol_table: FileSymbolTable,
         ibc_code: str
-    ) -> Optional[Dict[str, Dict[str, str]]]:
+    ):
         """创建规范化符号（带重试机制）
         
         Args:
@@ -396,12 +506,12 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         symbols = symbol_table.get_all_symbols()
         if not symbols:
             print(f"    {Colors.WARNING}警告: 未从符号表中提取到符号{Colors.ENDC}")
-            return {}
+            return False, {}
         
         # 检查AI处理器
         if not self.chat_handler.has_role(self.role_symbol_normalizer):
             print(f"    {Colors.FAIL}错误: 符号规范化AI处理器未初始化{Colors.ENDC}")
-            return None
+            return False, {}
         
         # 带重试的规范化调用，因为本身是在单文件ibc源码生成的流程中再嵌套调用，所以重试次数设为2
         max_attempts = 2
@@ -469,10 +579,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt_str = user_prompt_str.replace('AST_SYMBOLS_PLACEHOLDER', symbols_text)
         
         return user_prompt_str
-    
-
-
-    # ========== 辅助方法 ==========
 
     def _get_target_language(self) -> str:
         """获取目标编程语言"""
@@ -493,7 +599,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             description = symbol.description if symbol.description else '无描述'
             lines.append(f"- {symbol.symbol_name} ({symbol_type}, 描述: {description})")
         return '\n'.join(lines)
-    
+        
     def _parse_symbol_normalizer_response(self, response: str) -> Dict[str, Dict[str, str]]:
         """解析符号规范化AI的响应"""
         try:
@@ -539,121 +645,35 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 标识符必须以字母或下划线开头，仅包含字母、数字、下划线
         pattern = r'^[a-zA-Z_][a-zA-Z0-9_]*$'
         return re.match(pattern, identifier) is not None
-    
 
-    
-    # ========== 符号信息构建方法 ==========
-    
-    def _build_available_symbols_text(
-        self, 
-        dependencies: List[str], 
-        work_ibc_dir_path: str
-    ) -> str:
-        """
-        构建可用符号的文本描述
+    def _update_all_ibc_verify_codes(self):
+        """统一更新所有ibc文件的MD5校验码到verify文件中"""
+        print(f"  {Colors.OKBLUE}开始更新ibc文件校验码...{Colors.ENDC}")
         
-        根据符号的可见性过滤：
-        - PUBLIC: 对所有文件可见
-        - GLOBAL: 对所有文件可见
-        - PROTECTED: 仅对子类/友元可见（需要AI自行判断）
-        - MODULE_LOCAL: 仅在定义文件内可见，不对外暴露
-        - PRIVATE: 私有，不对外暴露
-        
-        Args:
-            dependencies: 依赖文件列表
-            work_ibc_dir_path: IBC根目录路径
+        for file_path in self.file_creation_order_list:
+            ibc_file = os.path.join(self.work_ibc_dir_path, f"{file_path}.ibc")
+            verify_file = os.path.join(self.work_ibc_dir_path, f"{file_path}_verify.json")
             
-        Returns:
-            str: 可用符号的文本描述
-        """
-        if not dependencies:
-            return '暂无可用的依赖符号'
-
-        ibc_data_store = get_ibc_data_store()
-        lines = ['可用的已生成符号：', '']
-        
-        # 定义可对外可见的符号类型（使用枚举）
-        # MODULE_LOCAL 和 PRIVATE 不对外暴露
-        externally_visible_types = [
-            VisibilityTypes.PUBLIC,
-            VisibilityTypes.GLOBAL,
-            VisibilityTypes.PROTECTED
-        ]
-        
-        for dep_file in dependencies:
-            # 加载依赖文件的符号表
-            dep_symbol_table = ibc_data_store.load_file_symbols(work_ibc_dir_path, dep_file)
-            
-            if len(dep_symbol_table) == 0:
-                # TODO: 不应该直接continue 虽然理论上来说不应该进入这里
-                continue
-            
-            lines.append(f"来自文件：{dep_file}")
-            
-            has_visible_symbols = False
-            for symbol_name, symbol in dep_symbol_table.items():
-                # 检查符号可见性
-                # 1. 如果未规范化，也列出来（供生成时参考）
-                # 2. 如果已规范化，仅列出对外可见的符号
-                is_visible = False
-                
-                if not symbol.visibility:
-                    # TODO: 这里逻辑有问题，不应该出现未规范化的内容，以后来修
-                    # 未规范化的符号，也列出
-                    is_visible = True
-                elif symbol.visibility in externally_visible_types:
-                    # 已规范化且可见性符合要求
-                    is_visible = True
-                
-                if is_visible:
-                    # 处理symbol_type，避免None情况
-                    if symbol.symbol_type:
-                        symbol_type_label = {
-                            SymbolType.CLASS: '类',
-                            SymbolType.FUNCTION: '函数',
-                            SymbolType.VARIABLE: '变量',
-                            SymbolType.MODULE: '模块'
-                        }.get(symbol.symbol_type, symbol.symbol_type.value)
-                    else:
-                        symbol_type_label = '未知'
+            # 只有当ibc文件存在时才更新其MD5
+            if os.path.exists(ibc_file):
+                try:
+                    with open(ibc_file, 'r', encoding='utf-8') as f:
+                        ibc_content = f.read()
+                    current_ibc_md5 = IbcFuncs.calculate_text_md5(ibc_content)
                     
-                    description = symbol.description if symbol.description else '无描述'
-                    lines.append(f"- {symbol_type_label} {symbol.symbol_name}")
-                    lines.append(f"  描述：{description}")
+                    # 加载现有的verify数据
+                    verify_data = self._load_or_create_verify_file(verify_file)
                     
-                    if symbol.normalized_name:
-                        lines.append(f"  规范化名称：{symbol.normalized_name}")
+                    # 更新ibc的MD5
+                    verify_data['ibc_verify_code'] = current_ibc_md5
                     
-                    # 显示可见性信息
-                    if symbol.visibility:
-                        visibility_label = {
-                            VisibilityTypes.PUBLIC: '公开（所有文件可用）',
-                            VisibilityTypes.GLOBAL: '全局（所有文件可用）',
-                            VisibilityTypes.PROTECTED: '受保护（仅子类/友元可用）'
-                        }.get(symbol.visibility, symbol.visibility.value)
-                        lines.append(f"  可见性：{visibility_label}")
+                    # 保存更新后的verify数据
+                    self._save_verify_file(verify_file, verify_data)
                     
-                    lines.append('')
-                    has_visible_symbols = True
-            
-            # 如果该依赖文件没有可见符号，移除文件标题
-            if not has_visible_symbols:
-                lines.pop()  # 移除添加的第一行 "来自文件："
+                except Exception as e:
+                    print(f"    {Colors.WARNING}警告: 更新ibc文件MD5失败: {file_path}, {e}{Colors.ENDC}")
         
-        # 添加可见性规则说明
-        if len(lines) > 2:
-            lines.append('')
-            lines.append('**符号可见性规则说明：**')
-            lines.append('- 公开(public)/全局(global): 可以直接使用')
-            lines.append('- 受保护(protected): 仅当当前文件是符号所在类的子类或友元时才能使用，否则不能使用')
-            lines.append('- 模块局部(module_local): 仅在符号定义文件内可用，不对外暴露')
-            lines.append('- 私有(private): 不对外暴露，不能使用')
-            lines.append('')
-            lines.append('请你在生成代码时严格遵守以上可见性规则，不要使用不符合可见性要求的符号。')
-        
-        return '\n'.join(lines) if len(lines) > 2 else '暂无可用的依赖符号'
-    
-    # ========== 命令可用性状态检查 ==========
+        print(f"  {Colors.OKGREEN}ibc文件校验码更新完毕{Colors.ENDC}")
     
     def is_cmd_valid(self):
         return self._check_cmd_requirement() and self._check_ai_handler()
@@ -683,8 +703,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             return False
         
         return True
-
-    # ========== AI处理器初始化方法 ==========
     
     def _init_ai_handlers(self):
         """初始化AI处理器"""
@@ -699,16 +717,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             print(f"错误: 读取配置文件失败: {e}")
             return
         
-        # 初始化Chat处理器
-        chat_config = self._get_chat_config(config_json_dict)
-        if chat_config and not ICPChatHandler.is_initialized():
-            ICPChatHandler.initialize_chat_interface(chat_config)
-        
-        # 加载角色
-        self._load_chat_roles()
-    
-    def _get_chat_config(self, config_json_dict: Dict[str, Any]) -> Optional[ChatApiConfig]:
-        """获取Chat API配置"""
         chat_api_config_dict = None
         if 'intent_behavior_code_gen_handler' in config_json_dict:
             chat_api_config_dict = config_json_dict['intent_behavior_code_gen_handler']
@@ -716,16 +724,17 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             chat_api_config_dict = config_json_dict['coder_handler']
         else:
             print("错误: 配置文件缺少intent_behavior_code_gen_handler或coder_handler配置")
-            return None
-        
-        return ChatApiConfig(
+            return
+
+        chat_config = ChatApiConfig(
             base_url=chat_api_config_dict.get('api-url', ''),
             api_key=chat_api_config_dict.get('api-key', ''),
             model=chat_api_config_dict.get('model', '')
         )
-    
-    def _load_chat_roles(self):
-        """加载Chat角色"""
+
+        if not ICPChatHandler.is_initialized():
+            ICPChatHandler.initialize_chat_interface(chat_config)
+        
         app_data_store = get_app_data_store()
         app_prompt_dir_path = app_data_store.get_prompt_dir()
         
