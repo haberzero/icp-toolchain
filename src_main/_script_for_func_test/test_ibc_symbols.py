@@ -2,7 +2,7 @@
 IBC符号系统完整测试套件
 
 测试范围：
-1. 符号数据类型（SymbolNode, FileSymbolTable）
+1. 符号数据类型（SymbolNode）
 2. 符号提取功能（从AST提取符号声明）
 3. 函数参数存储
 4. 符号表序列化/反序列化
@@ -10,6 +10,7 @@ IBC符号系统完整测试套件
 """
 import sys
 import os
+from typing import Dict
 
 # 添加src_main目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,7 +19,7 @@ from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
 from utils.ibc_analyzer.ibc_symbol_processor import IbcSymbolProcessor
 from typedef.ibc_data_types import (
-    SymbolNode, SymbolType, FileSymbolTable, VisibilityTypes
+    SymbolNode, SymbolType, VisibilityTypes
 )
 
 # ==================== 数据类型基础测试 ======================================
@@ -97,7 +98,7 @@ class UserManager():
         symbol_gen = IbcSymbolProcessor(ast_dict)
         symbol_table = symbol_gen.process_symbols()
         
-        all_symbols = symbol_table.get_symbols_by_name()
+        all_symbols = symbol_table
         
         # 验证符号
         assert "userCount" in all_symbols
@@ -153,8 +154,8 @@ func 登录(
         symbol_gen = IbcSymbolProcessor(ast_dict)
         symbol_table = symbol_gen.process_symbols()
         
-        func1 = symbol_table.get_symbol("计算总价")
-        func2 = symbol_table.get_symbol("登录")
+        func1 = symbol_table.get("计算总价")
+        func2 = symbol_table.get("登录")
         
         # 验证参数
         assert len(func1.parameters) == 3
@@ -199,7 +200,7 @@ class ConfigManager():
         symbol_gen = IbcSymbolProcessor(ast_dict)
         symbol_table = symbol_gen.process_symbols()
         
-        all_symbols = symbol_table.get_symbols_by_name()
+        all_symbols = symbol_table
         
         # 验证类和成员
         assert "ConfigManager" in all_symbols
@@ -246,18 +247,23 @@ class DataProcessor(BaseProcessor: 基础处理器):
         symbol_table = symbol_gen.process_symbols()
         
         # 序列化
-        table_dict = symbol_table.to_dict()
+        table_dict = {}
+        for symbol_name, symbol in symbol_table.items():
+            table_dict[symbol_name] = symbol.to_dict()
         
         # 反序列化
-        restored_table = FileSymbolTable.from_dict(table_dict)
+        restored_table: Dict[str, SymbolNode] = {}
+        for symbol_name, symbol_dict in table_dict.items():
+            symbol_node = SymbolNode.from_dict(symbol_dict)
+            restored_table[symbol_name] = symbol_node
         
         # 验证
         assert len(restored_table) == len(symbol_table)
         
         # 验证符号
         for symbol_name in symbol_table.keys():
-            original = symbol_table.get_symbol(symbol_name)
-            restored = restored_table.get_symbol(symbol_name)
+            original = symbol_table.get(symbol_name)
+            restored = restored_table.get(symbol_name)
             assert original.uid == restored.uid
             assert original.symbol_type == restored.symbol_type
         
@@ -308,12 +314,13 @@ class UserService(BaseService: 基础服务类):
         symbol_gen = IbcSymbolProcessor(ast_dict)
         symbol_table = symbol_gen.process_symbols()
         
-        all_symbols = symbol_table.get_all_symbols()
+        all_symbols = symbol_table
         print(f"  提取符号数: {len(all_symbols)}")
         
         # 步骤2: 验证初始状态
         print("\n步骤2: 验证符号初始状态...")
-        unnormalized = symbol_table.get_unnormalized_symbols()
+        unnormalized = {name: symbol for name, symbol in symbol_table.items() 
+                        if not symbol.is_normalized()}
         assert len(unnormalized) == len(all_symbols), "所有符号应该未规范化"
         print(f"  未规范化符号: {len(unnormalized)}/{len(all_symbols)}")
         
@@ -327,7 +334,7 @@ class UserService(BaseService: 基础服务类):
         }
         
         for symbol_name, (normalized_name, visibility_str) in normalization_map.items():
-            symbol = symbol_table.get_symbol(symbol_name)
+            symbol = symbol_table.get(symbol_name)
             if symbol:
                 visibility = VisibilityTypes.PUBLIC if visibility_str == "public" else VisibilityTypes.PRIVATE
                 symbol.update_normalized_info(normalized_name, visibility)
@@ -335,22 +342,28 @@ class UserService(BaseService: 基础服务类):
         
         # 步骤4: 验证规范化结果
         print("\n步骤4: 验证规范化结果...")
-        unnormalized_after = symbol_table.get_unnormalized_symbols()
+        unnormalized_after = {name: symbol for name, symbol in symbol_table.items() 
+                              if not symbol.is_normalized()}
         print(f"  未规范化符号: {len(unnormalized_after)}/{len(all_symbols)}")
         assert len(unnormalized_after) == 0, "所有符号都应已规范化"
         
         # 步骤5: 序列化
         print("\n步骤5: 序列化符号表...")
-        table_dict = symbol_table.to_dict()
+        table_dict = {}
+        for symbol_name, symbol in symbol_table.items():
+            table_dict[symbol_name] = symbol.to_dict()
         print(f"  序列化完成，符号数: {len(table_dict)}")
         
         # 步骤6: 反序列化并验证
         print("\n步骤6: 反序列化并验证...")
-        restored_table = FileSymbolTable.from_dict(table_dict)
+        restored_table: Dict[str, SymbolNode] = {}
+        for symbol_name, symbol_dict in table_dict.items():
+            symbol_node = SymbolNode.from_dict(symbol_dict)
+            restored_table[symbol_name] = symbol_node
         
         for symbol_name in all_symbols.keys():
-            original = symbol_table.get_symbol(symbol_name)
-            restored = restored_table.get_symbol(symbol_name)
+            original = symbol_table.get(symbol_name)
+            restored = restored_table.get(symbol_name)
             
             if original and restored:
                 assert restored.is_normalized() or original.is_normalized() == False
@@ -361,7 +374,7 @@ class UserService(BaseService: 基础服务类):
         print("  数据一致性验证通过")
         
         # 验证函数参数
-        login_func = symbol_table.get_symbol("登录")
+        login_func = symbol_table.get("登录")
         assert len(login_func.parameters) == 2
         print(f"\n函数参数: {list(login_func.parameters.keys())}")
         

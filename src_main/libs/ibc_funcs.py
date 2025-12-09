@@ -6,7 +6,7 @@ from typing import List, Dict, Optional, Union, Set, Any
 
 from typedef.ibc_data_types import (
     IbcBaseAstNode, ClassNode, FunctionNode, VariableNode, 
-    BehaviorStepNode, FileSymbolTable, SymbolType, VisibilityTypes
+    BehaviorStepNode, SymbolType, VisibilityTypes, SymbolNode
 )
 
 class IbcFuncs:
@@ -93,11 +93,11 @@ class IbcFuncs:
     # ==================== 符号映射构建 ====================
     
     @staticmethod
-    def build_symbol_mapping(symbol_table: FileSymbolTable) -> Dict[str, str]:
+    def build_symbol_mapping(symbol_table: Dict[str, SymbolNode]) -> Dict[str, str]:
         """构建符号名映射字典
         
         Args:
-            symbol_table: 文件符号表
+            symbol_table: 文件符号表字典
             
         Returns:
             Dict[str, str]: {原始名称 -> 规范化名称} 映射

@@ -11,7 +11,7 @@ from typing import Dict, Any
 from typedef.ibc_data_types import (
     IbcBaseAstNode, AstNodeType, ModuleNode, ClassNode, 
     FunctionNode, VariableNode, BehaviorStepNode,
-    SymbolNode, FileSymbolTable, VisibilityTypes
+    SymbolNode, VisibilityTypes
 )
 from typedef.cmd_data_types import Colors
 
@@ -228,7 +228,7 @@ class IbcDataStore:
             print(f"  {Colors.WARNING}警告: 读取符号表失败 {symbols_file}: {e}{Colors.ENDC}")
             return {}
     
-    def load_file_symbols(self, ibc_root_path: str, file_path: str) -> FileSymbolTable:
+    def load_file_symbols(self, ibc_root_path: str, file_path: str) -> Dict[str, SymbolNode]:
         """加载指定文件的符号数据"""
         symbols_file = self.get_symbols_file_path(ibc_root_path, file_path)
         dir_symbols_table = self.load_dir_symbols_table(symbols_file)
@@ -237,22 +237,31 @@ class IbcDataStore:
         file_symbol_data = dir_symbols_table.get(file_name, {})
         
         if not file_symbol_data:
-            return FileSymbolTable()
+            return {}
         
-        return FileSymbolTable.from_dict(file_symbol_data)
+        # 从字典数据重建符号表
+        symbol_table: Dict[str, SymbolNode] = {}
+        for symbol_name, symbol_dict in file_symbol_data.items():
+            symbol_node = SymbolNode.from_dict(symbol_dict)
+            symbol_table[symbol_name] = symbol_node
+        return symbol_table
     
     def save_file_symbols(
         self, 
         ibc_root_path: str, 
         file_path: str, 
-        file_symbol_table: FileSymbolTable
+        file_symbol_table: Dict[str, SymbolNode]
     ) -> bool:
         """保存文件的符号数据到对应目录的symbols.json"""
         symbols_file = self.get_symbols_file_path(ibc_root_path, file_path)
         dir_symbols_table = self.load_dir_symbols_table(symbols_file)
         
         file_name = os.path.basename(file_path)
-        dir_symbols_table[file_name] = file_symbol_table.to_dict()
+        # 将符号表转换为字典格式
+        symbols_dict = {}
+        for symbol_name, symbol in file_symbol_table.items():
+            symbols_dict[symbol_name] = symbol.to_dict()
+        dir_symbols_table[file_name] = symbols_dict
         
         try:
             os.makedirs(os.path.dirname(symbols_file), exist_ok=True)
@@ -274,7 +283,7 @@ class IbcDataStore:
         """更新符号的规范化信息"""
         file_symbol_table = self.load_file_symbols(ibc_root_path, file_path)
         
-        symbol = file_symbol_table.get_symbol(symbol_name)
+        symbol = file_symbol_table.get(symbol_name)
         if not symbol:
             print(f"  {Colors.WARNING}警告: 找不到符号 {symbol_name}{Colors.ENDC}")
             return False

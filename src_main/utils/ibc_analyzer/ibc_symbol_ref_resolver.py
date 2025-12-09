@@ -5,7 +5,7 @@ import re
 from typing import Dict, List, Tuple, Optional, Set, Any
 from typedef.ibc_data_types import (
     IbcBaseAstNode, ModuleNode, FunctionNode, VariableNode, BehaviorStepNode, ClassNode,
-    FileSymbolTable, SymbolNode, SymbolType
+    SymbolNode, SymbolType
 )
 from libs.dir_json_funcs import DirJsonFuncs
 

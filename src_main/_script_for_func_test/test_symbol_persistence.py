@@ -5,11 +5,12 @@
 """
 import sys
 import os
+from typing import Dict
 
 # 添加src_main到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from typedef.ibc_data_types import SymbolNode, FileSymbolTable, SymbolType, VisibilityTypes
+from typedef.ibc_data_types import SymbolNode, SymbolType, VisibilityTypes
 from data_store.ibc_data_store import get_instance as get_ibc_data_store
 
 
@@ -22,7 +23,7 @@ def test_symbol_table_basic_persistence():
     
     # 1. 创建测试符号表
     print("\n1. 创建测试符号表...")
-    symbol_table = FileSymbolTable()
+    symbol_table: Dict[str, SymbolNode] = {}
     
     # 添加类符号
     class_symbol = SymbolNode(
@@ -33,7 +34,7 @@ def test_symbol_table_basic_persistence():
         description="用户管理类",
         symbol_type=SymbolType.CLASS
     )
-    symbol_table.add_symbol(class_symbol)
+    symbol_table[class_symbol.symbol_name] = class_symbol
     
     # 添加函数符号
     func_symbol = SymbolNode(
@@ -45,7 +46,7 @@ def test_symbol_table_basic_persistence():
         symbol_type=SymbolType.FUNCTION,
         parameters={"用户名": "登录用户名", "密码": "用户密码"}
     )
-    symbol_table.add_symbol(func_symbol)
+    symbol_table[func_symbol.symbol_name] = func_symbol
     
     # 添加变量符号
     var_symbol = SymbolNode(
@@ -56,7 +57,7 @@ def test_symbol_table_basic_persistence():
         description="存储所有用户的列表",
         symbol_type=SymbolType.VARIABLE
     )
-    symbol_table.add_symbol(var_symbol)
+    symbol_table[var_symbol.symbol_name] = var_symbol
     
     print(f"   创建了 {len(symbol_table)} 个符号")
     
@@ -100,7 +101,7 @@ def test_symbol_table_basic_persistence():
         print(f"   ✓ 符号数量匹配: {len(loaded_symbol_table)}")
     
     # 验证类符号
-    loaded_class = loaded_symbol_table.get_symbol("UserManager")
+    loaded_class = loaded_symbol_table.get("UserManager")
     if not loaded_class or \
        loaded_class.symbol_name != class_symbol.symbol_name or \
        loaded_class.normalized_name != class_symbol.normalized_name or \
@@ -112,7 +113,7 @@ def test_symbol_table_basic_persistence():
         print(f"   ✓ 类符号数据正确")
     
     # 验证函数符号
-    loaded_func = loaded_symbol_table.get_symbol("登录")
+    loaded_func = loaded_symbol_table.get("登录")
     if not loaded_func or \
        loaded_func.symbol_name != func_symbol.symbol_name or \
        loaded_func.normalized_name != func_symbol.normalized_name or \
@@ -123,7 +124,7 @@ def test_symbol_table_basic_persistence():
         print(f"   ✓ 函数符号数据正确")
     
     # 验证变量符号
-    loaded_var = loaded_symbol_table.get_symbol("用户列表")
+    loaded_var = loaded_symbol_table.get("用户列表")
     if not loaded_var or \
        loaded_var.symbol_name != var_symbol.symbol_name or \
        loaded_var.visibility != var_symbol.visibility:
@@ -153,7 +154,7 @@ def test_symbol_table_update():
     test_ibc_root = os.path.join(dev_temp_dir, "test_ibc_root")
     test_file_path = "update_test.ibc"
     
-    symbol_table = FileSymbolTable()
+    symbol_table: Dict[str, SymbolNode] = {}
     test_symbol = SymbolNode(
         uid=1,
         symbol_name="测试函数",
@@ -162,7 +163,7 @@ def test_symbol_table_update():
         description="测试函数描述",
         symbol_type=SymbolType.FUNCTION
     )
-    symbol_table.add_symbol(test_symbol)
+    symbol_table[test_symbol.symbol_name] = test_symbol
     
     # 保存初始符号表
     ibc_data_store.save_file_symbols(test_ibc_root, test_file_path, symbol_table)
@@ -186,7 +187,7 @@ def test_symbol_table_update():
     # 3. 重新加载并验证
     print("\n3. 重新加载并验证...")
     loaded_symbol_table = ibc_data_store.load_file_symbols(test_ibc_root, test_file_path)
-    loaded_symbol = loaded_symbol_table.get_symbol("测试函数")
+    loaded_symbol = loaded_symbol_table.get("测试函数")
     
     all_correct = True
     if not loaded_symbol:
@@ -223,30 +224,32 @@ def test_multiple_files_in_directory():
     
     # 1. 保存第一个文件的符号表
     print("\n1. 保存第一个文件的符号表...")
-    symbol_table1 = FileSymbolTable()
-    symbol_table1.add_symbol(SymbolNode(
+    symbol_table1: Dict[str, SymbolNode] = {}
+    symbol1 = SymbolNode(
         uid=1,
         symbol_name="File1Symbol",
         normalized_name="File1Symbol",
         visibility=VisibilityTypes.PUBLIC,
         description="文件1的符号",
         symbol_type=SymbolType.CLASS
-    ))
+    )
+    symbol_table1[symbol1.symbol_name] = symbol1
     
     success1 = ibc_data_store.save_file_symbols(test_ibc_root, "file1.ibc", symbol_table1)
     print(f"   ✓ 文件1符号表已保存")
     
     # 2. 保存第二个文件的符号表
     print("\n2. 保存第二个文件的符号表...")
-    symbol_table2 = FileSymbolTable()
-    symbol_table2.add_symbol(SymbolNode(
+    symbol_table2: Dict[str, SymbolNode] = {}
+    symbol2 = SymbolNode(
         uid=2,
         symbol_name="File2Symbol",
         normalized_name="File2Symbol",
         visibility=VisibilityTypes.PUBLIC,
         description="文件2的符号",
         symbol_type=SymbolType.FUNCTION
-    ))
+    )
+    symbol_table2[symbol2.symbol_name] = symbol2
     
     success2 = ibc_data_store.save_file_symbols(test_ibc_root, "file2.ibc", symbol_table2)
     print(f"   ✓ 文件2符号表已保存")
@@ -258,19 +261,19 @@ def test_multiple_files_in_directory():
     
     all_correct = True
     
-    if not loaded_table1.has_symbol("File1Symbol"):
+    if "File1Symbol" not in loaded_table1:
         print(f"   ✗ 文件1符号丢失")
         all_correct = False
-    elif loaded_table1.has_symbol("File2Symbol"):
+    elif "File2Symbol" in loaded_table1:
         print(f"   ✗ 文件1包含了文件2的符号（符号泄漏）")
         all_correct = False
     else:
         print(f"   ✓ 文件1符号表正确")
     
-    if not loaded_table2.has_symbol("File2Symbol"):
+    if "File2Symbol" not in loaded_table2:
         print(f"   ✗ 文件2符号丢失")
         all_correct = False
-    elif loaded_table2.has_symbol("File1Symbol"):
+    elif "File1Symbol" in loaded_table2:
         print(f"   ✗ 文件2包含了文件1的符号（符号泄漏）")
         all_correct = False
     else:

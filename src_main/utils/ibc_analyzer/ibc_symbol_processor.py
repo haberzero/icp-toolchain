@@ -6,7 +6,7 @@ IBC符号提取模块
 from typing import Dict, Optional
 from typedef.ibc_data_types import (
     IbcBaseAstNode, ClassNode, FunctionNode, VariableNode, ModuleNode, BehaviorStepNode,
-    VisibilityTypes, SymbolNode, SymbolType, FileSymbolTable
+    VisibilityTypes, SymbolNode, SymbolType
 )
 
 
@@ -19,24 +19,26 @@ class IbcSymbolProcessor:
         """初始化符号生成器"""
         self.ast_dict = ast_dict
     
-    def process_symbols(self) -> FileSymbolTable:
+    def process_symbols(self) -> Dict[str, SymbolNode]:
         """
         从AST中提取符号信息
         
         Returns:
-            FileSymbolTable: 文件符号表对象，包含所有提取的符号声明
+            Dict[str, SymbolNode]: 文件符号表字典，以符号名为key，SymbolNode为value
 
         注意：
         - normalized_name (规范化名称)和visibility (可见性)在符号提取时不填充,
         - 留空字符串, 后续由cmd_handler调用ai_interface推断后填充
         """
-        symbol_table = FileSymbolTable()
+        symbol_table: Dict[str, SymbolNode] = {}
         
         # 提取符号声明
         for uid, node in self.ast_dict.items():
             symbol = self._create_symbol_from_node(uid, node)
             if symbol:
-                symbol_table.add_symbol(symbol)
+                if symbol.symbol_name in symbol_table:
+                    print(f"警告: 符号名 {symbol.symbol_name} 已存在，将被覆盖")
+                symbol_table[symbol.symbol_name] = symbol
 
         return symbol_table
     
@@ -84,7 +86,7 @@ class IbcSymbolProcessor:
     
     def update_symbol_normalized_name(
         self, 
-        symbol_table: FileSymbolTable, 
+        symbol_table: Dict[str, SymbolNode], 
         symbol_name: str, 
         normalized_name: str
     ) -> bool:
@@ -92,14 +94,14 @@ class IbcSymbolProcessor:
         更新符号的规范化名称
         
         Args:
-            symbol_table: 符号表
+            symbol_table: 符号表字典
             symbol_name: 符号名称
             normalized_name: 规范化名称
             
         Returns:
             bool: 更新是否成功
         """
-        symbol = symbol_table.get_symbol(symbol_name)
+        symbol = symbol_table.get(symbol_name)
         if symbol is None:
             return False
         
@@ -108,7 +110,7 @@ class IbcSymbolProcessor:
     
     def update_symbol_visibility(
         self, 
-        symbol_table: FileSymbolTable, 
+        symbol_table: Dict[str, SymbolNode], 
         symbol_name: str, 
         visibility: VisibilityTypes
     ) -> bool:
@@ -116,14 +118,14 @@ class IbcSymbolProcessor:
         更新符号的可见性
         
         Args:
-            symbol_table: 符号表
+            symbol_table: 符号表字典
             symbol_name: 符号名称
             visibility: 可见性
             
         Returns:
             bool: 更新是否成功
         """
-        symbol = symbol_table.get_symbol(symbol_name)
+        symbol = symbol_table.get(symbol_name)
         if symbol is None:
             return False
         
@@ -132,7 +134,7 @@ class IbcSymbolProcessor:
     
     def update_symbol_normalized_info(
         self,
-        symbol_table: FileSymbolTable,
+        symbol_table: Dict[str, SymbolNode],
         symbol_name: str,
         normalized_name: str,
         visibility: VisibilityTypes
@@ -141,7 +143,7 @@ class IbcSymbolProcessor:
         同时更新符号的规范化名称和可见性
         
         Args:
-            symbol_table: 符号表
+            symbol_table: 符号表字典
             symbol_name: 符号名称
             normalized_name: 规范化名称
             visibility: 可见性
@@ -149,7 +151,7 @@ class IbcSymbolProcessor:
         Returns:
             bool: 更新是否成功
         """
-        symbol = symbol_table.get_symbol(symbol_name)
+        symbol = symbol_table.get(symbol_name)
         if symbol is None:
             return False
         

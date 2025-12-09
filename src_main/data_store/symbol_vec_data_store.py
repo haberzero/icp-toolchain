@@ -6,7 +6,7 @@
 # import os
 # import lancedb
 # from typing import List, Dict, Tuple, Optional
-# from typedef.ibc_data_types import FileSymbolTable, SymbolNode
+# from typedef.ibc_data_types import SymbolNode
 # from typedef.cmd_data_types import Colors
 
 

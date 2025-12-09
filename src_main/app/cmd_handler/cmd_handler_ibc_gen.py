@@ -9,7 +9,7 @@ from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
 from typedef.ibc_data_types import (
     IbcBaseAstNode, AstNodeType, ClassNode, FunctionNode, VariableNode, 
-    VisibilityTypes, SymbolType, FileSymbolTable, SymbolNode
+    VisibilityTypes, SymbolType, SymbolNode
 )
 
 from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
@@ -453,17 +453,29 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         return '\n'.join(section_lines)
     
+    def _build_available_symbols_text(self, dependencies: List[str], work_ibc_dir_path: str) -> str:
+        """构建可用符号的文本描述
+        
+        Args:
+            dependencies: 依赖文件列表
+            work_ibc_dir_path: IBC根目录路径
+            
+        Returns:
+            str: 可用符号的文本描述
+        """
+        return IbcFuncs.build_available_symbols_text(dependencies, work_ibc_dir_path)
+    
     def _create_normalized_symbols(
         self, 
         icp_json_file_path: str,
-        symbol_table: FileSymbolTable,
+        symbol_table: Dict[str, SymbolNode],
         ibc_code: str
     ):
         """创建规范化符号（带重试机制）
         
         Args:
             icp_json_file_path: 文件路径
-            symbol_table: 符号表
+            symbol_table: 符号表字典
             ibc_code: IBC代码
             
         Returns:
@@ -471,7 +483,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         """
         print(f"    正在进行符号规范化...")
         
-        symbols = symbol_table.get_all_symbols()
+        symbols = symbol_table
         if not symbols:
             print(f"    {Colors.WARNING}警告: 未从符号表中提取到符号{Colors.ENDC}")
             return False, {}
