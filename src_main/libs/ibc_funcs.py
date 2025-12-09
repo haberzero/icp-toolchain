@@ -108,6 +108,83 @@ class IbcFuncs:
                 mapping[symbol.symbol_name] = symbol.normalized_name
         return mapping
     
+    # ==================== 符号表更新 ====================
+    
+    @staticmethod
+    def update_symbol_normalized_name(
+        symbol_table: Dict[str, SymbolNode],
+        symbol_name: str,
+        normalized_name: str
+    ) -> bool:
+        """
+        更新符号的规范化名称
+        
+        Args:
+            symbol_table: 符号表字典
+            symbol_name: 符号名称
+            normalized_name: 规范化名称
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        symbol = symbol_table.get(symbol_name)
+        if symbol is None:
+            return False
+        
+        symbol.normalized_name = normalized_name
+        return True
+    
+    @staticmethod
+    def update_symbol_visibility(
+        symbol_table: Dict[str, SymbolNode],
+        symbol_name: str,
+        visibility: VisibilityTypes
+    ) -> bool:
+        """
+        更新符号的可见性
+        
+        Args:
+            symbol_table: 符号表字典
+            symbol_name: 符号名称
+            visibility: 可见性
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        symbol = symbol_table.get(symbol_name)
+        if symbol is None:
+            return False
+        
+        symbol.visibility = visibility
+        return True
+    
+    @staticmethod
+    def update_symbol_normalized_info(
+        symbol_table: Dict[str, SymbolNode],
+        symbol_name: str,
+        normalized_name: str,
+        visibility: VisibilityTypes
+    ) -> bool:
+        """
+        同时更新符号的规范化名称和可见性
+        
+        Args:
+            symbol_table: 符号表字典
+            symbol_name: 符号名称
+            normalized_name: 规范化名称
+            visibility: 可见性
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        symbol = symbol_table.get(symbol_name)
+        if symbol is None:
+            return False
+        
+        symbol.normalized_name = normalized_name
+        symbol.visibility = visibility
+        return True
+    
     # ==================== AST符号替换 ====================
     
     @staticmethod
