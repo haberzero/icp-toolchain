@@ -30,6 +30,40 @@ class IbcDataStore:
         if not hasattr(self, '_initialized'):
             self._initialized = True
     
+    # ==================== IBC代码管理 ====================
+    
+    def get_ibc_file_path(self, ibc_root_path: str, file_path: str) -> str:
+        """获取文件对应的.ibc文件路径"""
+        return os.path.join(ibc_root_path, f"{file_path}.ibc")
+    
+    def save_ibc_code(self, ibc_file_path: str, ibc_code: str) -> bool:
+        """保存IBC代码到文件"""
+        try:
+            directory = os.path.dirname(ibc_file_path)
+            if directory and not os.path.exists(directory):
+                os.makedirs(directory)
+            
+            with open(ibc_file_path, 'w', encoding='utf-8') as f:
+                f.write(ibc_code)
+            return True
+        except Exception as e:
+            print(f"保存IBC代码失败: {e}")
+            return False
+    
+    def load_ibc_code(self, ibc_file_path: str) -> str:
+        """加载IBC代码，文件不存在则返回空字符串"""
+        if not os.path.exists(ibc_file_path):
+            return ""
+        
+        try:
+            with open(ibc_file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            print(f"读取IBC代码失败: {e}")
+            return ""
+    
+    # ==================== AST数据管理 ====================
+    
     def save_ast_to_file(self, ast_dict: Dict[int, IbcBaseAstNode], file_path: str) -> bool:
         """将AST字典保存到JSON文件"""
         try:
@@ -89,6 +123,11 @@ class IbcDataStore:
             return IbcBaseAstNode.from_dict(node_dict)
     
     # ==================== 校验数据管理 ====================
+    
+    def get_verify_file_path(self, ibc_root_path: str, file_path: str) -> str:
+        """获取文件对应的_verify.json路径"""
+        return os.path.join(ibc_root_path, f"{file_path}_verify.json")
+    
     def load_verify_data(self, verify_file_path: str) -> Dict[str, str]:
         """加载verify.json文件，不存在则返回空字典"""
         if os.path.exists(verify_file_path):

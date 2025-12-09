@@ -154,9 +154,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         2. 检查ibc文件是否存在
         3. 检查依赖链中的变化（依赖传播）
         
-        Args:
-            file_list: 按依赖顺序排列的文件列表
-            
         Returns:
             Dict[str, bool]: 文件路径到是否需要更新的映射
         """
@@ -169,10 +166,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         for file_path in file_list:
             need_update = False
             
-            # 构建文件路径
+            ibc_data_store = get_ibc_data_store()
             req_file = os.path.join(self.work_staging_dir_path, f"{file_path}_one_file_req.txt")
-            ibc_file = os.path.join(self.work_ibc_dir_path, f"{file_path}.ibc")
-            verify_file = os.path.join(self.work_ibc_dir_path, f"{file_path}_verify.json")
+            ibc_file = ibc_data_store.get_ibc_file_path(self.work_ibc_dir_path, file_path)
+            verify_file = ibc_data_store.get_verify_file_path(self.work_ibc_dir_path, file_path)
             
             # 检查one_file_req文件是否存在
             if not os.path.exists(req_file):
@@ -224,22 +221,20 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 self._propagate_update_to_dependents(file_path, need_update_flag_dict)
             else:
                 # 检查ibc文件的MD5是否变化（用户可能手动修改了）
-                ibc_file = os.path.join(self.work_ibc_dir_path, f"{file_path}.ibc")
-                verify_file = os.path.join(self.work_ibc_dir_path, f"{file_path}_verify.json")
+                ibc_data_store = get_ibc_data_store()
+                ibc_file = ibc_data_store.get_ibc_file_path(self.work_ibc_dir_path, file_path)
+                verify_file = ibc_data_store.get_verify_file_path(self.work_ibc_dir_path, file_path)
                 
                 if os.path.exists(ibc_file):
                     try:
-                        with open(ibc_file, 'r', encoding='utf-8') as f:
-                            ibc_content = f.read()
-                        current_ibc_md5 = IbcFuncs.calculate_text_md5(ibc_content)
-                        
-                        ibc_data_store = get_ibc_data_store()
-                        verify_data = ibc_data_store.load_verify_data(verify_file)
-                        saved_ibc_md5 = verify_data.get('ibc_verify_code', None)
-                        
+                        ibc_content = ibc_data_store.load_ibc_code(ibc_file)
+                        if ibc_content:
+                            current_ibc_md5 = IbcFuncs.calculate_text_md5(ibc_content)
+                            
+                            verify_data = ibc_data_store.load_verify_data(verify_file)
+                            saved_ibc_md5 = verify_data.get('ibc_verify_code', None)
                         if saved_ibc_md5 is not None and saved_ibc_md5 != current_ibc_md5:
                             print(f"    {Colors.OKBLUE}ibc文件被手动修改: {file_path}，依赖它的文件需要更新{Colors.ENDC}")
-                            # 传播更新到依赖此文件的其他文件
                             self._propagate_update_to_dependents(file_path, need_update_flag_dict)
                     except Exception as e:
                         print(f"    {Colors.WARNING}警告: 检查ibc文件MD5失败: {file_path}, {e}{Colors.ENDC}")
@@ -313,17 +308,18 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             if not success or not ast_dict or not symbol_table:
                 print(f"    {Colors.WARNING}警告: IBC代码分析失败{Colors.ENDC}")
-                return False
+                continue
 
             # 保存IBC代码
-            ibc_file_path = os.path.join(self.work_ibc_dir_path, f"{icp_json_file_path}.ibc")
-            os.makedirs(os.path.dirname(ibc_file_path), exist_ok=True)
-            with open(ibc_file_path, 'w', encoding='utf-8') as f:
-                f.write(ibc_code)
-            print(f"    {Colors.OKGREEN}IBC代码已保存: {ibc_file_path}{Colors.ENDC}")
-            ast_file_path = os.path.join(self.work_ibc_dir_path, f"{icp_json_file_path}_ibc_ast.json")
-            
             ibc_data_store = get_ibc_data_store()
+            ibc_file_path = ibc_data_store.get_ibc_file_path(self.work_ibc_dir_path, icp_json_file_path)
+            if not ibc_data_store.save_ibc_code(ibc_file_path, ibc_code):
+                print(f"    {Colors.WARNING}警告: IBC代码保存失败{Colors.ENDC}")
+                continue
+            print(f"    {Colors.OKGREEN}IBC代码已保存: {ibc_file_path}{Colors.ENDC}")
+            
+            # 保存AST
+            ast_file_path = os.path.join(self.work_ibc_dir_path, f"{icp_json_file_path}_ibc_ast.json")
             if ibc_data_store.save_ast_to_file(ast_dict, ast_file_path):
                 print(f"    {Colors.OKGREEN}AST已保存: {ast_file_path}{Colors.ENDC}")
             else:
@@ -623,25 +619,18 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         ibc_data_store = get_ibc_data_store()
         
         for file_path in self.file_creation_order_list:
-            ibc_file = os.path.join(self.work_ibc_dir_path, f"{file_path}.ibc")
-            verify_file = os.path.join(self.work_ibc_dir_path, f"{file_path}_verify.json")
+            ibc_file = ibc_data_store.get_ibc_file_path(self.work_ibc_dir_path, file_path)
+            verify_file = ibc_data_store.get_verify_file_path(self.work_ibc_dir_path, file_path)
             
-            # 只有当ibc文件存在时才更新其MD5
             if os.path.exists(ibc_file):
                 try:
-                    with open(ibc_file, 'r', encoding='utf-8') as f:
-                        ibc_content = f.read()
-                    current_ibc_md5 = IbcFuncs.calculate_text_md5(ibc_content)
-                    
-                    # 加载现有的verify数据
-                    verify_data = ibc_data_store.load_verify_data(verify_file)
-                    
-                    # 更新ibc的MD5
-                    verify_data['ibc_verify_code'] = current_ibc_md5
-                    
-                    # 保存更新后的verify数据
-                    ibc_data_store.save_verify_data(verify_file, verify_data)
-                    
+                    ibc_content = ibc_data_store.load_ibc_code(ibc_file)
+                    if ibc_content:
+                        current_ibc_md5 = IbcFuncs.calculate_text_md5(ibc_content)
+                        
+                        verify_data = ibc_data_store.load_verify_data(verify_file)
+                        verify_data['ibc_verify_code'] = current_ibc_md5
+                        ibc_data_store.save_verify_data(verify_file, verify_data)
                 except Exception as e:
                     print(f"    {Colors.WARNING}警告: 更新ibc文件MD5失败: {file_path}, {e}{Colors.ENDC}")
         
