@@ -34,6 +34,7 @@ def test_symbol_node_basics():
         # 创建函数符号（带参数）
         symbol = SymbolNode(
             uid=1,
+            parent_symbol_name="",  # 根符号
             symbol_name="计算总价",
             normalized_name="",
             visibility=VisibilityTypes.DEFAULT,
@@ -277,6 +278,137 @@ class DataProcessor(BaseProcessor: 基础处理器):
         return False
 
 
+# ==================== 符号层次结构测试 ====================
+
+def test_symbol_hierarchy():
+    """测试符号层次结构（parent_symbol_name和children_symbol_names）"""
+    print("=" * 60)
+    print("测试符号层次结构")
+    print("=" * 60)
+    
+    # 创建包含类和成员的IBC代码
+    code = """class UserManager():
+    var userList: 用户列表
+    var sessionStore: 会话存储
+    
+    func 添加用户(用户名, 密码):
+        保存用户信息
+    
+    func 删除用户(用户ID):
+        删除用户信息
+
+func 全局函数():
+    执行操作"""
+    
+    try:
+        # 解析代码
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_dict = parser.parse()
+        
+        # 提取符号
+        symbol_processor = IbcSymbolProcessor(ast_dict)
+        symbol_table = symbol_processor.process_symbols()
+        
+        print(f"\n提取的符号数量: {len(symbol_table)}")
+        
+        # 查找类符号
+        user_manager = symbol_table.get("UserManager")
+        if not user_manager:
+            print("\n✗ 未找到UserManager类")
+            return False
+        
+        # 验证UserManager应该有4个子符号（2个变量 + 2个函数）
+        print(f"\nUserManager的子符号数量: {len(user_manager.children_symbol_names)}")
+        if len(user_manager.children_symbol_names) != 4:
+            print(f"✗ UserManager应该有4个子符号，实际有{len(user_manager.children_symbol_names)}个")
+            return False
+        
+        # 验证子符号的parent_symbol_name
+        print("验证子符号的parent关系:")
+        for child_symbol_name in user_manager.children_symbol_names:
+            child_symbol = symbol_table.get(child_symbol_name)
+            
+            if not child_symbol:
+                print(f"✗ 未找到符号{child_symbol_name}")
+                return False
+            
+            if child_symbol.parent_symbol_name != "UserManager":
+                print(f"✗ 子符号{child_symbol_name}的parent_symbol_name不正确")
+                print(f"  期望: UserManager, 实际: {child_symbol.parent_symbol_name}")
+                return False
+        
+        print(f"  ✓ 所有4个子符号的parent_symbol_name都正确")
+        
+        # 验证全局函数没有父符号（parent_symbol_name为空）
+        global_func = symbol_table.get("全局函数")
+        if not global_func:
+            print("\n✗ 未找到全局函数")
+            return False
+        
+        if global_func.parent_symbol_name != "":
+            print(f"✗ 全局函数的parent_symbol_name应该为空，实际为{global_func.parent_symbol_name}")
+            return False
+        
+        if len(global_func.children_symbol_names) != 0:
+            print(f"✗ 全局函数不应该有子符号")
+            return False
+        
+        print(f"  ✓ 全局函数parent_symbol_name为空，children_symbol_names为空")
+        
+        # 测试add_child和remove_child方法
+        test_symbol = SymbolNode(
+            uid=100,
+            parent_symbol_name="",
+            symbol_name="TestSymbol",
+            symbol_type=SymbolType.CLASS
+        )
+        
+        test_symbol.add_child("ChildSymbol1")
+        test_symbol.add_child("ChildSymbol2")
+        test_symbol.add_child("ChildSymbol1")  # 重复添加应该被忽略
+        
+        if len(test_symbol.children_symbol_names) != 2:
+            print(f"\n✗ add_child测试失败")
+            return False
+        
+        test_symbol.remove_child("ChildSymbol1")
+        if len(test_symbol.children_symbol_names) != 1 or "ChildSymbol2" not in test_symbol.children_symbol_names:
+            print(f"✗ remove_child测试失败")
+            return False
+        
+        print(f"  ✓ add_child和remove_child方法正常工作")
+        
+        # 测试序列化和反序列化
+        symbol_dict = user_manager.to_dict()
+        
+        if "parent_symbol_name" not in symbol_dict or "children_symbol_names" not in symbol_dict:
+            print("\n✗ 序列化结果缺少parent_symbol_name或children_symbol_names")
+            return False
+        
+        restored_symbol = SymbolNode.from_dict(symbol_dict)
+        
+        if restored_symbol.parent_symbol_name != user_manager.parent_symbol_name:
+            print(f"✗ 反序列化后parent_symbol_name不匹配")
+            return False
+        
+        if restored_symbol.children_symbol_names != user_manager.children_symbol_names:
+            print(f"✗ 反序列化后children_symbol_names不匹配")
+            return False
+        
+        print(f"  ✓ parent_symbol_name和children_symbol_names序列化/反序列化正常")
+        
+        print("\n[通过] 符号层次结构测试通过\n")
+        return True
+        
+    except Exception as e:
+        print(f"\n[失败] 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 # ==================== 集成测试 ====================
 
 def test_complete_workflow():
@@ -405,6 +537,7 @@ if __name__ == "__main__":
         ]),
         ("序列化与集成测试", [
             ("符号表序列化", test_symbol_table_serialization),
+            ("符号层次结构", test_symbol_hierarchy),
             ("完整工作流程", test_complete_workflow),
         ]),
     ]

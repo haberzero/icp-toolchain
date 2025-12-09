@@ -190,6 +190,8 @@ class SymbolType(Enum):
 class SymbolNode:
     """符号表节点类"""
     uid: int = 0
+    parent_symbol_name: str = ""  # 父符号名称，用于建立层次关系
+    children_symbol_names: List[str] = field(default_factory=list)  # 子符号名称列表
     symbol_name: str = ""
     normalized_name: str = ""  # 规范化名称，由AI推断后填充
     visibility: VisibilityTypes = VisibilityTypes.DEFAULT  # 可见性，由AI推断后填充
@@ -201,6 +203,8 @@ class SymbolNode:
         """将符号节点转换为字典表示"""
         return {
             "uid": self.uid,
+            "parent_symbol_name": self.parent_symbol_name,
+            "children_symbol_names": self.children_symbol_names,
             "symbol_name": self.symbol_name,
             "normalized_name": self.normalized_name,
             "visibility": self.visibility.value,
@@ -228,6 +232,8 @@ class SymbolNode:
         
         return SymbolNode(
             uid=data.get("uid", 0),
+            parent_symbol_name=data.get("parent_symbol_name", ""),
+            children_symbol_names=data.get("children_symbol_names", []),
             symbol_name=data.get("symbol_name", ""),
             normalized_name=data.get("normalized_name", ""),
             visibility=visibility_value,
@@ -247,6 +253,16 @@ class SymbolNode:
         """更新规范化信息"""
         self.normalized_name = normalized_name
         self.visibility = visibility
+    
+    def add_child(self, child_symbol_name: str) -> None:
+        """添加子符号"""
+        if child_symbol_name not in self.children_symbol_names:
+            self.children_symbol_names.append(child_symbol_name)
+    
+    def remove_child(self, child_symbol_name: str) -> None:
+        """移除子符号"""
+        if child_symbol_name in self.children_symbol_names:
+            self.children_symbol_names.remove(child_symbol_name)
 
 
 # FileSymbolTable类已被移除，现在直接使用 Dict[str, SymbolNode] 类型

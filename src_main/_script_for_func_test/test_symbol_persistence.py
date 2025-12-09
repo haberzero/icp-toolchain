@@ -28,6 +28,7 @@ def test_symbol_table_basic_persistence():
     # 添加类符号
     class_symbol = SymbolNode(
         uid=1,
+        parent_symbol_name="",  # 根符号，parent为空
         symbol_name="UserManager",
         normalized_name="UserManager",
         visibility=VisibilityTypes.PUBLIC,
@@ -39,6 +40,7 @@ def test_symbol_table_basic_persistence():
     # 添加函数符号
     func_symbol = SymbolNode(
         uid=2,
+        parent_symbol_name="",  # 根符号，parent为空
         symbol_name="登录",
         normalized_name="Login",
         visibility=VisibilityTypes.PUBLIC,
@@ -51,6 +53,7 @@ def test_symbol_table_basic_persistence():
     # 添加变量符号
     var_symbol = SymbolNode(
         uid=3,
+        parent_symbol_name="",  # 根符号，parent为空
         symbol_name="用户列表",
         normalized_name="userList",
         visibility=VisibilityTypes.PRIVATE,
@@ -157,6 +160,7 @@ def test_symbol_table_update():
     symbol_table: Dict[str, SymbolNode] = {}
     test_symbol = SymbolNode(
         uid=1,
+        parent_symbol_name="",  # 根符号
         symbol_name="测试函数",
         normalized_name="",  # 未规范化
         visibility=VisibilityTypes.DEFAULT,
@@ -227,6 +231,7 @@ def test_multiple_files_in_directory():
     symbol_table1: Dict[str, SymbolNode] = {}
     symbol1 = SymbolNode(
         uid=1,
+        parent_symbol_name="",  # 根符号
         symbol_name="File1Symbol",
         normalized_name="File1Symbol",
         visibility=VisibilityTypes.PUBLIC,
@@ -243,6 +248,7 @@ def test_multiple_files_in_directory():
     symbol_table2: Dict[str, SymbolNode] = {}
     symbol2 = SymbolNode(
         uid=2,
+        parent_symbol_name="",  # 根符号
         symbol_name="File2Symbol",
         normalized_name="File2Symbol",
         visibility=VisibilityTypes.PUBLIC,
