@@ -142,11 +142,11 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self.work_staging_dir_path = work_staging_dir_path
         self.work_ibc_dir_path = work_ibc_dir_path
         
-        # 初始化更新状态 - 必须在实例变量设置后调用
-        self.need_update_flag_list = self._initialize_update_status(file_creation_order_list)
+        # 初始化更新状态.需要依赖self.file_creation_order_list等内容
+        self.need_update_flag_dict = self._initialize_update_status()
 
     
-    def _initialize_update_status(self, file_list: List[str]) -> Dict[str, bool]:
+    def _initialize_update_status(self) -> Dict[str, bool]:
         """初始化更新状态字典
         
         根据以下逻辑标记文件是否需要更新：
@@ -161,7 +161,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             Dict[str, bool]: 文件路径到是否需要更新的映射
         """
         print(f"  {Colors.OKBLUE}开始检查文件更新状态...{Colors.ENDC}")
-        need_update_flag_list = {}
+        need_update_flag_dict = {}
+
+        file_list = self.file_creation_order_list
         
         # 第一阶段：检查one_file_req的MD5和ibc文件存在性
         for file_path in file_list:
@@ -176,7 +178,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             if not os.path.exists(req_file):
                 print(f"    {Colors.WARNING}警告: one_file_req文件不存在: {file_path}{Colors.ENDC}")
                 need_update = True
-                need_update_flag_list[file_path] = need_update
+                need_update_flag_dict[file_path] = need_update
                 continue
             
             # 读取one_file_req的当前MD5
@@ -187,11 +189,12 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             except Exception as e:
                 print(f"    {Colors.WARNING}警告: 读取one_file_req文件失败: {file_path}, {e}{Colors.ENDC}")
                 need_update = True
-                need_update_flag_list[file_path] = need_update
+                need_update_flag_dict[file_path] = need_update
                 continue
             
             # 读取或创建verify.json文件
-            verify_data = self._load_or_create_verify_file(verify_file)
+            ibc_data_store = get_ibc_data_store()
+            verify_data = ibc_data_store.load_verify_data(verify_file)
             
             # 检查one_file_req的MD5是否变化
             saved_req_md5 = verify_data.get('one_file_req_verify_code', None)
@@ -207,18 +210,18 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 print(f"    {Colors.OKBLUE}ibc文件不存在，需要生成: {file_path}{Colors.ENDC}")
                 need_update = True
             
-            need_update_flag_list[file_path] = need_update
+            need_update_flag_dict[file_path] = need_update
             
             # 更新one_file_req的MD5到verify文件
             verify_data['one_file_req_verify_code'] = current_req_md5
-            self._save_verify_file(verify_file, verify_data)
+            ibc_data_store.save_verify_data(verify_file, verify_data)
         
         # 第二阶段：依赖链传播更新
         # 按依赖顺序遍历（file_list已经是拓扑排序后的顺序）
         for file_path in file_list:
-            if need_update_flag_list.get(file_path, False):
+            if need_update_flag_dict.get(file_path, False):
                 # 如果当前文件已标记需要更新，则所有依赖它的文件也需要更新
-                self._propagate_update_to_dependents(file_path, need_update_flag_list)
+                self._propagate_update_to_dependents(file_path, need_update_flag_dict)
             else:
                 # 检查ibc文件的MD5是否变化（用户可能手动修改了）
                 ibc_file = os.path.join(self.work_ibc_dir_path, f"{file_path}.ibc")
@@ -230,71 +233,38 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                             ibc_content = f.read()
                         current_ibc_md5 = IbcFuncs.calculate_text_md5(ibc_content)
                         
-                        verify_data = self._load_or_create_verify_file(verify_file)
+                        ibc_data_store = get_ibc_data_store()
+                        verify_data = ibc_data_store.load_verify_data(verify_file)
                         saved_ibc_md5 = verify_data.get('ibc_verify_code', None)
                         
                         if saved_ibc_md5 is not None and saved_ibc_md5 != current_ibc_md5:
                             print(f"    {Colors.OKBLUE}ibc文件被手动修改: {file_path}，依赖它的文件需要更新{Colors.ENDC}")
                             # 传播更新到依赖此文件的其他文件
-                            self._propagate_update_to_dependents(file_path, need_update_flag_list)
+                            self._propagate_update_to_dependents(file_path, need_update_flag_dict)
                     except Exception as e:
                         print(f"    {Colors.WARNING}警告: 检查ibc文件MD5失败: {file_path}, {e}{Colors.ENDC}")
         
         # 打印更新状态摘要
-        update_count = sum(1 for v in need_update_flag_list.values() if v)
+        update_count = sum(1 for v in need_update_flag_dict.values() if v)
         print(f"  {Colors.OKGREEN}更新状态检查完成: {update_count}/{len(file_list)} 个文件需要更新{Colors.ENDC}")
         
-        return need_update_flag_list
+        return need_update_flag_dict
     
-    def _load_or_create_verify_file(self, verify_file_path: str) -> Dict[str, str]:
-        """加载或创建verify.json文件
-        
-        Args:
-            verify_file_path: verify文件的完整路径
-            
-        Returns:
-            Dict[str, str]: verify数据字典
-        """
-        if os.path.exists(verify_file_path):
-            try:
-                with open(verify_file_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception as e:
-                print(f"    {Colors.WARNING}警告: 读取verify文件失败，将创建新文件: {e}{Colors.ENDC}")
-                return {}
-        else:
-            return {}
-    
-    def _save_verify_file(self, verify_file_path: str, verify_data: Dict[str, str]):
-        """保存verify.json文件
-        
-        Args:
-            verify_file_path: verify文件的完整路径
-            verify_data: 要保存的verify数据
-        """
-        try:
-            # 确保目录存在
-            os.makedirs(os.path.dirname(verify_file_path), exist_ok=True)
-            with open(verify_file_path, 'w', encoding='utf-8') as f:
-                json.dump(verify_data, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            print(f"    {Colors.WARNING}警告: 保存verify文件失败: {e}{Colors.ENDC}")
-    
-    def _propagate_update_to_dependents(self, file_path: str, need_update_flag_list: Dict[str, bool]):
+    def _propagate_update_to_dependents(self, file_path: str, need_update_flag_dict: Dict[str, bool]):
         """将更新标记传播到所有依赖当前文件的文件
         
         Args:
             file_path: 被依赖的文件路径
-            need_update_flag_list: 更新标记字典
+            need_update_flag_dict: 更新标记字典
         """
         # 遍历所有文件，找出依赖当前文件的文件
         for potential_dependent, dependencies in self.dependent_relation.items():
             if file_path in dependencies:
-                if not need_update_flag_list.get(potential_dependent, False):
+                if not need_update_flag_dict.get(potential_dependent, False):
                     print(f"    {Colors.OKBLUE}依赖传播: {potential_dependent} 需要更新（因为依赖 {file_path}）{Colors.ENDC}")
-                    need_update_flag_list[potential_dependent] = True
+                    need_update_flag_dict[potential_dependent] = True
                     # 递归传播
-                    self._propagate_update_to_dependents(potential_dependent, need_update_flag_list)
+                    self._propagate_update_to_dependents(potential_dependent, need_update_flag_dict)
     
     
     def _create_single_ibc_file(self, icp_json_file_path: str) -> bool:
@@ -309,7 +279,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         print(f"  {Colors.OKBLUE}正在处理文件: {icp_json_file_path}{Colors.ENDC}")
         
         # 检查是否需要更新
-        if not self.need_update_flag_list.get(icp_json_file_path, False):
+        if not self.need_update_flag_dict.get(icp_json_file_path, False):
             print(f"    {Colors.WARNING}文件及其依赖均未变化，跳过生成: {icp_json_file_path}{Colors.ENDC}")
             return True
         
@@ -650,6 +620,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         """统一更新所有ibc文件的MD5校验码到verify文件中"""
         print(f"  {Colors.OKBLUE}开始更新ibc文件校验码...{Colors.ENDC}")
         
+        ibc_data_store = get_ibc_data_store()
+        
         for file_path in self.file_creation_order_list:
             ibc_file = os.path.join(self.work_ibc_dir_path, f"{file_path}.ibc")
             verify_file = os.path.join(self.work_ibc_dir_path, f"{file_path}_verify.json")
@@ -662,13 +634,13 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                     current_ibc_md5 = IbcFuncs.calculate_text_md5(ibc_content)
                     
                     # 加载现有的verify数据
-                    verify_data = self._load_or_create_verify_file(verify_file)
+                    verify_data = ibc_data_store.load_verify_data(verify_file)
                     
                     # 更新ibc的MD5
                     verify_data['ibc_verify_code'] = current_ibc_md5
                     
                     # 保存更新后的verify数据
-                    self._save_verify_file(verify_file, verify_data)
+                    ibc_data_store.save_verify_data(verify_file, verify_data)
                     
                 except Exception as e:
                     print(f"    {Colors.WARNING}警告: 更新ibc文件MD5失败: {file_path}, {e}{Colors.ENDC}")
