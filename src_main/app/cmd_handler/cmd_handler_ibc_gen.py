@@ -513,7 +513,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 continue
             
             # 解析响应
-            normalized_symbols = IbcFuncs.parse_symbol_normalizer_response(response_content)
+            cleaned_response = ICPChatHandler.clean_code_block_markers(response_content)
+            normalized_symbols = IbcFuncs.parse_symbol_normalizer_response(cleaned_response)
             if normalized_symbols:
                 return True, normalized_symbols
             else:

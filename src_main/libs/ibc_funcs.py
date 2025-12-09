@@ -53,11 +53,6 @@ class IbcFuncs:
                 格式: {"原始符号名": {"normalized_name": "规范化名", "visibility": "可见性"}}
         """
         try:
-            from app.ai_chat_handler import ICPChatHandler
-            
-            # 清理代码块标记
-            cleaned_response = ICPChatHandler.clean_code_block_markers(response)
-            
             # 解析JSON
             result = json.loads(cleaned_response)
             
