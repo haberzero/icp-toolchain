@@ -41,3 +41,6 @@ src_main/app_data/app_data.json
 # Test files and temporary dev files
 test_target_proj
 test.py
+
+# backup
+*.bak
