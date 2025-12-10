@@ -423,11 +423,13 @@ def test_symbol_management():
     )
     symbol_table[var_symbol.symbol_name] = var_symbol
     
-    if not ibc_data_store.save_symbols(test_ibc_root, file_path, symbol_table):
+    symbols_path = ibc_data_store.build_symbols_path(test_ibc_root, file_path)
+    file_name = os.path.basename(file_path)
+    if not ibc_data_store.save_symbols(symbols_path, file_name, symbol_table):
         print(f"   ✗ 符号表保存失败")
         return False
     
-    loaded_symbols = ibc_data_store.load_symbols(test_ibc_root, file_path)
+    loaded_symbols = ibc_data_store.load_symbols(symbols_path, file_name)
     if len(loaded_symbols) != len(symbol_table):
         print(f"   ✗ 符号表加载失败")
         return False
@@ -450,12 +452,12 @@ def test_symbol_management():
     # 测试用例2: 更新符号信息
     print("\n5.2 测试更新符号规范化信息...")
     if not ibc_data_store.update_symbol_info(
-        test_ibc_root, file_path, "登录", "Login", VisibilityTypes.PROTECTED
+        symbols_path, file_name, "登录", "Login", VisibilityTypes.PROTECTED
     ):
         print(f"   ✗ 符号信息更新失败")
         return False
     
-    updated_symbols = ibc_data_store.load_symbols(test_ibc_root, file_path)
+    updated_symbols = ibc_data_store.load_symbols(symbols_path, file_name)
     updated_func = updated_symbols.get("登录")
     if updated_func.normalized_name == "Login" and updated_func.visibility == VisibilityTypes.PROTECTED:
         print(f"   ✓ 符号信息更新成功")
@@ -475,10 +477,12 @@ def test_symbol_management():
     )
     symbol_table2[symbol2.symbol_name] = symbol2
     
-    ibc_data_store.save_symbols(test_ibc_root, file2_path, symbol_table2)
+    symbols_path2 = ibc_data_store.build_symbols_path(test_ibc_root, file2_path)
+    file_name2 = os.path.basename(file2_path)
+    ibc_data_store.save_symbols(symbols_path2, file_name2, symbol_table2)
     
-    symbols1 = ibc_data_store.load_symbols(test_ibc_root, file_path)
-    symbols2 = ibc_data_store.load_symbols(test_ibc_root, file2_path)
+    symbols1 = ibc_data_store.load_symbols(symbols_path, file_name)
+    symbols2 = ibc_data_store.load_symbols(symbols_path2, file_name2)
     
     if "UserManager" in symbols1 and "ServiceClass" not in symbols1 and \
        "ServiceClass" in symbols2 and "UserManager" not in symbols2:
@@ -489,7 +493,8 @@ def test_symbol_management():
     
     # 测试用例4: 加载不存在的符号表
     print("\n5.4 测试加载不存在的符号表...")
-    non_exist_symbols = ibc_data_store.load_symbols(test_ibc_root, "non/exist")
+    non_exist_path = ibc_data_store.build_symbols_path(test_ibc_root, "non/exist")
+    non_exist_symbols = ibc_data_store.load_symbols(non_exist_path, "exist")
     if non_exist_symbols == {}:
         print(f"   ✓ 不存在文件返回空字典")
     else:

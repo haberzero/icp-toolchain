@@ -125,7 +125,9 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             
             # 2. 加载符号表
             print(f"    正在加载符号表...")
-            symbol_table = ibc_data_store.load_symbols(work_ibc_dir_path, icp_json_file_path)
+            symbols_path = ibc_data_store.build_symbols_path(work_ibc_dir_path, icp_json_file_path)
+            file_name = os.path.basename(icp_json_file_path)
+            symbol_table = ibc_data_store.load_symbols(symbols_path, file_name)
             
             if not symbol_table or len(symbol_table) == 0:
                 print(f"    {Colors.WARNING}警告: 符号表为空{Colors.ENDC}")
