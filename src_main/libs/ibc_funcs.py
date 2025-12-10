@@ -339,7 +339,7 @@ class IbcFuncs:
         
         for dep_file in dependencies:
             # 加载依赖文件的符号表
-            dep_symbol_table = ibc_data_store.load_file_symbols(work_ibc_dir_path, dep_file)
+            dep_symbol_table = ibc_data_store.load_symbols(work_ibc_dir_path, dep_file)
             
             if len(dep_symbol_table) == 0:
                 continue

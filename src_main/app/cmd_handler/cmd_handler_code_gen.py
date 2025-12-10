@@ -117,7 +117,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             
             print(f"    正在加载AST...")
             ibc_data_store = get_ibc_data_store()
-            ast_dict = ibc_data_store.load_ast_from_file(ast_file_path)
+            ast_dict = ibc_data_store.load_ast(ast_file_path)
             
             if not ast_dict:
                 print(f"    {Colors.FAIL}错误: AST加载失败{Colors.ENDC}")
@@ -125,7 +125,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             
             # 2. 加载符号表
             print(f"    正在加载符号表...")
-            symbol_table = ibc_data_store.load_file_symbols(work_ibc_dir_path, icp_json_file_path)
+            symbol_table = ibc_data_store.load_symbols(work_ibc_dir_path, icp_json_file_path)
             
             if not symbol_table or len(symbol_table) == 0:
                 print(f"    {Colors.WARNING}警告: 符号表为空{Colors.ENDC}")

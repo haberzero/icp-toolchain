@@ -77,8 +77,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 所有文件处理完毕，统一更新ibc文件的MD5值
         print(f"  {Colors.OKBLUE}开始更新ibc文件校验码...{Colors.ENDC}")
         ibc_data_store = get_ibc_data_store()
-        ibc_data_store.update_all_ibc_verify_codes(self.work_ibc_dir_path, self.file_creation_order_list)
-        print(f"  {Colors.OKGREEN}ibc文件校验码更新完毕{Colors.ENDC}")
+        result = ibc_data_store.batch_update_verify_codes(self.work_ibc_dir_path, self.file_creation_order_list)
+        print(f"  {Colors.OKGREEN}ibc文件校验码更新完毕: {result['success']} 成功{Colors.ENDC}")
         
         print(f"{Colors.OKGREEN}半自然语言行为描述代码生成完毕!{Colors.ENDC}")
     
@@ -171,10 +171,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             ibc_data_store = get_ibc_data_store()
             req_file = os.path.join(self.work_staging_dir_path, f"{file_path}_one_file_req.txt")
-            ibc_file = ibc_data_store.get_ibc_file_path(self.work_ibc_dir_path, file_path)
-            verify_file = ibc_data_store.get_verify_file_path(self.work_ibc_dir_path, file_path)
+            ibc_path = ibc_data_store.build_ibc_path(self.work_ibc_dir_path, file_path)
+            verify_path = ibc_data_store.build_verify_path(self.work_ibc_dir_path, file_path)
             
-            # 检查one_file_req文件是否存在
+            # 检棚one_file_req文件是否存在
             if not os.path.exists(req_file):
                 print(f"    {Colors.WARNING}警告: one_file_req文件不存在: {file_path}{Colors.ENDC}")
                 need_update = True
@@ -194,7 +194,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             # 读取或创建verify.json文件
             ibc_data_store = get_ibc_data_store()
-            verify_data = ibc_data_store.load_verify_data(verify_file)
+            verify_data = ibc_data_store.load_verify_data(verify_path)
             
             # 检查one_file_req的MD5是否变化
             saved_req_md5 = verify_data.get('one_file_req_verify_code', None)
@@ -206,7 +206,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 need_update = True
             
             # 检查ibc文件是否存在
-            if not need_update and not os.path.exists(ibc_file):
+            if not need_update and not os.path.exists(ibc_path):
                 print(f"    {Colors.OKBLUE}ibc文件不存在，需要生成: {file_path}{Colors.ENDC}")
                 need_update = True
             
@@ -214,7 +214,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             # 更新one_file_req的MD5到verify文件
             verify_data['one_file_req_verify_code'] = current_req_md5
-            ibc_data_store.save_verify_data(verify_file, verify_data)
+            ibc_data_store.save_verify_data(verify_path, verify_data)
         
         # 第二阶段：依赖链传播更新
         # 按依赖顺序遍历（file_list已经是拓扑排序后的顺序）
@@ -225,16 +225,16 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             else:
                 # 检查ibc文件的MD5是否变化（用户可能手动修改了）
                 ibc_data_store = get_ibc_data_store()
-                ibc_file = ibc_data_store.get_ibc_file_path(self.work_ibc_dir_path, file_path)
-                verify_file = ibc_data_store.get_verify_file_path(self.work_ibc_dir_path, file_path)
+                ibc_path = ibc_data_store.build_ibc_path(self.work_ibc_dir_path, file_path)
+                verify_path = ibc_data_store.build_verify_path(self.work_ibc_dir_path, file_path)
                 
-                if os.path.exists(ibc_file):
+                if os.path.exists(ibc_path):
                     try:
-                        ibc_content = ibc_data_store.load_ibc_code(ibc_file)
+                        ibc_content = ibc_data_store.load_ibc_code(ibc_path)
                         if ibc_content:
                             current_ibc_md5 = IbcFuncs.calculate_text_md5(ibc_content)
                             
-                            verify_data = ibc_data_store.load_verify_data(verify_file)
+                            verify_data = ibc_data_store.load_verify_data(verify_path)
                             saved_ibc_md5 = verify_data.get('ibc_verify_code', None)
                         if saved_ibc_md5 is not None and saved_ibc_md5 != current_ibc_md5:
                             print(f"    {Colors.OKBLUE}ibc文件被手动修改: {file_path}，依赖它的文件需要更新{Colors.ENDC}")
@@ -314,24 +314,24 @@ class CmdHandlerIbcGen(BaseCmdHandler):
 
             # 保存IBC代码
             ibc_data_store = get_ibc_data_store()
-            ibc_file_path = ibc_data_store.get_ibc_file_path(self.work_ibc_dir_path, icp_json_file_path)
-            if not ibc_data_store.save_ibc_code(ibc_file_path, ibc_code):
+            ibc_path = ibc_data_store.build_ibc_path(self.work_ibc_dir_path, icp_json_file_path)
+            if not ibc_data_store.save_ibc_code(ibc_path, ibc_code):
                 print(f"    {Colors.WARNING}警告: IBC代码保存失败{Colors.ENDC}")
                 continue
-            print(f"    {Colors.OKGREEN}IBC代码已保存: {ibc_file_path}{Colors.ENDC}")
+            print(f"    {Colors.OKGREEN}IBC代码已保存: {ibc_path}{Colors.ENDC}")
             
             # 保存AST
-            ast_file_path = os.path.join(self.work_ibc_dir_path, f"{icp_json_file_path}_ibc_ast.json")
-            if ibc_data_store.save_ast_to_file(ast_dict, ast_file_path):
-                print(f"    {Colors.OKGREEN}AST已保存: {ast_file_path}{Colors.ENDC}")
+            ast_path = ibc_data_store.build_ast_path(self.work_ibc_dir_path, icp_json_file_path)
+            if ibc_data_store.save_ast(ast_path, ast_dict):
+                print(f"    {Colors.OKGREEN}AST已保存: {ast_path}{Colors.ENDC}")
             else:
                 print(f"    {Colors.WARNING}警告: AST保存失败{Colors.ENDC}")
             
             # 创建规范化符号（带重试）
-            normalized_symbols_dict = self._create_normalized_symbols(icp_json_file_path, symbol_table, ibc_code)
-            if not normalized_symbols_dict:
-                print(f"    {Colors.WARNING}警告: 符号规范化失败{Colors.ENDC}")
-                continue
+            # normalized_symbols_dict = self._create_normalized_symbols(icp_json_file_path, symbol_table, ibc_code)
+            # if not normalized_symbols_dict:
+            #     print(f"    {Colors.WARNING}警告: 符号规范化失败{Colors.ENDC}")
+            #     continue
             
             # 符号规范化成功，返回成功
             return True
