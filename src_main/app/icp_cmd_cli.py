@@ -11,6 +11,7 @@ from typing import Optional
 from typedef.cmd_data_types import Colors
 from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
 from .cmd_handler.command_manager import CommandManager
+from .cmd_handler.base_cmd_handler import BaseCmdHandler
 
 # ==================== 状态定义 ====================
 
@@ -145,7 +146,7 @@ class IcpCmdCli:
             # 在input阶段被中断
             raise
     
-    def _process_command(self, user_input: str, cmd_handler):
+    def _process_command(self, user_input: str, cmd_handler: BaseCmdHandler):
         """处理命令执行
         
         Args:
@@ -173,7 +174,7 @@ class IcpCmdCli:
         # 执行命令
         self._execute_command(cmd_handler)
     
-    def _execute_command(self, cmd_handler):
+    def _execute_command(self, cmd_handler: BaseCmdHandler):
         """执行命令
         
         Args:
