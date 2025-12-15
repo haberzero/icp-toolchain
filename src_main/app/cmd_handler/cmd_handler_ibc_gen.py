@@ -147,7 +147,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         # 初始化更新状态.需要依赖self.file_creation_order_list等内容
         self.need_update_flag_dict = self._initialize_update_status()
-
     
     def _initialize_update_status(self) -> Dict[str, bool]:
         """初始化更新状态字典
@@ -173,13 +172,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             req_file = os.path.join(self.work_staging_dir_path, f"{file_path}_one_file_req.txt")
             ibc_file = ibc_data_store.get_ibc_file_path(self.work_ibc_dir_path, file_path)
             verify_file = ibc_data_store.get_verify_file_path(self.work_ibc_dir_path, file_path)
-            
-            # 检查one_file_req文件是否存在
-            if not os.path.exists(req_file):
-                print(f"    {Colors.WARNING}警告: one_file_req文件不存在: {file_path}{Colors.ENDC}")
-                need_update = True
-                need_update_flag_dict[file_path] = need_update
-                continue
             
             # 读取one_file_req的当前MD5
             try:
@@ -588,19 +580,62 @@ class CmdHandlerIbcGen(BaseCmdHandler):
 
     def _check_cmd_requirement(self) -> bool:
         """验证命令的前置条件"""
-        # 检查IBC目录结构文件是否存在
-        ibc_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_final.json')
-        if not os.path.exists(ibc_dir_file):
-            print(f"  {Colors.WARNING}警告: IBC目录结构文件不存在，请先执行one_file_req_gen命令{Colors.ENDC}")
+        try:
+            # 检查IBC目录结构文件是否存在
+            ibc_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_final.json')
+            if not os.path.exists(ibc_dir_file):
+                print(f"  {Colors.WARNING}警告: IBC目录结构文件不存在，请先执行one_file_req_gen命令{Colors.ENDC}")
+                return False
+            
+            # 检查文件级实现规划文件是否存在
+            implementation_plan_file = os.path.join(self.work_data_dir_path, 'icp_implementation_plan.txt')
+            if not os.path.exists(implementation_plan_file):
+                print(f"  {Colors.WARNING}警告: 文件级实现规划文件不存在，请先执行目录文件填充命令{Colors.ENDC}")
+                return False
+            
+            # 读取目录结构并解析
+            with open(ibc_dir_file, 'r', encoding='utf-8') as f:
+                dir_structure_str = f.read()
+            dir_json_dict = json.loads(dir_structure_str)
+            
+            # 验证目录结构完整性
+            if "proj_root_dict" not in dir_json_dict or "dependent_relation" not in dir_json_dict:
+                print(f"  {Colors.FAIL}错误: IBC目录结构缺少必要的节点(proj_root_dict或dependent_relation){Colors.ENDC}")
+                return False
+            
+            # 获取文件列表
+            dependent_relation = dir_json_dict['dependent_relation']
+            file_list = DirJsonFuncs.build_file_creation_order(dependent_relation)
+            
+            # 检查src_staging目录是否存在
+            work_staging_dir_path = os.path.join(self.work_dir_path, 'src_staging')
+            if not os.path.exists(work_staging_dir_path):
+                print(f"  {Colors.FAIL}错误: src_staging目录不存在，请先执行one_file_req_gen命令{Colors.ENDC}")
+                return False
+            
+            # 检查每个文件的one_file_req文件是否存在
+            missing_files = []
+            for file_path in file_list:
+                req_file = os.path.join(work_staging_dir_path, f"{file_path}_one_file_req.txt")
+                if not os.path.exists(req_file):
+                    missing_files.append(f"{file_path}_one_file_req.txt")
+            
+            if missing_files:
+                print(f"  {Colors.FAIL}错误: 以下one_file_req文件不存在，请先执行one_file_req_gen命令:{Colors.ENDC}")
+                for missing_file in missing_files[:5]:  # 只显示前5个
+                    print(f"    - {missing_file}")
+                if len(missing_files) > 5:
+                    print(f"    ... 还有 {len(missing_files) - 5} 个文件")
+                return False
+            
+            return True
+                
+        except json.JSONDecodeError as e:
+            print(f"  {Colors.FAIL}错误: IBC目录结构文件格式错误: {e}{Colors.ENDC}")
             return False
-        
-        # 检查文件级实现规划文件是否存在
-        implementation_plan_file = os.path.join(self.work_data_dir_path, 'icp_implementation_plan.txt')
-        if not os.path.exists(implementation_plan_file):
-            print(f"  {Colors.WARNING}警告: 文件级实现规划文件不存在，请先执行目录文件填充命令{Colors.ENDC}")
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 检查前置文件时发生异常: {e}{Colors.ENDC}")
             return False
-        
-        return True
     
     def _check_ai_handler(self) -> bool:
         """验证AI处理器是否初始化成功"""
