@@ -12,6 +12,7 @@ from data_store.user_data_store import get_instance as get_user_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
+from utils.issue_recorder import TextIssueRecorder
 
 
 
@@ -34,6 +35,11 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
 
         self.chat_handler = ICPChatHandler()
         self.role_name = "2_req_to_module"
+        
+        # 初始化issue recorder和上一次生成的内容
+        self.issue_recorder = TextIssueRecorder()
+        self.last_generated_content = None  # 上一次生成的内容
+        
         self._init_ai_handlers()
 
     def execute(self):
@@ -42,14 +48,22 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
             return
             
         print(f"{Colors.OKBLUE}开始进行需求分析...{Colors.ENDC}")
-        requirement_content = get_user_data_store().get_user_prompt()
+        
+        # 重置实例变量
+        self.issue_recorder.clear()
+        self.last_generated_content = None
+        
+        # 构建用户提示词
+        user_prompt = self._build_user_prompt()
+        if not user_prompt:
+            return
         
         max_attempts = 3
         for attempt in range(max_attempts):
             print(f"{self.role_name}正在进行第 {attempt + 1} 次尝试...")
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_name,
-                user_prompt=requirement_content
+                user_prompt=user_prompt
             ))
             
             # 如果响应失败，继续下一次尝试
@@ -64,8 +78,13 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
             is_valid = self._validate_response(cleaned_content)
             if is_valid:
                 break
+            
+            # 如果验证失败，保存当前生成的内容用于下一次重试
+            self.last_generated_content = cleaned_content
+            # 重新构建用户提示词（包含issue信息）
+            user_prompt = self._build_user_prompt()
         
-        if attempt == max_attempts - 1:
+        if attempt == max_attempts - 1 and not is_valid:
             print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的需求分析结果{Colors.ENDC}")
             return
         
@@ -79,6 +98,32 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
         except Exception as e:
             print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
             return
+
+    def _build_user_prompt(self) -> str:
+        """
+        构建用户提示词
+        
+        Returns:
+            str: 完整的用户提示词，失败时返回空字符串
+        """
+        requirement_content = get_user_data_store().get_user_prompt()
+        if not requirement_content:
+            print(f"{Colors.FAIL}错误: 未找到用户需求内容{Colors.ENDC}")
+            return ""
+        
+        user_prompt_str = requirement_content
+        
+        # 如果是重试，添加上一次生成的内容和问题信息
+        if self.issue_recorder.has_issues() and self.last_generated_content:
+            user_prompt_str += "\n\n## 重试生成信息\n\n"
+            user_prompt_str += "这是一次重试生成，上一次生成的内容是:\n\n"
+            user_prompt_str += "```json\n" + self.last_generated_content + "\n```\n\n"
+            user_prompt_str += "其中检测到了生成的内容存在以下问题:\n\n"
+            for issue in self.issue_recorder.get_issues():
+                user_prompt_str += f"- {issue.issue_content}\n"
+            user_prompt_str += "\n请根据上述问题进行修正。\n"
+        
+        return user_prompt_str
 
     def _validate_response(self, cleaned_json_str: str) -> bool:
         """
@@ -94,68 +139,91 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
         try:
             json_dict = json.loads(cleaned_json_str)
         except json.JSONDecodeError as e:
-            print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
-            print(f"AI返回内容: {cleaned_json_str[:200]}...")  # 只显示前200个字符
+            error_msg = f"AI返回的内容不是有效的JSON格式: {e}"
+            print(f"{Colors.FAIL}错误: {error_msg}{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
             return False
         
         # 检查必需字段是否存在
         required_fields = ['main_goal', 'core_functions', 'module_breakdown', 'ExternalLibraryDependencies']
         for field in required_fields:
             if field not in json_dict:
-                print(f"{Colors.WARNING}警告: 生成的JSON缺少必需字段: {field}{Colors.ENDC}")
+                error_msg = f"生成的JSON缺少必需字段: {field}"
+                print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+                self.issue_recorder.record_issue(error_msg)
                 return False
         
         # 验证 main_goal 是字符串
         if not isinstance(json_dict['main_goal'], str) or not json_dict['main_goal'].strip():
-            print(f"{Colors.WARNING}警告: main_goal 字段必须是非空字符串{Colors.ENDC}")
+            error_msg = "main_goal 字段必须是非空字符串"
+            print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
             return False
         
         # 验证 core_functions 是列表且不为空
         if not isinstance(json_dict['core_functions'], list) or len(json_dict['core_functions']) == 0:
-            print(f"{Colors.WARNING}警告: core_functions 字段必须是非空列表{Colors.ENDC}")
+            error_msg = "core_functions 字段必须是非空列表"
+            print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
             return False
         
         # 验证 core_functions 中的每个元素都是字符串
         for func in json_dict['core_functions']:
             if not isinstance(func, str) or not func.strip():
-                print(f"{Colors.WARNING}警告: core_functions 中的元素必须是非空字符串{Colors.ENDC}")
+                error_msg = "core_functions 中的元素必须是非空字符串"
+                print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+                self.issue_recorder.record_issue(error_msg)
                 return False
         
         # 验证 module_breakdown 是字典且不为空
         if not isinstance(json_dict['module_breakdown'], dict) or len(json_dict['module_breakdown']) == 0:
-            print(f"{Colors.WARNING}警告: module_breakdown 字段必须是非空字典{Colors.ENDC}")
+            error_msg = "module_breakdown 字段必须是非空字典"
+            print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
             return False
         
         # 验证每个模块的结构
         for module_name, module_info in json_dict['module_breakdown'].items():
             if not isinstance(module_info, dict):
-                print(f"{Colors.WARNING}警告: 模块 {module_name} 的信息必须是字典{Colors.ENDC}")
+                error_msg = f"模块 {module_name} 的信息必须是字典"
+                print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+                self.issue_recorder.record_issue(error_msg)
                 return False
             
             # 检查模块的必需字段
             if 'responsibilities' not in module_info or 'dependencies' not in module_info:
-                print(f"{Colors.WARNING}警告: 模块 {module_name} 缺少 responsibilities 或 dependencies 字段{Colors.ENDC}")
+                error_msg = f"模块 {module_name} 缺少 responsibilities 或 dependencies 字段"
+                print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+                self.issue_recorder.record_issue(error_msg)
                 return False
             
             # 验证 responsibilities 是列表且不为空
             if not isinstance(module_info['responsibilities'], list) or len(module_info['responsibilities']) == 0:
-                print(f"{Colors.WARNING}警告: 模块 {module_name} 的 responsibilities 必须是非空列表{Colors.ENDC}")
+                error_msg = f"模块 {module_name} 的 responsibilities 必须是非空列表"
+                print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+                self.issue_recorder.record_issue(error_msg)
                 return False
             
             # 验证 dependencies 是列表
             if not isinstance(module_info['dependencies'], list):
-                print(f"{Colors.WARNING}警告: 模块 {module_name} 的 dependencies 必须是列表{Colors.ENDC}")
+                error_msg = f"模块 {module_name} 的 dependencies 必须是列表"
+                print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+                self.issue_recorder.record_issue(error_msg)
                 return False
         
         # 验证 ExternalLibraryDependencies 是字典
         if not isinstance(json_dict['ExternalLibraryDependencies'], dict):
-            print(f"{Colors.WARNING}警告: ExternalLibraryDependencies 字段必须是字典{Colors.ENDC}")
+            error_msg = "ExternalLibraryDependencies 字段必须是字典"
+            print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
             return False
         
         # 验证 ExternalLibraryDependencies 中的值都是字符串
         for lib_name, lib_desc in json_dict['ExternalLibraryDependencies'].items():
             if not isinstance(lib_desc, str) or not lib_desc.strip():
-                print(f"{Colors.WARNING}警告: 库 {lib_name} 的描述必须是非空字符串{Colors.ENDC}")
+                error_msg = f"库 {lib_name} 的描述必须是非空字符串"
+                print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+                self.issue_recorder.record_issue(error_msg)
                 return False
         
         print(f"{Colors.OKGREEN}需求分析结果验证通过{Colors.ENDC}")

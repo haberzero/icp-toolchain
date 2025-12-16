@@ -12,6 +12,7 @@ from data_store.user_data_store import get_instance as get_user_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
+from utils.issue_recorder import TextIssueRecorder
 
 
 
@@ -34,6 +35,11 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
 
         self.chat_handler = ICPChatHandler()
         self.role_name = "3_module_to_dir"
+        
+        # 初始化issue recorder和上一次生成的内容
+        self.issue_recorder = TextIssueRecorder()
+        self.last_generated_content = None  # 上一次生成的内容
+        
         self._init_ai_handlers()
 
     def execute(self):
@@ -42,6 +48,10 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             return
             
         print(f"{Colors.OKBLUE}开始生成目录结构...{Colors.ENDC}")
+        
+        # 重置实例变量
+        self.issue_recorder.clear()
+        self.last_generated_content = None
         
         # 构建用户提示词
         user_prompt = self._build_user_prompt_for_module_to_dir()
@@ -68,6 +78,11 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             is_valid = self._validate_response(cleaned_content)
             if is_valid:
                 break
+            
+            # 如果验证失败，保存当前生成的内容用于下一次重试
+            self.last_generated_content = cleaned_content
+            # 重新构建用户提示词（包含issue信息）
+            user_prompt = self._build_user_prompt_for_module_to_dir()
 
         if attempt == max_attempts - 1 and not is_valid:
             print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的依赖关系{Colors.ENDC}")
@@ -119,7 +134,19 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: 需求分析结果不是有效的JSON格式: {e}{Colors.ENDC}")
             return ""
         
-        return filtered_requirement_str
+        user_prompt_str = filtered_requirement_str
+        
+        # 如果是重试，添加上一次生成的内容和问题信息
+        if self.issue_recorder.has_issues() and self.last_generated_content:
+            user_prompt_str += "\n\n## 重试生成信息\n\n"
+            user_prompt_str += "这是一次重试生成，上一次生成的内容是:\n\n"
+            user_prompt_str += "```json\n" + self.last_generated_content + "\n```\n\n"
+            user_prompt_str += "其中检测到了生成的内容存在以下问题:\n\n"
+            for issue in self.issue_recorder.get_issues():
+                user_prompt_str += f"- {issue.issue_content}\n"
+            user_prompt_str += "\n请根据上述问题进行修正。\n"
+        
+        return user_prompt_str
 
     def _validate_response(self, cleaned_json_str: str) -> bool:
         """
@@ -135,21 +162,29 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         try:
             json_dict = json.loads(cleaned_json_str)
         except json.JSONDecodeError as e:
-            print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
+            error_msg = f"AI返回的内容不是有效的JSON格式: {e}"
+            print(f"{Colors.FAIL}错误: {error_msg}{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
             return False
 
         # 检查key的存在性以及key内容的匹配，以及检查是否有其它多余字段
         required_key = "proj_root_dict"
         if required_key not in json_dict:
-            print(f"{Colors.FAIL}错误: AI返回的内容缺少关键字段: {required_key}{Colors.ENDC}")
+            error_msg = f"AI返回的内容缺少关键字段: {required_key}"
+            print(f"{Colors.FAIL}错误: {error_msg}{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
             return False
         if not isinstance(json_dict[required_key], dict):
-            print(f"{Colors.FAIL}错误: 字段 {required_key} 的内容不是字典类型{Colors.ENDC}")
+            error_msg = f"字段 {required_key} 的内容不是字典类型"
+            print(f"{Colors.FAIL}错误: {error_msg}{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
             return False
 
         for key in json_dict:
             if key != required_key:
-                print(f"{Colors.FAIL}错误: 存在多余字段: {key}{Colors.ENDC}")
+                error_msg = f"存在多余字段: {key}"
+                print(f"{Colors.FAIL}错误: {error_msg}{Colors.ENDC}")
+                self.issue_recorder.record_issue(error_msg)
                 return False
         
         # 检查目录结构中的所有键是否包含'.'（疑似后缀名或非法命名）
@@ -158,7 +193,9 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
                 for k, v in node.items():
                     current_path = f"{path}/{k}" if path else k
                     if "." in k:
-                        print(f"{Colors.FAIL}错误: 目录键包含'.'（疑似后缀或非法命名）: {current_path}{Colors.ENDC}")
+                        error_msg = f"目录键包含'.'（疑似后缀或非法命名）: {current_path}"
+                        print(f"{Colors.FAIL}错误: {error_msg}{Colors.ENDC}")
+                        self.issue_recorder.record_issue(error_msg)
                         return True
                     if isinstance(v, dict):
                         if _has_dot_in_keys(v, current_path):

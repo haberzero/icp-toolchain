@@ -13,6 +13,7 @@ from data_store.user_data_store import get_instance as get_user_data_store
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
+from utils.issue_recorder import TextIssueRecorder
 
 
 
@@ -38,6 +39,10 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         self.role_dir_file_fill = "4_dir_file_fill"
         self.role_plan_gen = "4_dir_file_fill_plan_gen"
         
+        # 初始化issue recorder和上一次生成的内容
+        self.issue_recorder = TextIssueRecorder()
+        self.last_generated_content = None  # 上一次生成的内容
+        
         # 初始化AI处理器
         self._init_ai_handlers()
 
@@ -47,6 +52,10 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             return
             
         print(f"{Colors.OKBLUE}开始进行目录文件填充...{Colors.ENDC}")
+
+        # 重置实例变量
+        self.issue_recorder.clear()
+        self.last_generated_content = None
 
         # 构建用户提示词
         user_prompt = self._build_user_prompt_for_dir_file_filler()
@@ -73,6 +82,11 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             is_valid = self._validate_response(cleaned_content, self.old_json_dict)
             if is_valid:
                 break
+            
+            # 如果验证失败，保存当前生成的内容用于下一次重试
+            self.last_generated_content = cleaned_content
+            # 重新构建用户提示词（包含issue信息）
+            user_prompt = self._build_user_prompt_for_dir_file_filler()
         
         if attempt == max_attempts - 1 and not is_valid:
             print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的目录结构{Colors.ENDC}")
@@ -179,6 +193,16 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         user_prompt_str = user_prompt_str.replace('PROGRAMMING_REQUIREMENT_PLACEHOLDER', requirement_str)
         user_prompt_str = user_prompt_str.replace('JSON_STRUCTURE_PLACEHOLDER', dir_structure_str)
         
+        # 如果是重试，添加上一次生成的内容和问题信息
+        if self.issue_recorder.has_issues() and self.last_generated_content:
+            user_prompt_str += "\n\n## 重试生成信息\n\n"
+            user_prompt_str += "这是一次重试生成，上一次生成的内容是:\n\n"
+            user_prompt_str += "```json\n" + self.last_generated_content + "\n```\n\n"
+            user_prompt_str += "其中检测到了生成的内容存在以下问题:\n\n"
+            for issue in self.issue_recorder.get_issues():
+                user_prompt_str += f"- {issue.issue_content}\n"
+            user_prompt_str += "\n请根据上述问题进行修正。\n"
+        
         return user_prompt_str
 
     def _build_user_prompt_for_plan_generator(self) -> str:
@@ -248,22 +272,30 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         try:
             new_json_dict = json.loads(cleaned_json_str)
         except json.JSONDecodeError as e:
-            print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
+            error_msg = f"AI返回的内容不是有效的JSON格式: {e}"
+            print(f"{Colors.FAIL}错误: {error_msg}{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
             return False
         
         # 检查新JSON内容结构是否与旧JSON内容结构一致
         if not DirJsonFuncs.compare_structure(old_json_dict, new_json_dict):
-            print(f"{Colors.WARNING}警告: 生成的JSON结构不符合要求，正在重新生成...{Colors.ENDC}")
+            error_msg = "生成的JSON结构不符合要求"
+            print(f"{Colors.WARNING}警告: {error_msg}，正在重新生成...{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
             return False
             
         # 检查新添加的节点是否都为字符串类型
         if not DirJsonFuncs.check_new_nodes_are_strings(new_json_dict):
-            print(f"{Colors.WARNING}警告: 生成的JSON包含非字符串类型的叶子节点，正在重新生成...{Colors.ENDC}")
+            error_msg = "生成的JSON包含非字符串类型的叶子节点"
+            print(f"{Colors.WARNING}警告: {error_msg}，正在重新生成...{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
             return False
 
         # 检查并确保 proj_root_dict 下有主入口文件
         if not self._ensure_main_entry_file(new_json_dict):
-            print(f"{Colors.WARNING}警告: 目录结构中的主入口文件检查/填充未成功，正在重新生成...{Colors.ENDC}")
+            error_msg = "目录结构中的主入口文件检查/填充未成功"
+            print(f"{Colors.WARNING}警告: {error_msg}，正在重新生成...{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
             return False
 
         return True

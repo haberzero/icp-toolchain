@@ -13,6 +13,7 @@ from data_store.user_data_store import get_instance as get_user_data_store
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
+from utils.issue_recorder import TextIssueRecorder
 
 
 class CmdHandlerOneFileReq(BaseCmdHandler):
@@ -34,6 +35,11 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
 
         self.chat_handler = ICPChatHandler()
         self.role_one_file_req = "6_one_file_req_gen"
+        
+        # 初始化issue recorder和上一次生成的内容
+        self.issue_recorder = TextIssueRecorder()
+        self.last_generated_content = None  # 上一次生成的内容
+        
         self._init_ai_handlers()
 
         self.accumulated_file_str_list: List[tuple[str, str]] = []  # File path and its content
@@ -153,36 +159,47 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
 
     def _create_single_one_file_req(self, icp_json_file_path: str) -> bool:
         """为当前选中路径生成单文件需求描述并保存"""
+        # 重置单个文件的生成状态
+        self.issue_recorder.clear()
+        self.last_generated_content = None
+        
         max_attempts = 3
-        response_content = None
-        success = False
+        
+        # 构建用户提示词
+        user_prompt_ofr = self._build_user_prompt_for_one_file_req(icp_json_file_path)
+        if not user_prompt_ofr:
+            print(f"  {Colors.FAIL}错误: 无法构建用户提示词: {icp_json_file_path}{Colors.ENDC}")
+            return False
 
         for attempt in range(max_attempts):
             print(f"{self.role_one_file_req}正在进行第 {attempt + 1} 次尝试...")
             
-            # 构建用户提示词
-            user_prompt_ofr = self._build_user_prompt_for_one_file_req(icp_json_file_path)
-            if not user_prompt_ofr:
-                print(f"  {Colors.FAIL}错误: 无法构建用户提示词: {icp_json_file_path}{Colors.ENDC}")
-                return False
-
             # 获取模型输出
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_one_file_req,
                 user_prompt=user_prompt_ofr
             ))
             
+            # 如果响应失败，继续下一次尝试
+            if not success:
+                print(f"  {Colors.WARNING}警告: AI响应失败，将进行下一次尝试{Colors.ENDC}")
+                continue
+            
             # 移除可能的代码块标记
             response_content = ICPChatHandler.clean_code_block_markers(response_content)
             
-            if success:
+            # 验证响应内容
+            is_valid = self._validate_response(response_content)
+            if is_valid:
                 break
-            else:
-                print(f"  {Colors.FAIL}错误: 生成文件依赖关系失败: {icp_json_file_path}{Colors.ENDC}")
-                print(f"  {Colors.FAIL}重试当前文件的生成过程{Colors.ENDC}")
+            
+            # 如果验证失败，保存当前生成的内容用于下一次重试
+            self.last_generated_content = response_content
+            # 重新构建用户提示词（包含issue信息）
+            user_prompt_ofr = self._build_user_prompt_for_one_file_req(icp_json_file_path)
         
         # 循环已跳出，检查运行结果并进行相应操作
-        if attempt == max_attempts - 1:
+        if attempt == max_attempts - 1 and not is_valid:
             print(f"{Colors.FAIL}错误: 达到最大尝试次数，生成单文件需求描述失败: {icp_json_file_path}{Colors.ENDC}")
             return False
 
@@ -273,6 +290,16 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         user_prompt_str = user_prompt_str.replace('EXTERNAL_LIB_ALLOWLIST_PLACEHOLDER', self.allowed_libs_text)
         user_prompt_str = user_prompt_str.replace('MODULE_DEPENDENCY_SUGGESTIONS_PLACEHOLDER', self.module_suggestions_text)
         
+        # 如果是重试，添加上一次生成的内容和问题信息
+        if self.issue_recorder.has_issues() and self.last_generated_content:
+            user_prompt_str += "\n\n## 重试生成信息\n\n"
+            user_prompt_str += "这是一次重试生成，上一次生成的内容是:\n\n"
+            user_prompt_str += "```\n" + self.last_generated_content + "\n```\n\n"
+            user_prompt_str += "其中检测到了生成的内容存在以下问题:\n\n"
+            for issue in self.issue_recorder.get_issues():
+                user_prompt_str += f"- {issue.issue_content}\n"
+            user_prompt_str += "\n请根据上述问题进行修正。\n"
+        
         return user_prompt_str
 
     def _extract_section_content(self, content: str, section_name: str) -> str:
@@ -326,6 +353,52 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
     
         return '\n'.join(section_lines)
 
+    def _validate_response(self, response_content: str) -> bool:
+        """验证AI响应内容是否包含所有必需的section
+        
+        Args:
+            response_content: AI生成的响应内容
+            
+        Returns:
+            bool: 是否包含所有必需的section
+        """
+        # 定义所有必需的section关键字
+        required_sections = ['class', 'func', 'var', 'behavior', 'description', 'import', 'external_lib']
+        
+        missing_sections = []
+        for section in required_sections:
+            if not self._check_section_exists(response_content, section):
+                missing_sections.append(section)
+        
+        if missing_sections:
+            error_msg = f"生成的内容缺少必需的section关键字: {', '.join(missing_sections)}，内容可以为空，但不允许缺失关键字"
+            print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
+            return False
+        
+        print(f"{Colors.OKGREEN}单文件需求描述验证通过{Colors.ENDC}")
+        return True
+
+    def _check_section_exists(self, content: str, section_name: str) -> bool:
+        """检查指定的section关键字是否存在于内容中
+        
+        Args:
+            content: 文件内容
+            section_name: 要检查的section名称(如'description', 'func', 'class'等)
+            
+        Returns:
+            bool: section是否存在
+        """
+        lines = content.split('\n')
+        section_marker = f'{section_name}:'
+        
+        for line in lines:
+            # 检查是否存在section:标记
+            if line.strip().startswith(section_marker):
+                return True
+        
+        return False
+    
     def is_cmd_valid(self):
         return self._check_cmd_requirement() and self._check_ai_handler()
 
