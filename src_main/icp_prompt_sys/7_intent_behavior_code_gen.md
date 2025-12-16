@@ -50,7 +50,7 @@ module requests: Python第三方HTTP请求库
 
 **路径对应关系**：
 
-```
+```intent_behavior_code
 module utils.logger          →  utils/logger.ibc
 module config.settings       →  config/settings.ibc  
 module database.conn.pool    →  database/conn/pool.ibc
@@ -64,6 +64,7 @@ module core                  →  core.ibc
 **语法模板**：
 
 带有参数描述的模板
+
 ```intent_behavior_code
 func 函数名(
     <参数1>[: 参数描述],
@@ -73,6 +74,7 @@ func 函数名(
 ```
 
 无参数描述的模板
+
 ```intent_behavior_code
 func 函数名(<参数1>, <参数2>, ...):
     函数体描述
@@ -107,6 +109,7 @@ func 简单函数(参数1, 参数2):
 ```
 
 **错误示例**：
+
 ```intent_behavior_code
 // 禁止使用的语法, 出现参数描述后必须换行！！！
 func 计算订单总价(商品列表: 包含价格信息的商品对象数组, 折扣率: 0到1之间的小数):
@@ -241,6 +244,7 @@ var dbConnection: 数据库连接对象 $database.Connection
 ```
 
 **错误示例**：
+
 ```intent_behavior_code
 // 禁止使用的语法！！！
 var userCount = 0
@@ -270,7 +274,7 @@ $符号分层路径.符号
 ```
 
 **规则**：
-    
+
 - 只能在行为步骤描述中使用
 - 不允许嵌套式引用
 - 引用外部文件定义的函数、变量、类等符号必须使用以 `$` 开头的标记
@@ -279,7 +283,7 @@ $符号分层路径.符号
 - 引用必须与前后内容使用空格或保留符号分隔；点号`.`视为符号引用内容的一部分
 - 在行为描述行中，对于显而易见的当前文件内可用符号，无需强制使用 `$` 标记
 
-**示例1：引用当前文件内的符号，非必要**
+示例1：引用当前文件内的符号，非必要
 
 ```intent_behavior_code
 module utils.httpClient: HTTP客户端工具模块
@@ -296,9 +300,10 @@ func 发送请求(请求数据):
     返回 失败
 ```
 
-**示例2：引用外部文件的符号（推荐场景）**
+示例2：引用外部文件的符号（推荐场景）
 
 已有的工程文件结构参考：
+
 ```json
 {
   "proj_root_dict": {
@@ -315,6 +320,7 @@ func 发送请求(请求数据):
 ```
 
 初始化模块的代码如下：
+
 ```intent_behavior_code
 module utils.logger: 日志工具模块
 module utils.validator: 数据验证工具模块
