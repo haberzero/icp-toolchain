@@ -33,7 +33,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
 
         self.chat_handler = ICPChatHandler()
-        self.role_one_file_req = "7_one_file_req_gen"
+        self.role_one_file_req = "6_one_file_req_gen"
         self._init_ai_handlers()
 
         self.accumulated_file_str_list: List[tuple[str, str]] = []  # File path and its content
@@ -64,20 +64,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
                 print(f"{Colors.FAIL}单文件需求描述生成失败，终止执行{Colors.ENDC}")
                 return
 
-        # 使用前序依赖分析的结果，生成最终的目录内容文件
-        dir_content_dict = {
-            "proj_root_dict": self.final_dir_json_dict['proj_root_dict'],
-            "dependent_relation": self.dependent_relation_dict
-        }
-        
-        dir_content_file = os.path.join(self.work_data_dir_path, "icp_dir_content_final.json")
-        try:
-            with open(dir_content_file, 'w', encoding='utf-8') as f:
-                json.dump(dir_content_dict, f, indent=2, ensure_ascii=False)
-            print(f"  {Colors.OKGREEN}目录内容文件已保存: {dir_content_file}{Colors.ENDC}")
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 保存目录内容文件失败 {dir_content_file}: {e}{Colors.ENDC}")
-            return
+        # 使用依赖分析的结果，不再生成新的依赖关系文件
 
         print(f"{Colors.OKGREEN}IBC目录结构创建命令执行完毕!{Colors.ENDC}")
 
@@ -90,22 +77,22 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: 读取用户需求失败{Colors.ENDC}")
             return ""
         
-        # 读取经过依赖项修复的目录结构
-        final_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_refined.json')
+        # 读取依赖分析结果
+        final_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_depend.json')
         try:
             with open(final_dir_file, 'r', encoding='utf-8') as f:
                 final_dir_json_dict = json.load(f)
         except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取最终目录结构失败: {e}{Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 读取依赖分析结果失败: {e}{Colors.ENDC}")
             return
         
         if not final_dir_json_dict:
-            print(f"  {Colors.FAIL}错误: 最终目录结构内容为空{Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 依赖分析结果内容为空{Colors.ENDC}")
             return
 
         # 检查是否包含必要的节点
         if "proj_root_dict" not in final_dir_json_dict or "dependent_relation" not in final_dir_json_dict:
-            print(f"  {Colors.FAIL}错误: 最终目录结构缺少必要的节点(proj_root_dict或dependent_relation){Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 依赖分析结果缺少必要的节点(proj_root_dict或dependent_relation){Colors.ENDC}")
             return
         
         # 从dependent_relation中获取文件创建顺序, 可以认为列表中靠近 index=0 的文件其层级低且被其它文件依赖
@@ -344,10 +331,10 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
 
     def _check_cmd_requirement(self) -> bool:
         """验证命令的前置条件"""
-        # 检查最终目录结构文件是否存在
-        final_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_refined.json')
+        # 检查依赖分析结果文件是否存在
+        final_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_depend.json')
         if not os.path.exists(final_dir_file):
-            print(f"  {Colors.WARNING}警告: 目录结构文件不存在，请先执行循环依赖解决命令{Colors.ENDC}")
+            print(f"  {Colors.WARNING}警告: 依赖分析结果文件不存在，请先执行依赖分析命令{Colors.ENDC}")
             return False
         
         # 检查文件级实现规划文件是否存在

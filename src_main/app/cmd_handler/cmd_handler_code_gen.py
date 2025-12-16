@@ -38,7 +38,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
         
-        self.role_name = "9_target_code_gen"
+        self.role_name = "8_target_code_gen"
         
         # 使用ICPChatHandler和ICPEmbeddingHandler
         self.chat_handler = ICPChatHandler()
@@ -57,17 +57,17 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             
         print(f"{Colors.OKBLUE}开始生成目标语言代码...{Colors.ENDC}")
 
-        # 读取IBC目录结构
-        ibc_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_final.json')
+        # 读取依赖分析结果
+        ibc_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_depend.json')
         try:
             with open(ibc_dir_file, 'r', encoding='utf-8') as f:
                 ibc_content_json_dict = json.load(f)
         except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取IBC目录结构失败: {e}{Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 读取依赖分析结果失败: {e}{Colors.ENDC}")
             return
         
         if not ibc_content_json_dict or "dependent_relation" not in ibc_content_json_dict:
-            print(f"  {Colors.FAIL}错误: IBC目录结构缺少必要的节点{Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 依赖分析结果缺少必要的节点{Colors.ENDC}")
             return
 
         # 从dependent_relation中获取文件创建顺序
@@ -315,10 +315,10 @@ class CmdHandlerCodeGen(BaseCmdHandler):
 
     def _check_cmd_requirement(self) -> bool:
         """验证命令的前置条件"""
-        # 检查IBC目录结构文件是否存在
-        ibc_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_final.json')
+        # 检查依赖分析结果文件是否存在
+        ibc_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_depend.json')
         if not os.path.exists(ibc_dir_file):
-            print(f"  {Colors.WARNING}警告: IBC目录结构文件不存在，请先执行ibc_gen命令{Colors.ENDC}")
+            print(f"  {Colors.WARNING}警告: 依赖分析结果文件不存在，请先执行依赖分析命令{Colors.ENDC}")
             return False
         
         # 检查IBC目录是否存在

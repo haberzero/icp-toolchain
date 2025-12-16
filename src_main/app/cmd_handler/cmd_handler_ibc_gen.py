@@ -52,8 +52,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
         self.work_icp_config_file_path = os.path.join(self.work_config_dir_path, 'icp_config.json')
 
-        self.role_ibc_gen = "8_intent_behavior_code_gen"
-        self.role_symbol_normalizer = "8_symbol_normalizer"
+        self.role_ibc_gen = "7_intent_behavior_code_gen"
+        self.role_symbol_normalizer = "7_symbol_normalizer"
         self.chat_handler = ICPChatHandler()
         self._init_ai_handlers()
     
@@ -84,22 +84,22 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     
     def _build_pre_execution_variables(self):
         """准备命令正式开始执行之前所需的变量内容"""
-        # 读取IBC目录结构
-        final_dir_content_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_final.json')
+        # 读取依赖分析结果
+        final_dir_content_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_depend.json')
         try:
             with open(final_dir_content_file, 'r', encoding='utf-8') as f:
                 final_dir_structure_str = f.read()
         except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取目录结构失败: {e}{Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 读取依赖分析结果失败: {e}{Colors.ENDC}")
             return
         
         if not final_dir_structure_str:
-            print(f"  {Colors.FAIL}错误: IBC目录结构内容为空{Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 依赖分析结果内容为空{Colors.ENDC}")
             return
         
         final_dir_json_dict = json.loads(final_dir_structure_str)
         if "proj_root_dict" not in final_dir_json_dict or "dependent_relation" not in final_dir_json_dict:
-            print(f"  {Colors.FAIL}错误: IBC目录结构缺少必要的节点(proj_root_dict或dependent_relation){Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 依赖分析结果缺少必要的节点(proj_root_dict或dependent_relation){Colors.ENDC}")
             return
         
         # 读取用户需求
@@ -283,6 +283,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 print(f"    {Colors.FAIL}错误: 构建用户提示词失败{Colors.ENDC}")
                 continue
             
+            # 将用户提示词保存到stage文件夹以便查看生成过程
+            self._save_user_prompt_to_stage(icp_json_file_path, user_prompt, attempt + 1)
+            
             # 调用AI生成IBC代码
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_ibc_gen,
@@ -404,6 +407,40 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt_str = user_prompt_str.replace('AVAILABLE_SYMBOLS_PLACEHOLDER', available_symbols_text)
         
         return user_prompt_str
+
+    def _save_user_prompt_to_stage(self, icp_json_file_path: str, user_prompt: str, attempt: int) -> bool:
+        """将用户提示词保存到stage文件夹以便查看
+        
+        Args:
+            icp_json_file_path: 文件路径
+            user_prompt: 用户提示词
+            attempt: 当前尝试次数
+            
+        Returns:
+            bool: 是否成功保存
+        """
+        try:
+            # 构建保存路径，与one_file_req类似
+            prompt_file_path = os.path.join(
+                self.work_staging_dir_path, 
+                f"{icp_json_file_path}_ibc_user_prompt_attempt{attempt}.txt"
+            )
+            
+            # 创建目录
+            parent_dir = os.path.dirname(prompt_file_path)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
+            
+            # 保存提示词
+            with open(prompt_file_path, 'w', encoding='utf-8') as f:
+                f.write(user_prompt)
+            
+            print(f"    {Colors.OKGREEN}用户提示词已保存: {prompt_file_path}{Colors.ENDC}")
+            return True
+            
+        except Exception as e:
+            print(f"    {Colors.WARNING}警告: 保存用户提示词失败 {prompt_file_path}: {e}{Colors.ENDC}")
+            return False
 
     def _extract_section_content(self, content: str, section_name: str) -> str:
         """从文件内容中提取指定部分的内容"""
@@ -581,10 +618,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     def _check_cmd_requirement(self) -> bool:
         """验证命令的前置条件"""
         try:
-            # 检查IBC目录结构文件是否存在
-            ibc_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_final.json')
+            # 检查依赖分析结果文件是否存在
+            ibc_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_depend.json')
             if not os.path.exists(ibc_dir_file):
-                print(f"  {Colors.WARNING}警告: IBC目录结构文件不存在，请先执行one_file_req_gen命令{Colors.ENDC}")
+                print(f"  {Colors.WARNING}警告: 依赖分析结果文件不存在，请先执行依赖分析命令{Colors.ENDC}")
                 return False
             
             # 检查文件级实现规划文件是否存在
@@ -598,9 +635,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 dir_structure_str = f.read()
             dir_json_dict = json.loads(dir_structure_str)
             
-            # 验证目录结构完整性
+            # 验证依赖分析结果完整性
             if "proj_root_dict" not in dir_json_dict or "dependent_relation" not in dir_json_dict:
-                print(f"  {Colors.FAIL}错误: IBC目录结构缺少必要的节点(proj_root_dict或dependent_relation){Colors.ENDC}")
+                print(f"  {Colors.FAIL}错误: 依赖分析结果缺少必要的节点(proj_root_dict或dependent_relation){Colors.ENDC}")
                 return False
             
             # 获取文件列表
@@ -631,7 +668,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             return True
                 
         except json.JSONDecodeError as e:
-            print(f"  {Colors.FAIL}错误: IBC目录结构文件格式错误: {e}{Colors.ENDC}")
+            print(f"  {Colors.FAIL}错误: 依赖分析结果文件格式错误: {e}{Colors.ENDC}")
             return False
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 检查前置文件时发生异常: {e}{Colors.ENDC}")

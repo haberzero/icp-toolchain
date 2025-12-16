@@ -34,8 +34,8 @@ class ChatInterface:
 
     async def verify_connection(self) -> bool:
         """
-        验证与模型的连接是否正常（通过检查模型是否可访问）
-        这是一个轻量级测试，不消耗对话 token
+        验证与模型的连接是否正常（通过发送简单的测试请求）
+        使用简单对话请求验证，适用于所有兼容OpenAI的平台
         
         Returns:
             bool: 连接是否正常
@@ -44,9 +44,21 @@ class ChatInterface:
             return False
         
         try:
-            # 尝试获取模型信息，验证连接
-            await self.client.models.retrieve(self.model)
-            return True
+            # 发送一个简单的测试请求来验证连接
+            messages = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Hi"}
+            ]
+            
+            # 使用非流式请求进行验证，减少响应处理复杂度
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=10  # 限制响应长度，减少token消耗
+            )
+            
+            # 检查是否成功获得响应
+            return response is not None and len(response.choices) > 0
         except Exception as e:
             print(f"模型连接验证失败: {e}")
             return False
