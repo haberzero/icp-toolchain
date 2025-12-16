@@ -4,16 +4,21 @@ from typedef.ibc_data_types import IbcKeywords, IbcTokenType, Token, IbcBaseAstN
 from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
 from utils.ibc_analyzer.ibc_symbol_processor import IbcSymbolProcessor
+from utils.issue_recorder import IbcIssueRecorder
 
 from typedef.ibc_data_types import IbcBaseAstNode
 from typedef.exception_types import IbcAnalyzerError
 
 
-def analyze_ibc_code(text: str) -> Tuple[bool, Optional[Dict], Optional[Dict]]:
+def analyze_ibc_code(
+    text: str, 
+    ibc_issue_recorder: Optional[IbcIssueRecorder] = None
+) -> Tuple[bool, Optional[Dict], Optional[Dict]]:
     """分析IBC代码，返回解析状态、AST字典以及原始符号表
     
     Args:
         text: 待分析的IBC代码文本
+        ibc_issue_recorder: 可选的问题记录器，用于记录分析过程中的错误信息
         
     Returns:
         Tuple[bool, Optional[Dict], Optional[Dict]]: 
@@ -41,19 +46,30 @@ def analyze_ibc_code(text: str) -> Tuple[bool, Optional[Dict], Optional[Dict]]:
 
     except IbcAnalyzerError as e:
         # 根据行号，从text原始文本中提取行内容
-        if not e.line_content and e.line_num > 0:
+        line_content = e.line_content
+        if not line_content and e.line_num > 0:
             lines = text.split('\n')
             if 0 < e.line_num <= len(lines):
                 line_content = lines[e.line_num - 1].rstrip()
-                print(f"IBC分析错误: {e.message}")
-                print(f"  行号: {e.line_num}")
-                print(f"  内容: {line_content}")
+        
+        # 记录错误信息到issue recorder
+        if ibc_issue_recorder is not None:
+            ibc_issue_recorder.record_issue(
+                message=e.message,
+                line_num=e.line_num,
+                line_content=line_content if line_content else ""
+            )
+        
+        # 打印错误信息
+        if line_content:
+            print(f"IBC分析错误: {e.message}")
+            print(f"  行号: {e.line_num}")
+            print(f"  内容: {line_content}")
         else:
             print(f"IBC分析错误: {e.message}")
             if e.line_num > 0:
                 print(f"  行号: {e.line_num}")
-            if e.line_content:
-                print(f"  内容: {e.line_content}")
+        
         return False, None, None
     
     except Exception as e:
