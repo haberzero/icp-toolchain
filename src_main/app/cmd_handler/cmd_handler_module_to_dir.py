@@ -69,7 +69,7 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             if is_valid:
                 break
 
-        if attempt == max_attempts - 1:
+        if attempt == max_attempts - 1 and not is_valid:
             print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的依赖关系{Colors.ENDC}")
             return
         
@@ -136,7 +136,6 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             json_dict = json.loads(cleaned_json_str)
         except json.JSONDecodeError as e:
             print(f"{Colors.FAIL}错误: AI返回的内容不是有效的JSON格式: {e}{Colors.ENDC}")
-            print(f"AI返回内容: {cleaned_json_str}")
             return False
 
         # 检查key的存在性以及key内容的匹配，以及检查是否有其它多余字段
