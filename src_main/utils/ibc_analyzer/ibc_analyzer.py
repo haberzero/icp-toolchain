@@ -21,10 +21,6 @@ def analyze_ibc_code(text: str) -> Tuple[bool, Optional[Dict], Optional[Dict]]:
             - Optional[Dict]: AST字典（解析失败时为None）
             - Optional[Dict]: 符号表（解析失败时为None）
     """
-    # 空文件视为解析成功
-    if not text or not text.strip():
-        return True, None, None
-    
     try:
         # 预处理中文特殊标点符号
         text = preprocess_cn_text(text)

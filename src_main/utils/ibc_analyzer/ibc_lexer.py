@@ -164,72 +164,59 @@ class IbcLexer:
 
     def tokenize(self) -> List[Token]:
         """执行词法分析"""
-        try:
-            # 空文件也应该添加NEWLINE和EOF
-            if not self.lines:
-                self.tokens.append(Token(IbcTokenType.NEWLINE, '', 1))
-                self.tokens.append(Token(IbcTokenType.EOF, '', 1))
-                return self.tokens
-            
-            # 处理每一行
-            while self._get_next_line():
-                # 跳过空行和注释行
-                striped_line = self.current_line.strip()
-                if not striped_line or striped_line.startswith('//'):
-                    self.tokens.append(Token(IbcTokenType.NEWLINE, '', self.line_num))
-                    continue
-
-                # 处理缩进
-                indent_level = self._calc_indent_level(self.current_line)
-                current_indent = self.indent_stack[-1]
-                if indent_level > current_indent:
-                    # 根据缩进差值添加相应数量的 INDENT token
-                    indent_diff = indent_level - current_indent
-                    for _ in range(indent_diff):
-                        self.tokens.append(Token(IbcTokenType.INDENT, "", self.line_num))
-                        current_indent += 1
-                        self.indent_stack.append(current_indent)
-                elif indent_level < current_indent:
-                    # 减少缩进
-                    while self.indent_stack and self.indent_stack[-1] > indent_level:
-                        self.tokens.append(Token(IbcTokenType.DEDENT, "", self.line_num))
-                        self.indent_stack.pop()
-                    
-                    # 检查缩进是否对齐
-                    if not self.indent_stack or self.indent_stack[-1] != indent_level:
-                        raise LexerError(
-                            message="Inconsistent indentation",
-                            line_num=self.line_num
-                        )
-                
-                # 识别并处理行开头可能存在的关键字
-                content_line: str = self._process_keyword(striped_line)
-
-                # 处理行
-                self._tokenize_line(content_line)
-                
-                # 每行结束后添加换行符
-                self.tokens.append(Token(IbcTokenType.NEWLINE, '', self.line_num))
-            
-            # 文件结束前处理剩余的DEDENT
-            while len(self.indent_stack) > 1:
-                self.tokens.append(Token(IbcTokenType.DEDENT, "", self.line_num))
-                self.indent_stack.pop()
-            
-            # 添加最终的换行符和EOF
-            self.tokens.append(Token(IbcTokenType.NEWLINE, '', self.line_num))
-            self.tokens.append(Token(IbcTokenType.EOF, '', self.line_num))
-            
+        # 空文件也应该添加NEWLINE和EOF
+        if not self.lines:
+            self.tokens.append(Token(IbcTokenType.NEWLINE, '', 1))
+            self.tokens.append(Token(IbcTokenType.EOF, '', 1))
             return self.tokens
         
-        except LexerError:
-            # LexerError已经带有line_num，直接重新抛出
-            raise
+        # 处理每一行
+        while self._get_next_line():
+            # 跳过空行和注释行
+            striped_line = self.current_line.strip()
+            if not striped_line or striped_line.startswith('//'):
+                self.tokens.append(Token(IbcTokenType.NEWLINE, '', self.line_num))
+                continue
+
+            # 处理缩进
+            indent_level = self._calc_indent_level(self.current_line)
+            current_indent = self.indent_stack[-1]
+            if indent_level > current_indent:
+                # 根据缩进差值添加相应数量的 INDENT token
+                indent_diff = indent_level - current_indent
+                for _ in range(indent_diff):
+                    self.tokens.append(Token(IbcTokenType.INDENT, "", self.line_num))
+                    current_indent += 1
+                    self.indent_stack.append(current_indent)
+            elif indent_level < current_indent:
+                # 减少缩进
+                while self.indent_stack and self.indent_stack[-1] > indent_level:
+                    self.tokens.append(Token(IbcTokenType.DEDENT, "", self.line_num))
+                    self.indent_stack.pop()
+                
+                # 检查缩进是否对齐
+                if not self.indent_stack or self.indent_stack[-1] != indent_level:
+                    raise LexerError(
+                        message="Inconsistent indentation",
+                        line_num=self.line_num
+                    )
+            
+            # 识别并处理行开头可能存在的关键字
+            content_line: str = self._process_keyword(striped_line)
+
+            # 处理行
+            self._tokenize_line(content_line)
+            
+            # 每行结束后添加换行符
+            self.tokens.append(Token(IbcTokenType.NEWLINE, '', self.line_num))
         
-        except Exception as e:
-            print(f"!!! Unexpected Error: {e}")
-            raise LexerError(
-                message=f"Unexpected lexer error: {str(e)}",
-                line_num=self.line_num
-            ) from e
+        # 文件结束前处理剩余的DEDENT
+        while len(self.indent_stack) > 1:
+            self.tokens.append(Token(IbcTokenType.DEDENT, "", self.line_num))
+            self.indent_stack.pop()
         
+        # 添加最终的换行符和EOF
+        self.tokens.append(Token(IbcTokenType.NEWLINE, '', self.line_num))
+        self.tokens.append(Token(IbcTokenType.EOF, '', self.line_num))
+        
+        return self.tokens
