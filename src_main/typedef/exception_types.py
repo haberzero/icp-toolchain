@@ -11,13 +11,9 @@ class IbcAnalyzerError(Exception):
         if self.line_num > 0:
             if self.line_content:
                 return (
-                    f"\n{'='*70}\n"
                     f"IBC Analysis Error at Line {self.line_num}\n"
-                    f"{'-'*70}\n"
                     f"Line Content: {self.line_content}\n"
-                    f"{'-'*70}\n"
                     f"Error: {self.message}\n"
-                    f"{'='*70}"
                 )
             else:
                 return f"Line {self.line_num}: {self.message}"
@@ -31,13 +27,9 @@ class LexerError(IbcAnalyzerError):
         if self.line_num > 0:
             if self.line_content:
                 return (
-                    f"\n{'='*70}\n"
                     f"Lexer Error at Line {self.line_num}\n"
-                    f"{'-'*70}\n"
                     f"Line Content: {self.line_content}\n"
-                    f"{'-'*70}\n"
                     f"Error: {self.message}\n"
-                    f"{'='*70}"
                 )
             else:
                 return f"Lexer Error at Line {self.line_num}: {self.message}"
@@ -51,13 +43,9 @@ class IbcParserError(IbcAnalyzerError):
         if self.line_num > 0:
             if self.line_content:
                 return (
-                    f"\n{'='*70}\n"
                     f"Parser Error at Line {self.line_num}\n"
-                    f"{'-'*70}\n"
                     f"Line Content: {self.line_content}\n"
-                    f"{'-'*70}\n"
                     f"Error: {self.message}\n"
-                    f"{'='*70}"
                 )
             else:
                 return f"Parser Error at Line {self.line_num}: {self.message}"
