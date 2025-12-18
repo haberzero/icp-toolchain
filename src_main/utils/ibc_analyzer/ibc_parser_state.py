@@ -153,10 +153,10 @@ class VarDeclState(BaseState):
         self.state_type = ParserState.VAR_DECL
         # TODO: 暂时删除了单行内多变量声明的支持，但List仍暂时保留，未来可能仍想办法引入单行多变量声明
         self.variables: Dict[str, str] = {}  # {name: description}
-        self.var_type_refs: Dict[str, str] = {}  # {name: type_ref} 变量类型引用
+        self.var_type_refs: Dict[str, List[str]] = {}  # {name: [type_ref1, type_ref2, ...]} 虽然单行多变量不允许描述，但定义dict便于书写
         self.current_var_name = ""
         self.current_var_desc = ""
-        self.current_var_type_ref = ""  # 当前变量的类型引用
+        self.current_var_type_refs: List[str] = []  # 当前变量的类型引用列表
         self.sub_state = VarDeclSubState.EXPECTING_VAR_NAME
         self.pop_flag = False
         self.is_multi_var_line = False
@@ -229,22 +229,16 @@ class VarDeclState(BaseState):
         
         elif self.sub_state == VarDeclSubState.EXPECTING_VAR_DESC:
             if token.type == IbcTokenType.REF_IDENTIFIER:
-                # 处理符号引用
-                if self.current_var_type_ref:
-                    # 已经有一个符号引用，报错
-                    raise IbcParserError(
-                        message=f"VarDeclState: Variable description can only contain one symbol reference, but got multiple",
-                        line_num=token.line_num
-                    )
-                self.current_var_type_ref = token.value.strip()
+                # 处理符号引用，允许多个
+                self.current_var_type_refs.append(token.value.strip())
                 # 将引用内容也加入描述中
                 self.current_var_desc += token.value
             elif token.type == IbcTokenType.NEWLINE:
                 # 结束当前变量，创建节点并弹出
                 if self.current_var_name not in self.variables:
                     self.variables[self.current_var_name] = self.current_var_desc.strip()
-                    if self.current_var_type_ref:
-                        self.var_type_refs[self.current_var_name] = self.current_var_type_ref
+                    if self.current_var_type_refs:
+                        self.var_type_refs[self.current_var_name] = self.current_var_type_refs.copy()
                 else:
                     raise IbcParserError(
                         message=f"VarDeclState: Got an duplicate var definitions",
@@ -252,7 +246,7 @@ class VarDeclState(BaseState):
                     )
                 self.current_var_name = ""
                 self.current_var_desc = ""
-                self.current_var_type_ref = ""
+                self.current_var_type_refs = []
                 self._create_variable_nodes()
                 self.pop_flag = True
             else:
@@ -271,7 +265,7 @@ class VarDeclState(BaseState):
                 line_number=line_num,
                 identifier=var_name,
                 content=var_desc,
-                type_ref=self.var_type_refs.get(var_name, "")  # 添加类型引用
+                type_ref=self.var_type_refs.get(var_name, [])  # 添加类型引用列表
             )
             self.ast_node_dict[uid] = var_node
             if self.parent_uid in self.ast_node_dict:
