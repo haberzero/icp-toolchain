@@ -39,8 +39,12 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         self.chat_handler = ICPChatHandler()
         self.role_dir_file_fill = "4_dir_file_fill"
         self.role_plan_gen = "4_dir_file_fill_plan_gen"
-        self.sys_prompt_dir_file_fill = ""  # 系统提示词,在_init_ai_handlers中加载
-        self.sys_prompt_plan_gen = ""  # 系统提示词,在_init_ai_handlers中加载
+        self.sys_prompt_dir_file_fill = ""  # 系统提示词基础部分,在_init_ai_handlers中加载
+        self.sys_prompt_plan_gen = ""  # 系统提示词基础部分,在_init_ai_handlers中加载
+        self.sys_prompt_retry_part = ""  # 系统提示词重试部分,在_init_ai_handlers中加载
+        
+        self.user_prompt_base = ""  # 用户提示词基础部分
+        self.user_prompt_retry_part = ""  # 用户提示词重试部分
         
         # 初始化issue recorder和上一次生成的内容
         self.issue_recorder = TextIssueRecorder()
@@ -60,29 +64,30 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         self.issue_recorder.clear()
         self.last_generated_content = None
 
-        # 构建用户提示词
-        user_prompt = self._build_user_prompt_for_dir_file_filler()
-        if not user_prompt:
+        # 构建用户提示词基础部分
+        self.user_prompt_base = self._build_user_prompt_base()
+        if not self.user_prompt_base:
+            print(f"{Colors.FAIL}错误: 用户提示词构建失败，终止执行{Colors.ENDC}")
             return
         
         max_attempts = 3
         for attempt in range(max_attempts):
             print(f"{self.role_dir_file_fill}正在进行第 {attempt + 1} 次尝试...")
             
-            # ===== 临时代码: 保存用户提示词 =====
-            temp_prompt_file = os.path.join(self.work_data_dir_path, f'temp_user_prompt_attempt_{attempt + 1}.txt')
-            try:
-                with open(temp_prompt_file, 'w', encoding='utf-8') as f:
-                    f.write(user_prompt)
-                print(f"{Colors.OKBLUE}[临时] 已保存第 {attempt + 1} 次尝试的用户提示词到: {temp_prompt_file}{Colors.ENDC}")
-            except Exception as e:
-                print(f"{Colors.WARNING}[临时] 保存用户提示词失败: {e}{Colors.ENDC}")
-            # ===== 临时代码结束 =====
+            # 根据是否是重试来组合提示词
+            if attempt == 0:
+                # 第一次尝试,使用基础提示词
+                current_sys_prompt = self.sys_prompt_dir_file_fill
+                current_user_prompt = self.user_prompt_base
+            else:
+                # 重试时,添加重试部分
+                current_sys_prompt = self.sys_prompt_dir_file_fill + "\n\n" + self.sys_prompt_retry_part
+                current_user_prompt = self.user_prompt_base + "\n\n" + self.user_prompt_retry_part
             
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_dir_file_fill,
-                sys_prompt=self.sys_prompt_dir_file_fill,
-                user_prompt=user_prompt
+                sys_prompt=current_sys_prompt,
+                user_prompt=current_user_prompt
             ))
             
             # 如果响应失败，继续下一次尝试
@@ -98,10 +103,9 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             if is_valid:
                 break
             
-            # 如果验证失败，保存当前生成的内容用于下一次重试
+            # 如果验证失败，保存当前生成的内容并构建重试提示词
             self.last_generated_content = cleaned_content
-            # 重新构建用户提示词（包含issue信息）
-            user_prompt = self._build_user_prompt_for_dir_file_filler()
+            self.user_prompt_retry_part = self._build_user_prompt_retry_part()
         
         if attempt == max_attempts - 1 and not is_valid:
             print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的目录结构{Colors.ENDC}")
@@ -134,17 +138,8 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         
         # 调用AI生成实现规划
         for attempt in range(max_attempts):
-            
-            # ===== 临时代码: 保存用户提示词 =====
-            temp_prompt_file = os.path.join(self.work_data_dir_path, f'temp_plan_gen_prompt_attempt_{attempt + 1}.txt')
-            try:
-                with open(temp_prompt_file, 'w', encoding='utf-8') as f:
-                    f.write(user_prompt)
-                print(f"{Colors.OKBLUE}[临时] 已保存第 {attempt + 1} 次实现规划提示词到: {temp_prompt_file}{Colors.ENDC}")
-            except Exception as e:
-                print(f"{Colors.WARNING}[临时] 保存实现规划提示词失败: {e}{Colors.ENDC}")
-            # ===== 临时代码结束 =====
-            
+            print(f"{self.role_plan_gen}正在进行第 {attempt + 1} 次尝试...")
+
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_plan_gen,
                 sys_prompt=self.sys_prompt_plan_gen,
@@ -169,14 +164,14 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         except Exception as e:
             print(f"{Colors.FAIL}错误: 保存实现规划失败: {e}{Colors.ENDC}")
 
-    def _build_user_prompt_for_dir_file_filler(self) -> str:
+    def _build_user_prompt_base(self) -> str:
         """
-        构建目录文件填充的用户提示词（role_name_1）
+        构建目录文件填充的用户提示词基础部分
         
         从项目数据目录中读取所需文件，无需外部参数输入。
         
         Returns:
-            str: 完整的用户提示词，失败时返回空字符串
+            str: 基础用户提示词，失败时返回空字符串
         """
         # 读取需求分析结果
         requirement_analysis_file = os.path.join(self.work_data_dir_path, 'refined_requirements.json')
@@ -220,18 +215,39 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         user_prompt_str = user_prompt_str.replace('PROGRAMMING_REQUIREMENT_PLACEHOLDER', requirement_str)
         user_prompt_str = user_prompt_str.replace('JSON_STRUCTURE_PLACEHOLDER', dir_structure_str)
         
-        # 如果是重试，添加上一次生成的内容和问题信息
-        if self.issue_recorder.has_issues() and self.last_generated_content:
-            user_prompt_str += "\n\n## 重试生成信息\n\n"
-            user_prompt_str += "这是一次重试生成，上一次生成的内容是:\n\n"
-            user_prompt_str += "```json\n" + self.last_generated_content + "\n```\n\n"
-            user_prompt_str += "其中检测到了生成的内容存在以下问题:\n\n"
-            for issue in self.issue_recorder.get_issues():
-                print("issue: ", issue.issue_content)
-                user_prompt_str += f"- {issue.issue_content}\n"
-            user_prompt_str += "\n请根据检测到的问题，修改上一次生成内容中的错误，使其符合系统提示词的要求\n"
-        
         return user_prompt_str
+    
+    def _build_user_prompt_retry_part(self) -> str:
+        """构建用户提示词重试部分
+        
+        Returns:
+            str: 重试部分的用户提示词，失败时返回空字符串
+        """
+        if not self.issue_recorder.has_issues() or not self.last_generated_content:
+            return ""
+        
+        # 读取重试提示词模板
+        app_data_store = get_app_data_store()
+        retry_template_path = os.path.join(app_data_store.get_user_prompt_dir(), 'retry_prompt_template.md')
+        
+        try:
+            with open(retry_template_path, 'r', encoding='utf-8') as f:
+                retry_template = f.read()
+        except Exception as e:
+            print(f"{Colors.FAIL}错误: 读取重试模板失败: {e}{Colors.ENDC}")
+            return ""
+        
+        # 格式化上一次生成的内容（用json代码块包裹）
+        formatted_content = f"```json\n{self.last_generated_content}\n```"
+        
+        # 格式化问题列表
+        issues_list = "\n".join([f"- {issue.issue_content}" for issue in self.issue_recorder.get_issues()])
+        
+        # 替换占位符
+        retry_prompt = retry_template.replace('PREVIOUS_CONTENT_PLACEHOLDER', formatted_content)
+        retry_prompt = retry_prompt.replace('ISSUES_LIST_PLACEHOLDER', issues_list)
+        
+        return retry_prompt
 
     def _build_user_prompt_for_plan_generator(self) -> str:
         """
@@ -417,6 +433,58 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         # 未找到任何主入口文件
         return "未检测到主入口文件，请添加名为 main_xxx 形式的文件，优先放在 proj_root_dict 直接子节点下"
 
+    def _build_retry_prompt(self, previous_content: str, issues: list, code_block_type: str = "") -> str:
+        """
+        构建重试提示词
+        
+        Args:
+            previous_content: 上一次生成的内容
+            issues: 问题列表
+            code_block_type: 代码块类型(如"json", ""等)
+            
+        Returns:
+            str: 重试提示词
+        """
+        # 读取重试提示词模板
+        app_data_store = get_app_data_store()
+        retry_template_path = os.path.join(app_data_store.get_user_prompt_dir(), 'retry_prompt_template.md')
+        
+        try:
+            with open(retry_template_path, 'r', encoding='utf-8') as f:
+                retry_template = f.read()
+        except Exception as e:
+            print(f"{Colors.WARNING}警告: 读取重试模板失败: {e}，使用默认格式{Colors.ENDC}")
+            return self._build_default_retry_prompt(previous_content, issues, code_block_type)
+        
+        # 格式化上一次生成的内容
+        if code_block_type:
+            formatted_content = f"```{code_block_type}\n{previous_content}\n```"
+        else:
+            formatted_content = f"```\n{previous_content}\n```"
+        
+        # 格式化问题列表
+        issues_list = "\n".join([f"- {issue.issue_content}" for issue in issues])
+        
+        # 替换占位符
+        retry_prompt = retry_template.replace('PREVIOUS_CONTENT_PLACEHOLDER', formatted_content)
+        retry_prompt = retry_prompt.replace('ISSUES_LIST_PLACEHOLDER', issues_list)
+        
+        return retry_prompt
+    
+    def _build_default_retry_prompt(self, previous_content: str, issues: list, code_block_type: str = "") -> str:
+        """构建默认的重试提示词(作为模板读取失败时的后备)"""
+        retry_prompt = "## 重试生成信息\n\n"
+        retry_prompt += "这是一次重试生成，上一次生成的内容是:\n\n"
+        if code_block_type:
+            retry_prompt += f"```{code_block_type}\n{previous_content}\n```\n\n"
+        else:
+            retry_prompt += f"```\n{previous_content}\n```\n\n"
+        retry_prompt += "其中检测到了生成的内容存在以下问题:\n\n"
+        for issue in issues:
+            retry_prompt += f"- {issue.issue_content}\n"
+        retry_prompt += "\n请根据检测到的问题，修改上一次生成内容中的错误，使其符合系统提示词的要求\n"
+        return retry_prompt
+
     def is_cmd_valid(self):
         """检查目录文件填充命令的必要条件是否满足"""
         return self._check_cmd_requirement() and self._check_ai_handler()
@@ -509,4 +577,12 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
                 self.sys_prompt_plan_gen = f.read()
         except Exception as e:
             print(f"错误: 读取系统提示词文件失败 ({self.role_plan_gen}): {e}")
+        
+        # 加载系统提示词重试部分
+        retry_sys_prompt_path = os.path.join(app_prompt_dir_path, 'retry_sys_prompt.md')
+        try:
+            with open(retry_sys_prompt_path, 'r', encoding='utf-8') as f:
+                self.sys_prompt_retry_part = f.read()
+        except Exception as e:
+            print(f"错误: 读取系统提示词重试部分失败: {e}")
     

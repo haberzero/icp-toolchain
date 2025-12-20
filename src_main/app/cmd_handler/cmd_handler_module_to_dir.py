@@ -13,7 +13,7 @@ from data_store.user_data_store import get_instance as get_user_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
-from utils.issue_recorder import TextIssueRecorder
+from utils.issue_recorder import JsonIssueRecorder
 
 
 
@@ -36,10 +36,14 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
 
         self.chat_handler = ICPChatHandler()
         self.role_name = "3_module_to_dir"
-        self.sys_prompt = ""  # 系统提示词,在_init_ai_handlers中加载
+        self.sys_prompt = ""  # 系统提示词基础部分,在_init_ai_handlers中加载
+        self.sys_prompt_retry_part = ""  # 系统提示词重试部分,在_init_ai_handlers中加载
+        
+        self.user_prompt_base = ""  # 用户提示词基础部分
+        self.user_prompt_retry_part = ""  # 用户提示词重试部分
         
         # 初始化issue recorder和上一次生成的内容
-        self.issue_recorder = TextIssueRecorder()
+        self.issue_recorder = JsonIssueRecorder()
         self.last_generated_content = None  # 上一次生成的内容
         
         self._init_ai_handlers()
@@ -55,18 +59,30 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         self.issue_recorder.clear()
         self.last_generated_content = None
         
-        # 构建用户提示词
-        user_prompt = self._build_user_prompt_for_module_to_dir()
-        if not user_prompt:
+        # 构建用户提示词基础部分
+        self.user_prompt_base = self._build_user_prompt_base()
+        if not self.user_prompt_base:
+            print(f"{Colors.FAIL}错误: 用户提示词构建失败，终止执行{Colors.ENDC}")
             return
         
         max_attempts = 3
         for attempt in range(max_attempts):
             print(f"{self.role_name}正在进行第 {attempt + 1} 次尝试...")
+            
+            # 根据是否是重试来组合提示词
+            if attempt == 0:
+                # 第一次尝试,使用基础提示词
+                current_sys_prompt = self.sys_prompt
+                current_user_prompt = self.user_prompt_base
+            else:
+                # 重试时,添加重试部分
+                current_sys_prompt = self.sys_prompt + "\n\n" + self.sys_prompt_retry_part
+                current_user_prompt = self.user_prompt_base + "\n\n" + self.user_prompt_retry_part
+            
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_name,
-                sys_prompt=self.sys_prompt,
-                user_prompt=user_prompt
+                sys_prompt=current_sys_prompt,
+                user_prompt=current_user_prompt
             ))
             
             # 如果响应失败，继续下一次尝试
@@ -82,10 +98,9 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             if is_valid:
                 break
             
-            # 如果验证失败，保存当前生成的内容用于下一次重试
+            # 如果验证失败，保存当前生成的内容并构建重试提示词
             self.last_generated_content = cleaned_content
-            # 重新构建用户提示词（包含issue信息）
-            user_prompt = self._build_user_prompt_for_module_to_dir()
+            self.user_prompt_retry_part = self._build_user_prompt_retry_part()
 
         if attempt == max_attempts - 1 and not is_valid:
             print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的依赖关系{Colors.ENDC}")
@@ -101,11 +116,11 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             print(f"{Colors.FAIL}错误: 保存文件失败: {e}{Colors.ENDC}")
         return
 
-    def _build_user_prompt_for_module_to_dir(self) -> str:
-        """构建目录结构生成的用户提示词
+    def _build_user_prompt_base(self) -> str:
+        """构建目录结构生成的用户提示词基础部分
         
         Returns:
-            str: 完整的用户提示词，失败时返回空字符串
+            str: 基础用户提示词，失败时返回空字符串
         """
         # 读取需求分析结果
         requirement_analysis_file = os.path.join(self.work_data_dir_path, 'refined_requirements.json')
@@ -137,19 +152,39 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: 需求分析结果不是有效的JSON格式: {e}{Colors.ENDC}")
             return ""
         
-        user_prompt_str = filtered_requirement_str
+        return filtered_requirement_str
+    
+    def _build_user_prompt_retry_part(self) -> str:
+        """构建用户提示词重试部分
         
-        # 如果是重试，添加上一次生成的内容和问题信息
-        if self.issue_recorder.has_issues() and self.last_generated_content:
-            user_prompt_str += "\n\n## 重试生成信息\n\n"
-            user_prompt_str += "这是一次重试生成，上一次生成的内容是:\n\n"
-            user_prompt_str += "```json\n" + self.last_generated_content + "\n```\n\n"
-            user_prompt_str += "其中检测到了生成的内容存在以下问题:\n\n"
-            for issue in self.issue_recorder.get_issues():
-                user_prompt_str += f"- {issue.issue_content}\n"
-            user_prompt_str += "\n请根据检测到的问题，修改上一次生成内容中的错误，使其符合系统提示词的要求\n"
+        Returns:
+            str: 重试部分的用户提示词，失败时返回空字符串
+        """
+        if not self.issue_recorder.has_issues() or not self.last_generated_content:
+            return ""
         
-        return user_prompt_str
+        # 读取重试提示词模板
+        app_data_store = get_app_data_store()
+        retry_template_path = os.path.join(app_data_store.get_user_prompt_dir(), 'retry_prompt_template.md')
+        
+        try:
+            with open(retry_template_path, 'r', encoding='utf-8') as f:
+                retry_template = f.read()
+        except Exception as e:
+            print(f"{Colors.FAIL}错误: 读取重试模板失败: {e}{Colors.ENDC}")
+            return ""
+        
+        # 格式化上一次生成的内容（用json代码块包裹）
+        formatted_content = f"```json\n{self.last_generated_content}\n```"
+        
+        # 格式化问题列表
+        issues_list = "\n".join([f"- {issue.issue_content}" for issue in self.issue_recorder.get_issues()])
+        
+        # 替换占位符
+        retry_prompt = retry_template.replace('PREVIOUS_CONTENT_PLACEHOLDER', formatted_content)
+        retry_prompt = retry_prompt.replace('ISSUES_LIST_PLACEHOLDER', issues_list)
+        
+        return retry_prompt
 
     def _validate_response(self, cleaned_json_str: str) -> bool:
         """
@@ -312,7 +347,7 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         if not ICPChatHandler.is_initialized():
             ICPChatHandler.initialize_chat_interface(handler_config)
         
-        # 加载系统提示词
+        # 加载系统提示词基础部分
         app_data_store = get_app_data_store()
         app_sys_prompt_file_path = os.path.join(app_data_store.get_prompt_dir(), self.role_name + ".md")
         
@@ -321,3 +356,11 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
                 self.sys_prompt = f.read()
         except Exception as e:
             print(f"错误: 读取系统提示词文件失败: {e}")
+        
+        # 加载系统提示词重试部分
+        retry_sys_prompt_path = os.path.join(app_data_store.get_prompt_dir(), 'retry_sys_prompt.md')
+        try:
+            with open(retry_sys_prompt_path, 'r', encoding='utf-8') as f:
+                self.sys_prompt_retry_part = f.read()
+        except Exception as e:
+            print(f"错误: 读取系统提示词重试部分失败: {e}")
