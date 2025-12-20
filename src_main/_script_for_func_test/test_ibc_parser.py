@@ -47,7 +47,7 @@ def print_ast_tree(ast_nodes: dict, uid: int = 0, indent: int = 0) -> None:
         if node.content:
             print(f"{prefix}  - 描述: {node.content}")
         if node.type_ref:
-            print(f"{prefix}  - 类型引用: {node.type_ref}")
+            print(f"{prefix}  - 类型引用: {', '.join(node.type_ref)}")
     elif isinstance(node, BehaviorStepNode):
         print(f"{prefix}Behavior: {node.content[:50]}... (uid={node.uid})")
         if node.symbol_refs:
@@ -1526,9 +1526,9 @@ var config"""
         assert logger_var is not None, "找不到logger变量"
         assert db_var is not None, "找不到dbConnection变量"
         
-        # 验证类型引用
-        assert logger_var.type_ref == "logger.Logger", f"预期logger类型引用为'logger.Logger'，实际为'{logger_var.type_ref}'"
-        assert db_var.type_ref == "database.Connection", f"预期dbConnection类型引用为'database.Connection'，实际为'{db_var.type_ref}'"
+        # 验证类型引用（type_ref现在是列表）
+        assert logger_var.type_ref == ["logger.Logger"], f"预期logger类型引用为['logger.Logger']，实际为'{logger_var.type_ref}'"
+        assert db_var.type_ref == ["database.Connection"], f"预期dbConnection类型引用为['database.Connection']，实际为'{db_var.type_ref}'"
         
         # 验证描述中包含类型引用内容
         assert "logger.Logger" in logger_var.content, f"描述中应包含类型引用: {logger_var.content}"
@@ -1546,7 +1546,7 @@ var config"""
 
 
 def test_var_type_ref_error():
-    """测试变量类型引用错误：一个变量多个引用"""
+    """测试变量类型引用：一个变量允许多个引用"""
     print("\n测试 var_type_ref_error 函数...")
     
     code = """var data: 类型为 $type1.A 或者 $type2.B"""
@@ -1556,15 +1556,28 @@ def test_var_type_ref_error():
         tokens = lexer.tokenize()
         parser = IbcParser(tokens)
         ast_nodes = parser.parse()
-        print("  ❌ 测试失败: 应该抛出异常但没有")
-        return False
+        
+        root_node = ast_nodes[0]
+        data_var = None
+        for uid in root_node.children_uids:
+            node = ast_nodes[uid]
+            if isinstance(node, VariableNode) and node.identifier == "data":
+                data_var = node
+                break
+        
+        assert data_var is not None, "找不到data变量"
+        # 验证支持多个类型引用
+        assert len(data_var.type_ref) == 2, f"预期2个类型引用，实际{len(data_var.type_ref)}"
+        assert "type1.A" in data_var.type_ref, f"缺少type1.A引用: {data_var.type_ref}"
+        assert "type2.B" in data_var.type_ref, f"缺少type2.B引用: {data_var.type_ref}"
+        
+        print(f"  ✓ 成功解析多个类型引用")
+        return True
     except Exception as e:
-        if "can only contain one symbol reference" in str(e):
-            print(f"  ✓ 正确捕获到异常")
-            return True
-        else:
-            print(f"  ❌ 测试失败: 异常消息不正确: {e}")
-            return False
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 def test_class_inheritance_with_dollar():
