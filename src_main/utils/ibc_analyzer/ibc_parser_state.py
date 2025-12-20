@@ -2,7 +2,8 @@ from enum import Enum
 from typing import List, Dict, Optional
 from typedef.ibc_data_types import (
     IbcTokenType, Token, IbcBaseAstNode, AstNodeType, 
-    ModuleNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode
+    ModuleNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode,
+    VisibilityTypes
 )
 from typedef.exception_types import IbcParserError
 
@@ -21,6 +22,7 @@ class ParserState(Enum):
     FUNC_DECL = "FUNC_DECL"  # 函数声明解析
     FUNC_CONTENT = "FUNCTION_CONTENT"  # 函数内容解析
     BEHAVIOR_STEP = "BEHAVIOR_STEP"  # 行为步骤解析
+    VISIBILITY_DECL = "VISIBILITY_DECL"  # 可见性声明解析
 
 
 class BaseState:
@@ -50,7 +52,7 @@ class BaseState:
 
 
 class TopLevelState(BaseState):
-    """顶层状态类, 目前实际上不会被调用。token的处理逻辑主要集中在各自的状态机逻辑中 """
+    """顶层状态类, 用于ibc_parser标记父节点。token的处理逻辑主要集中在各自的状态机逻辑中 """
     def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcBaseAstNode]):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
         self.state_type = ParserState.TOP_LEVEL
@@ -256,6 +258,7 @@ class VarDeclState(BaseState):
     def _create_variable_nodes(self) -> None:
         """为所有变量创建节点"""
         line_num = self.current_token.line_num if self.current_token else 0
+        
         for var_name, var_desc in self.variables.items():
             uid = self.uid_generator.gen_uid()
             var_node = VariableNode(
@@ -536,6 +539,7 @@ class ClassDeclState(BaseState):
         line_num = self.current_token.line_num if self.current_token else 0
         if self.parent_class:
             self.inh_params = {self.parent_class: self.inherit_desc}
+        
         class_node = ClassNode(
             uid=uid,
             parent_uid=self.parent_uid,
@@ -554,13 +558,22 @@ class ClassDeclState(BaseState):
 
 
 class ClassContentState(BaseState):
-    """类内容状态类, 目前实际上不会被调用。token的处理逻辑主要集中在各自的状态机逻辑中 """
+    """类内容状态类, 跟踪当前可见性 """
     def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcBaseAstNode]):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
         self.state_type = ParserState.CLASS_CONTENT
+        self.current_visibility = VisibilityTypes.PUBLIC  # 类内默认是public
 
     def process_token(self, token: Token) -> None:
         self.current_token = token
+    
+    def get_current_visibility(self) -> VisibilityTypes:
+        """获取当前可见性"""
+        return self.current_visibility
+    
+    def set_current_visibility(self, visibility: VisibilityTypes) -> None:
+        """设置当前可见性"""
+        self.current_visibility = visibility
 
 
 # 函数声明的子状态枚举
@@ -862,7 +875,7 @@ class FuncDeclState(BaseState):
 
 
 class FuncContentState(BaseState):
-    """函数内容状态类, 目前实际上不会被调用。token的处理逻辑主要集中在各自的状态机逻辑中 """
+    """函数内容状态类, 用于ibc_parser标记父节点。具体token的处理逻辑主要集中在各自的状态机逻辑中 """
     def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcBaseAstNode]):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
         self.state_type = ParserState.FUNC_CONTENT
@@ -1176,3 +1189,58 @@ class BehaviorStepState(BaseState):
     def get_local_indent_level(self) -> int:
         """返回局部缩进等级"""
         return self.local_indent_level
+
+
+# 可见性声明的子状态枚举
+class VisibilityDeclSubState(Enum):
+    EXPECTING_COLON = "EXPECTING_COLON"
+    EXPECTING_NEWLINE = "EXPECTING_NEWLINE"
+
+
+class VisibilityDeclState(BaseState):
+    """可见性声明状态类"""
+    def __init__(self, parent_uid: int, uid_generator: IbcParserUidGenerator, ast_node_dict: Dict[int, IbcBaseAstNode]):
+        super().__init__(parent_uid, uid_generator, ast_node_dict)
+        self.state_type = ParserState.VISIBILITY_DECL
+        self.visibility_keyword = ""  # 保存关键字名称
+        self.sub_state = VisibilityDeclSubState.EXPECTING_COLON
+        self.pop_flag = False
+    
+    def process_token(self, token: Token) -> None:
+        self.current_token = token
+        
+        if self.sub_state == VisibilityDeclSubState.EXPECTING_COLON:
+            if token.type == IbcTokenType.COLON:
+                self.sub_state = VisibilityDeclSubState.EXPECTING_NEWLINE
+            else:
+                raise IbcParserError(
+                    message=f"VisibilityDeclState: Expecting colon after visibility keyword but got {token.type}",
+                    line_num=token.line_num
+                )
+        
+        elif self.sub_state == VisibilityDeclSubState.EXPECTING_NEWLINE:
+            if token.type == IbcTokenType.NEWLINE:
+                self.pop_flag = True
+            else:
+                raise IbcParserError(
+                    message=f"VisibilityDeclState: Expecting newline after colon but got {token.type}",
+                    line_num=token.line_num
+                )
+    
+    def is_need_pop(self) -> bool:
+        return self.pop_flag
+    
+    def set_visibility_keyword(self, keyword: str) -> None:
+        """设置可见性关键字"""
+        self.visibility_keyword = keyword
+    
+    def get_visibility_type(self) -> VisibilityTypes:
+        """根据关键字返回可见性类型"""
+        if self.visibility_keyword == "public":
+            return VisibilityTypes.PUBLIC
+        elif self.visibility_keyword == "protected":
+            return VisibilityTypes.PROTECTED
+        elif self.visibility_keyword == "private":
+            return VisibilityTypes.PRIVATE
+        else:
+            return VisibilityTypes.DEFAULT

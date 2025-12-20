@@ -27,8 +27,8 @@ class IbcSymbolProcessor:
             Dict[str, SymbolNode]: 文件符号表字典，以符号名为key，SymbolNode为value
 
         注意：
-        - normalized_name (规范化名称)和visibility (可见性)在符号提取时不填充,
-        - 留空字符串, 后续由cmd_handler调用ai_interface推断后填充
+        - visibility (可见性)直接从AST节点读取，默认为public
+        - normalized_name (规范化名称)在符号提取时不填充，留空字符串，后续由cmd_handler调用ai_interface推断后填充
         """
         symbol_table: Dict[str, SymbolNode] = {}
         
@@ -62,7 +62,7 @@ class IbcSymbolProcessor:
                 parent_symbol_name="",  # 初始为空，后续由_build_symbol_hierarchy填充
                 symbol_name=node.identifier,
                 normalized_name="",  # 留空，后续由AI推断填充
-                visibility=VisibilityTypes.DEFAULT,  # Default，后续由AI推断填充
+                visibility=node.visibility,  # 直接从AST节点读取
                 description=node.external_desc,
                 symbol_type=SymbolType.CLASS
             )
@@ -72,7 +72,7 @@ class IbcSymbolProcessor:
                 parent_symbol_name="",  # 初始为空，后续由_build_symbol_hierarchy填充
                 symbol_name=node.identifier,
                 normalized_name="",  # 留空，后续由AI推断填充
-                visibility=VisibilityTypes.DEFAULT,  # Default，后续由AI推断填充
+                visibility=node.visibility,  # 直接从AST节点读取
                 description=node.external_desc,
                 symbol_type=SymbolType.FUNCTION,
                 parameters=node.params  # 添加函数参数信息
@@ -83,7 +83,7 @@ class IbcSymbolProcessor:
                 parent_symbol_name="",  # 初始为空，后续由_build_symbol_hierarchy填充
                 symbol_name=node.identifier,
                 normalized_name="",  # 留空，后续由AI推断填充
-                visibility=VisibilityTypes.DEFAULT,  # Default，后续由AI推断填充
+                visibility=node.visibility,  # 直接从AST节点读取
                 description=node.external_desc,
                 symbol_type=SymbolType.VARIABLE
             )

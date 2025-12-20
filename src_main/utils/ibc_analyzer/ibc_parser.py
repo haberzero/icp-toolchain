@@ -2,14 +2,16 @@ from enum import Enum
 from typing import List, Dict, Any, Optional, Tuple, Callable
 from typedef.ibc_data_types import (
     IbcTokenType, Token, IbcBaseAstNode, AstNodeType, 
-    ModuleNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode
+    ModuleNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode,
+    VisibilityTypes
 )
 from typedef.exception_types import IbcParserError
 
 from utils.ibc_analyzer.ibc_parser_state import (
     ParserState, BaseState, TopLevelState, ModuleDeclState, 
     VarDeclState, DescriptionState, ClassContentState, FuncContentState,
-    ClassDeclState, FuncDeclState, BehaviorStepState, IntentCommentState
+    ClassDeclState, FuncDeclState, BehaviorStepState, IntentCommentState,
+    VisibilityDeclState
 )
 
 from utils.ibc_analyzer.ibc_parser_uid_generator import IbcParserUidGenerator
@@ -139,7 +141,7 @@ class IbcParser:
             self._handle_state_pop(current_state_obj, token)
     
     def _update_last_ast_node(self, current_uid: int) -> None:
-        """更新最后AST节点并附加描述信息"""
+        """更新最后AST节点并附加描述信息和可见性"""
         self.last_ast_node_uid = current_uid
         self.last_ast_node = self.ast_nodes[current_uid]
         
@@ -152,6 +154,93 @@ class IbcParser:
         else:
             self.pending_description = ""
             self.pending_intent_comment = ""
+        
+        # 统一处理可见性
+        self._apply_visibility_to_node(self.last_ast_node)
+    
+    def _apply_visibility_to_node(self, node: IbcBaseAstNode) -> None:
+        """为节点附加可见性"""
+        # 处理类节点的可见性
+        if isinstance(node, ClassNode):
+            # 递归查找父节点，确定是顶层类、类内类还是函数内类
+            parent_context = self._find_parent_context(node.parent_uid)
+            
+            if parent_context == 'top':
+                # 顶层类，必须是public
+                node.visibility = VisibilityTypes.PUBLIC
+            elif parent_context == 'class':
+                # 类内类，使用当前类内可见性
+                for state_obj, _ in reversed(self.state_stack):
+                    if isinstance(state_obj, ClassContentState):
+                        node.visibility = state_obj.get_current_visibility()
+                        break
+            elif parent_context == 'func':
+                # 函数内类，必须是private
+                node.visibility = VisibilityTypes.PRIVATE
+        
+        # 处理函数节点的可见性
+        elif isinstance(node, FunctionNode):
+            # 递归查找父节点，确定是顶层函数、类内函数还是函数内函数
+            parent_context = self._find_parent_context(node.parent_uid)
+            
+            if parent_context == 'top':
+                # 顶层函数，默认public
+                node.visibility = VisibilityTypes.PUBLIC
+            elif parent_context == 'class':
+                # 类内函数，使用当前类内可见性
+                for state_obj, _ in reversed(self.state_stack):
+                    if isinstance(state_obj, ClassContentState):
+                        node.visibility = state_obj.get_current_visibility()
+                        break
+            elif parent_context == 'func':
+                # 函数内函数，必须是private
+                node.visibility = VisibilityTypes.PRIVATE
+        
+        # 处理变量节点的可见性
+        elif isinstance(node, VariableNode):
+            # 变量只能在类内定义，使用当前类内可见性
+            for state_obj, _ in reversed(self.state_stack):
+                if isinstance(state_obj, ClassContentState):
+                    node.visibility = state_obj.get_current_visibility()
+                    break
+    
+    def _find_parent_context(self, parent_uid: int) -> str:
+        """
+        递归查找父节点上下文，返回 'top', 'class', 或 'func'
+        
+        查找规则：
+        - 向上递归查找父节点
+        - 如果遇到函数节点，返回 'func'
+        - 如果遇到类节点，继续向上递归
+        - 如果递归到根节点（uid=0），返回 'top' 或 'class'
+        """
+        current_uid = parent_uid
+        
+        while current_uid != 0:
+            parent_node = self.ast_nodes.get(current_uid)
+            
+            if parent_node is None:
+                # 找不到父节点，返回top
+                return 'top'
+            
+            if isinstance(parent_node, FunctionNode):
+                # 遇到函数节点，说明是函数内定义
+                return 'func'
+            elif isinstance(parent_node, ClassNode):
+                # 遇到类节点，继续向上递归
+                current_uid = parent_node.parent_uid
+            else:
+                # 遇到其他节点（如BehaviorStepNode），继续向上
+                current_uid = parent_node.parent_uid
+        
+        # 递归到根节点，检查是否在类内
+        # 通过检查parent_uid是否指向一个类节点
+        if parent_uid != 0:
+            immediate_parent = self.ast_nodes.get(parent_uid)
+            if isinstance(immediate_parent, ClassNode):
+                return 'class'
+        
+        return 'top'
     
     def _update_pass_token_flag(self, current_state_obj: BaseState) -> None:
         """更新token透传标志"""
@@ -179,6 +268,14 @@ class IbcParser:
         
         if isinstance(current_state_obj, IntentCommentState):
             self.pending_intent_comment = current_state_obj.get_content()
+        
+        # 处理可见性声明弹出，更新ClassContentState的当前可见性
+        if isinstance(current_state_obj, VisibilityDeclState):
+            if self.state_stack:  # 确保栈不为空
+                parent_state_obj, _ = self.state_stack[-1]
+                if isinstance(parent_state_obj, ClassContentState):
+                    visibility = current_state_obj.get_visibility_type()
+                    parent_state_obj.set_current_visibility(visibility)
         
         # 函数声明时的多行参数定义可能会因为不同开发者的书写习惯带来额外的缩进问题，需要单独处理
         if isinstance(current_state_obj, FuncDeclState):
@@ -336,6 +433,14 @@ class IbcParser:
                 line_num=token.line_num
             )
         
+        # 可见性关键字只允许在类内容中使用
+        if token.value in ("public", "protected", "private"):
+            if current_state_type != ParserState.CLASS_CONTENT:
+                raise IbcParserError(
+                    message=f"Visibility keyword '{token.value}' only allowed inside class definition",
+                    line_num=token.line_num
+                )
+        
         # 根据关键字类型压入相应的状态
         state_obj = None
         if token.type == IbcTokenType.KEYWORDS and token.value == "module":
@@ -350,6 +455,9 @@ class IbcParser:
             state_obj = FuncDeclState(parent_uid, self.uid_generator, self.ast_nodes)
         elif token.type == IbcTokenType.KEYWORDS and token.value == "@":
             state_obj = IntentCommentState(parent_uid, self.uid_generator, self.ast_nodes)
+        elif token.type == IbcTokenType.KEYWORDS and token.value in ("public", "protected", "private"):
+            state_obj = VisibilityDeclState(parent_uid, self.uid_generator, self.ast_nodes)
+            state_obj.set_visibility_keyword(token.value)
         else:
             raise IbcParserError(
                 message=f"Invalid keyword token'{token.value}', should not happen, contact dev please",

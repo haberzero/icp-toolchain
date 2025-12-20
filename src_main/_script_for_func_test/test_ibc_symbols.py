@@ -37,7 +37,7 @@ def test_symbol_node_basics():
             parent_symbol_name="",  # 根符号
             symbol_name="计算总价",
             normalized_name="",
-            visibility=VisibilityTypes.DEFAULT,
+            visibility=VisibilityTypes.PUBLIC,
             description="计算订单总价",
             symbol_type=SymbolType.FUNCTION,
             parameters={"商品列表": "商品数组", "折扣率": "0-1之间的小数"}
@@ -519,6 +519,64 @@ class UserService(BaseService: 基础服务类):
         return False
 
 
+def test_visibility_from_ast():
+    """测试可见性从 AST 节点直接填充"""
+    print("=" * 60)
+    print("测试可见性从 AST 填充")
+    print("=" * 60)
+    
+    code = """class DataProcessor():
+    private:
+    var _buffer: 缓冲区
+    
+    protected:
+    func _process():
+        执行内部处理
+    
+    public:
+    func process():
+        调用内部处理
+"""
+    
+    try:
+        # 解析代码
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_dict = parser.parse()
+        
+        # 提取符号
+        symbol_gen = IbcSymbolProcessor(ast_dict)
+        symbol_table = symbol_gen.process_symbols()
+        
+        # 验证可见性已经从 AST 填充
+        print("\n验证符号可见性:")
+        
+        assert "DataProcessor" in symbol_table
+        assert symbol_table["DataProcessor"].visibility == VisibilityTypes.PUBLIC, "顶层类应该是 public"
+        print(f"  ✓ DataProcessor: {symbol_table['DataProcessor'].visibility.value}")
+        
+        assert "_buffer" in symbol_table
+        assert symbol_table["_buffer"].visibility == VisibilityTypes.PRIVATE, "_buffer 应该是 private"
+        print(f"  ✓ _buffer: {symbol_table['_buffer'].visibility.value}")
+        
+        assert "_process" in symbol_table
+        assert symbol_table["_process"].visibility == VisibilityTypes.PROTECTED, "_process 应该是 protected"
+        print(f"  ✓ _process: {symbol_table['_process'].visibility.value}")
+        
+        assert "process" in symbol_table
+        assert symbol_table["process"].visibility == VisibilityTypes.PUBLIC, "process 应该是 public"
+        print(f"  ✓ process: {symbol_table['process'].visibility.value}")
+        
+        print("\n[通过] 可见性从 AST 正确填充\n")
+        return True
+    except Exception as e:
+        print(f"\n[失败] 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 # ==================== 主测试运行器 ====================
 
 if __name__ == "__main__":
@@ -539,6 +597,7 @@ if __name__ == "__main__":
             ("符号表序列化", test_symbol_table_serialization),
             ("符号层次结构", test_symbol_hierarchy),
             ("完整工作流程", test_complete_workflow),
+            ("可见性AST填充", test_visibility_from_ast),
         ]),
     ]
     

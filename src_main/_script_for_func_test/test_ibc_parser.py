@@ -7,7 +7,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
-from typedef.ibc_data_types import AstNodeType, ModuleNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode
+from typedef.ibc_data_types import AstNodeType, ModuleNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode, VisibilityTypes
 
 
 def print_ast_tree(ast_nodes: dict, uid: int = 0, indent: int = 0) -> None:
@@ -1611,6 +1611,236 @@ def test_class_inheritance_with_dollar():
         traceback.print_exc()
         return False
 
+
+def test_visibility_basic():
+    """测试基本可见性功能：public, protected, private"""
+    print("\n测试 visibility_basic 函数...")
+    
+    code = """class DataProcessor():
+    private:
+    var _internal_buffer: 内部缓存区
+    var _cache: 缓存数据
+    
+    func _validate_data(原始数据):
+        验证数据格式
+    
+    protected:
+    func _process_internal(原始数据):
+        预处理数据
+    
+    public:
+    func process_data(输入数据):
+        处理输入数据
+    
+    func get_result():
+        返回 结果
+"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        class_node = ast_nodes[root_node.children_uids[0]]
+        
+        assert isinstance(class_node, ClassNode), "预期为ClassNode"
+        assert class_node.visibility == VisibilityTypes.PUBLIC, f"顶层类应该是public，实际为{class_node.visibility}"
+        
+        # 收集成员节点
+        members = {}
+        for child_uid in class_node.children_uids:
+            child_node = ast_nodes[child_uid]
+            if isinstance(child_node, (VariableNode, FunctionNode)):
+                members[child_node.identifier] = child_node.visibility
+        
+        # 验证private成员
+        assert members.get('_internal_buffer') == VisibilityTypes.PRIVATE, "_internal_buffer应该是private"
+        assert members.get('_cache') == VisibilityTypes.PRIVATE, "_cache应该是private"
+        assert members.get('_validate_data') == VisibilityTypes.PRIVATE, "_validate_data应该是private"
+        
+        # 验证protected成员
+        assert members.get('_process_internal') == VisibilityTypes.PROTECTED, "_process_internal应该是protected"
+        
+        # 验证public成员
+        assert members.get('process_data') == VisibilityTypes.PUBLIC, "process_data应该是public"
+        assert members.get('get_result') == VisibilityTypes.PUBLIC, "get_result应该是public"
+        
+        print("  ✓ 成功验证可见性切换：private, protected, public")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_visibility_default_public():
+    """测试类内默认可见性为public"""
+    print("\n测试 visibility_default_public 函数...")
+    
+    code = """class TestClass():
+    var member1: 成员1
+    var member2: 成员2
+    
+    func method1():
+        执行操作1
+    
+    func method2():
+        执行操作2
+"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        class_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 收集成员节点
+        members = {}
+        for child_uid in class_node.children_uids:
+            child_node = ast_nodes[child_uid]
+            if isinstance(child_node, (VariableNode, FunctionNode)):
+                members[child_node.identifier] = child_node.visibility
+        
+        # 验证所有成员都是public
+        for member_name, visibility in members.items():
+            assert visibility == VisibilityTypes.PUBLIC, f"{member_name}应该是public，实际为{visibility}"
+        
+        print("  ✓ 成功验证类内默认可见性为public")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_visibility_nested_class():
+    """测试内部类的可见性"""
+    print("\n测试 visibility_nested_class 函数...")
+    
+    code = """class OuterClass():
+    var outer_member: 外部类成员
+    
+    private:
+    class InnerPrivateClass():
+        var inner_member: 内部私有类成员
+    
+    protected:
+    class InnerProtectedClass():
+        var inner_member: 内部保护类成员
+    
+    public:
+    class InnerPublicClass():
+        var inner_member: 内部公开类成员
+"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        outer_class = ast_nodes[root_node.children_uids[0]]
+        
+        assert outer_class.visibility == VisibilityTypes.PUBLIC, "顶层类应该是public"
+        
+        # 收集内部类
+        inner_classes = {}
+        for child_uid in outer_class.children_uids:
+            child_node = ast_nodes[child_uid]
+            if isinstance(child_node, ClassNode):
+                inner_classes[child_node.identifier] = child_node.visibility
+        
+        # 验证内部类的可见性
+        assert inner_classes.get('InnerPrivateClass') == VisibilityTypes.PRIVATE, "InnerPrivateClass应该是private"
+        assert inner_classes.get('InnerProtectedClass') == VisibilityTypes.PROTECTED, "InnerProtectedClass应该是protected"
+        assert inner_classes.get('InnerPublicClass') == VisibilityTypes.PUBLIC, "InnerPublicClass应该是public"
+        
+        print("  ✓ 成功验证内部类的可见性")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_visibility_func_nested():
+    """测试函数内嵌套定义的类和函数的可见性"""
+    print("\n测试 visibility_func_nested 函数...")
+    
+    code = """class OuterClass():
+    public:
+    func outer_method():
+        class LocalClass():
+            var local_member: 局部类成员
+            
+            func local_method():
+                执行操作
+        
+        func local_function():
+            返回结果
+        
+        使用局部类和函数
+        返回 结果
+
+func top_level_function():
+    class TopFuncLocalClass():
+        var member: 成员
+    
+    func top_func_local_function():
+        执行操作
+    
+    返回 结果
+"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        # 收集所有节点
+        all_nodes = {}
+        def collect_nodes(uid):
+            node = ast_nodes[uid]
+            if isinstance(node, (ClassNode, FunctionNode)):
+                all_nodes[node.identifier] = node.visibility
+            for child_uid in node.children_uids:
+                collect_nodes(child_uid)
+        
+        collect_nodes(0)
+        
+        # 验证顶层节点
+        assert all_nodes.get('OuterClass') == VisibilityTypes.PUBLIC, "OuterClass应该是public"
+        assert all_nodes.get('top_level_function') == VisibilityTypes.PUBLIC, "top_level_function应该是public"
+        
+        # 验证类内方法
+        assert all_nodes.get('outer_method') == VisibilityTypes.PUBLIC, "outer_method应该是public"
+        
+        # 验证函数内定义的类和函数（必须是private）
+        assert all_nodes.get('LocalClass') == VisibilityTypes.PRIVATE, "LocalClass应该是private"
+        assert all_nodes.get('local_method') == VisibilityTypes.PRIVATE, "local_method应该是private"
+        assert all_nodes.get('local_function') == VisibilityTypes.PRIVATE, "local_function应该是private"
+        assert all_nodes.get('TopFuncLocalClass') == VisibilityTypes.PRIVATE, "TopFuncLocalClass应该是private"
+        assert all_nodes.get('top_func_local_function') == VisibilityTypes.PRIVATE, "top_func_local_function应该是private"
+        
+        print("  ✓ 成功验证函数内嵌套定义的类和函数都是private")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("开始测试 Intent Behavior Code 解析器...")
@@ -1660,6 +1890,12 @@ if __name__ == "__main__":
         test_results.append(("变量类型引用", test_var_type_ref()))
         test_results.append(("变量多引用错误", test_var_type_ref_error()))
         test_results.append(("变量 = 等号语法", test_var_with_equal_sign()))
+        
+        # 可见性测试
+        test_results.append(("基本可见性", test_visibility_basic()))
+        test_results.append(("默认public可见性", test_visibility_default_public()))
+        test_results.append(("内部类可见性", test_visibility_nested_class()))
+        test_results.append(("函数内嵌套可见性", test_visibility_func_nested()))
         
         print("\n" + "=" * 60)
         print("测试结果汇总")

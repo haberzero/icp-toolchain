@@ -568,6 +568,81 @@ def test_equal_sign_with_symbol_ref():
         return False
 
 
+def test_visibility_keywords():
+    """测试可见性关键字（public, protected, private）"""
+    print("测试 visibility_keywords 函数...")
+    
+    code = """class TestClass():
+    public:
+    var public_member: 公开成员
+    
+    protected:
+    var protected_member: 保护成员
+    
+    private:
+    var private_member: 私有成员
+"""
+    
+    expected = [
+        (IbcTokenType.KEYWORDS, IbcKeywords.CLASS.value),
+        (IbcTokenType.IDENTIFIER, 'TestClass'),
+        (IbcTokenType.LPAREN, '('),
+        (IbcTokenType.RPAREN, ')'),
+        (IbcTokenType.COLON, ':'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.INDENT, ''),
+        (IbcTokenType.KEYWORDS, IbcKeywords.PUBLIC.value),  # public关键字
+        (IbcTokenType.COLON, ':'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.KEYWORDS, IbcKeywords.VAR.value),
+        (IbcTokenType.IDENTIFIER, 'public_member'),
+        (IbcTokenType.COLON, ':'),
+        (IbcTokenType.IDENTIFIER, ' 公开成员'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.KEYWORDS, IbcKeywords.PROTECTED.value),  # protected关键字
+        (IbcTokenType.COLON, ':'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.KEYWORDS, IbcKeywords.VAR.value),
+        (IbcTokenType.IDENTIFIER, 'protected_member'),
+        (IbcTokenType.COLON, ':'),
+        (IbcTokenType.IDENTIFIER, ' 保护成员'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.KEYWORDS, IbcKeywords.PRIVATE.value),  # private关键字
+        (IbcTokenType.COLON, ':'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.KEYWORDS, IbcKeywords.VAR.value),
+        (IbcTokenType.IDENTIFIER, 'private_member'),
+        (IbcTokenType.COLON, ':'),
+        (IbcTokenType.IDENTIFIER, ' 私有成员'),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.DEDENT, ''),
+        (IbcTokenType.NEWLINE, ''),
+        (IbcTokenType.EOF, '')
+    ]
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        
+        # 检查是否生成了public、protected、private关键字token
+        keywords_found = []
+        for token in tokens:
+            if token.type == IbcTokenType.KEYWORDS and token.value in ['public', 'protected', 'private']:
+                keywords_found.append(token.value)
+        
+        assert 'public' in keywords_found, "未找到public关键字"
+        assert 'protected' in keywords_found, "未找到protected关键字"
+        assert 'private' in keywords_found, "未找到private关键字"
+        
+        print("  ✓ 成功识别可见性关键字: public, protected, private")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        return False
+
+
 if __name__ == "__main__":
     print("\n开始测试 Intent Behavior Code 词法分析器...\n")
     
@@ -611,6 +686,9 @@ if __name__ == "__main__":
         print()
         
         test_results.append(("错误情况", test_error_cases()))
+        print()
+        
+        test_results.append(("可见性关键字", test_visibility_keywords()))
         print()
         
         print("=" * 50)

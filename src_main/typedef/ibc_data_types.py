@@ -35,6 +35,9 @@ class IbcKeywords(Enum):
     DESCRIPTION = "description"
     INTENT = "@"
     BEHAVIOR = "behavior"   # 特殊关键字，不由用户书写，而是由lexer自动添加至token list
+    PUBLIC = "public"
+    PROTECTED = "protected"
+    PRIVATE = "private"
 
 
 class Token:
@@ -59,7 +62,13 @@ class AstNodeType(Enum):
     BEHAVIOR_STEP = "BEHAVIOR_STEP"
 
 
-# TODO: 关于to_dict以及from_dict方法，以后可能需要重构。应该用一个专用的工厂类处理
+class VisibilityTypes(Enum):
+    PUBLIC = "public"
+    PROTECTED = "protected"
+    PRIVATE = "private"
+
+
+# TODO: 关于to_dict以叏from_dict方法，以后可能需要重构。应该用一个专用的工厂类处理
 @dataclass
 class IbcBaseAstNode:
     """AST基础节点类"""
@@ -68,6 +77,7 @@ class IbcBaseAstNode:
     children_uids: List[int] = field(default_factory=list)
     node_type: AstNodeType = AstNodeType.DEFAULT
     line_number: int = 0
+    visibility: VisibilityTypes = VisibilityTypes.PUBLIC  # 可见性标记，默认为public
     
     def to_dict(self) -> Dict[str, Any]:
         """将节点转换为字典表示"""
@@ -90,6 +100,8 @@ class IbcBaseAstNode:
             value = data[f.name]
             if f.type is AstNodeType:
                 value = AstNodeType(value) if value else AstNodeType.DEFAULT
+            elif f.type is VisibilityTypes:
+                value = VisibilityTypes(value) if value else VisibilityTypes.PUBLIC
             elif hasattr(f.type, '__origin__') and f.type.__origin__ is list:
                 # 简单处理 List[T]
                 value = list(value) if value else []
@@ -169,15 +181,6 @@ class BehaviorStepNode(IbcBaseAstNode):
         return f"BehaviorStepNode(uid={self.uid})"
 
 
-class VisibilityTypes(Enum):
-    DEFAULT = "default" # 未被填充，性质等同于private
-    PUBLIC = "public"
-    PRIVATE = "private"
-    PROTECTED = "protected"
-    MODULE_LOCAL = "module_local"
-    GLOBAL = "global"
-
-
 class SymbolType(Enum):
     """符号类型枚举"""
     DEFAULT = "default"
@@ -194,7 +197,7 @@ class SymbolNode:
     children_symbol_names: List[str] = field(default_factory=list)  # 子符号名称列表
     symbol_name: str = ""
     normalized_name: str = ""  # 规范化名称，由AI推断后填充
-    visibility: VisibilityTypes = VisibilityTypes.DEFAULT  # 可见性，由AI推断后填充
+    visibility: VisibilityTypes = VisibilityTypes.PUBLIC  # 可见性，从 AST 节点直接填充，默认为public
     symbol_type: SymbolType = SymbolType.DEFAULT
     description: str = ""   # 对外功能描述
     parameters: Dict[str, str] = field(default_factory=dict)  # 函数参数 {参数名: 参数描述}，仅FUNCTION类型使用
@@ -216,12 +219,12 @@ class SymbolNode:
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> 'SymbolNode':
         """从字典创建符号节点"""
-        visibility_value = data.get("visibility", VisibilityTypes.DEFAULT)
+        visibility_value = data.get("visibility", VisibilityTypes.PUBLIC)
         if isinstance(visibility_value, str):
             try:
                 visibility_value = VisibilityTypes(visibility_value)
             except ValueError:
-                visibility_value = VisibilityTypes.DEFAULT
+                visibility_value = VisibilityTypes.PUBLIC
         
         symbol_type_value = data.get("symbol_type", SymbolType.DEFAULT)
         if isinstance(symbol_type_value, str):
@@ -246,8 +249,8 @@ class SymbolNode:
         return f"SymbolNode(uid={self.uid}, name={self.symbol_name}, type={self.symbol_type})"
     
     def is_normalized(self) -> bool:
-        """检查符号是否已经规范化（包含规范化名称和可见性）"""
-        return bool(self.normalized_name and self.visibility != VisibilityTypes.DEFAULT)
+        """检查符号是否已经规范化（包含规范化名称）"""
+        return bool(self.normalized_name)
     
     def update_normalized_info(self, normalized_name: str, visibility: VisibilityTypes) -> None:
         """更新规范化信息"""

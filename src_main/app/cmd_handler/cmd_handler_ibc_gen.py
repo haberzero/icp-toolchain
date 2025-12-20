@@ -282,8 +282,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             # 构建用户提示词
             user_prompt = self._build_user_prompt_for_ibc_generator(icp_json_file_path)
             if not user_prompt:
-                print(f"    {Colors.FAIL}错误: 构建用户提示词失败{Colors.ENDC}")
-                continue
+                print(f"{Colors.FAIL}错误: 用户提示词构建失败，终止执行{Colors.ENDC}")
+                return False
             
             # 将用户提示词保存到stage文件夹以便查看生成过程
             self._save_user_prompt_to_stage(icp_json_file_path, user_prompt, attempt + 1)
