@@ -1,6 +1,7 @@
 import sys, os
 import asyncio
 import json
+import re
 from typing import List, Dict, Any
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
@@ -297,75 +298,62 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             self.issue_recorder.record_issue(error_msg)
             return False
 
-        # 检查并确保 proj_root_dict 下有主入口文件
-        if not self._ensure_main_entry_file(new_json_dict):
-            error_msg = "目录结构中的主入口文件检查/填充未成功，未检测到合理的主入口文件"
-            print(f"{Colors.WARNING}警告: {error_msg}，正在重新生成...{Colors.ENDC}")
+        # 检查 proj_root_dict 下是否有主入口文件
+        if not self._validate_main_entry_file_exists(new_json_dict):
+            error_msg = "未检测到主入口文件，请添加名为 main 或 Main 的文件，优先放在 proj_root_dict 直接子节点下"
+            print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
             self.issue_recorder.record_issue(error_msg)
             return False
 
         return True
 
-    def _ensure_main_entry_file(self, json_dict: Dict) -> bool:
-        """检查并确保proj_root_dict下有主入口文件"""
-        import re
+    def _validate_main_entry_file_exists(self, json_dict: Dict) -> bool:
+        """
+        验证proj_root_dict下是否存在主入口文件
         
-        if "proj_root_dict" not in json_dict:
-            return False
+        主入口文件可以在：
+        1. proj_root_dict 直接子节点（文件）
+        2. proj_root_dict 直接子节点中的文件夹内
         
+        Args:
+            json_dict: 包含proj_root_dict的JSON字典
+            
+        Returns:
+            bool: 如果找到主入口文件返回true，否则返回false
+        """
         proj_root_dict = json_dict["proj_root_dict"]
-        if not isinstance(proj_root_dict, dict):
-            return False
         
-        # 常见主入口文件命名模式（不区分大小写）
+        # 主入口文件命名模式
         main_patterns = [
             r'^main$',
-            r'^Main$',
-            r'^app$',
-            r'^App$',
-            r'^index$',
-            r'^Index$',
-            r'^run$',
-            r'^Run$',
-            r'^start$',
-            r'^Start$',
-            r'^launcher$',
-            r'^Launcher$',
-            r'^bootstrap$',
-            r'^Bootstrap$'
+            r'^Main$'
         ]
         
-        # 检查proj_root_dict直接子节点是否有主入口文件
-        has_main_entry = False
+        def matches_main_pattern(name: str) -> bool:
+            """检查名称是否匹配主入口文件模式"""
+            for pattern in main_patterns:
+                if re.match(pattern, name, re.IGNORECASE):
+                    return True
+            return False
+        
+        # 1. 检查proj_root_dict直接子节点中的文件
         for key, value in proj_root_dict.items():
-            # 只检查文件节点（值为字符串的节点）
             if isinstance(value, str):
-                # 使用正则表达式匹配
-                for pattern in main_patterns:
-                    if re.match(pattern, key, re.IGNORECASE):
-                        has_main_entry = True
-                        print(f"{Colors.OKGREEN}检测到主入口文件: {key}{Colors.ENDC}")
-                        break
-            if has_main_entry:
-                break
+                if matches_main_pattern(key):
+                    print(f"{Colors.OKGREEN}检测到主入口文件: {key}{Colors.ENDC}")
+                    return True
         
-        # 如果没有找到主入口文件，添加一个
-        if not has_main_entry:
-            # 优先使用 'main' 作为主入口文件名
-            main_file_name = 'main'
-            
-            # 如果 'main' 已经被用作目录名，尝试其他名称
-            if main_file_name in proj_root_dict and isinstance(proj_root_dict[main_file_name], dict):
-                for alt_name in ['app', 'index', 'run', 'start', 'launcher']:
-                    if alt_name not in proj_root_dict or not isinstance(proj_root_dict[alt_name], dict):
-                        main_file_name = alt_name
-                        break
-            
-            # 添加主入口文件
-            proj_root_dict[main_file_name] = "主入口程序，执行初始化并启动程序"
-            print(f"{Colors.OKGREEN}未检测到主入口文件，已自动添加: {main_file_name}{Colors.ENDC}")
+        # 2. 检查proj_root_dict直接子节点中的文件夹内
+        for key, value in proj_root_dict.items():
+            if isinstance(value, dict):
+                for sub_key, sub_value in value.items():
+                    if isinstance(sub_value, str):
+                        if matches_main_pattern(sub_key):
+                            print(f"{Colors.OKGREEN}检测到主入口文件: {key}/{sub_key}{Colors.ENDC}")
+                            return True
         
-        return True
+        # 未找到主入口文件
+        return False
 
     def is_cmd_valid(self):
         """检查目录文件填充命令的必要条件是否满足"""
