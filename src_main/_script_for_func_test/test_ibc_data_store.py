@@ -246,9 +246,14 @@ class User():
     
     # 解析IBC代码生成AST
     print("\n3.1 解析IBC代码...")
-    success, ast_dict, _ = analyze_ibc_code(ibc_code)
-    if not success or not ast_dict:
-        print(f"   ✗ 解析失败")
+    try:
+        ast_dict, _ = analyze_ibc_code(ibc_code)
+    except Exception as e:
+        print(f"   ✗ 解析失败: {e}")
+        return False
+    
+    if not ast_dict:
+        print(f"   ✗ 解析失败，未生成有效AST")
         return False
     print(f"   ✓ 解析成功，生成 {len(ast_dict)} 个节点")
     

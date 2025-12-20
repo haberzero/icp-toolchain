@@ -304,10 +304,21 @@ class CmdHandlerIbcGen(BaseCmdHandler):
 
             # 解析IBC代码生成AST
             print(f"    正在分析IBC代码生成AST...")
-            success, ast_dict, symbol_table = analyze_ibc_code(ibc_code)
+            try:
+                ast_dict, symbol_table = analyze_ibc_code(ibc_code)
+            except Exception as e:
+                # 捕获非预期IBC分析错误
+                print(f"    {Colors.FAIL}错误: IBC分析过程出错，遇到非预期的错误{Colors.ENDC}")
+                print(f"    {Colors.FAIL}错误类型: {type(e).__name__}{Colors.ENDC}")
+                print(f"    {Colors.FAIL}错误信息: {str(e)}{Colors.ENDC}")
+                import traceback
+                print(f"    {Colors.FAIL}错误堆栈:{Colors.ENDC}")
+                traceback.print_exc()
+                return False
             
-            if not success or not ast_dict or not symbol_table:
-                print(f"    {Colors.WARNING}警告: IBC代码分析失败{Colors.ENDC}")
+            # 检查是否得到有效的AST和符号表
+            if not ast_dict or not symbol_table:
+                print(f"    {Colors.WARNING}警告: IBC代码分析失败，未能生成有效的AST或符号表{Colors.ENDC}")
                 continue
 
             # 保存IBC代码
