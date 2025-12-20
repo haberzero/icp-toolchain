@@ -91,8 +91,8 @@ class IbcParser:
         if token.type == IbcTokenType.KEYWORDS:
             return ParserMainState.KEYWORD_PROCESSING
         
-        # token处在行首，且不是关键字，则认为是行为描述行的开始
-        if self.is_new_line_start and token.type is not IbcTokenType.KEYWORDS:
+        # token处在行首，且不是关键字、不是NEWLINE，则认为是行为描述行的开始
+        if self.is_new_line_start and token.type not in (IbcTokenType.KEYWORDS, IbcTokenType.NEWLINE):
             return ParserMainState.BEHAVIOR_START
         
         # 其他情况，常规处理
@@ -159,8 +159,12 @@ class IbcParser:
     
     def _update_new_line_flag(self, token: Token) -> None:
         """更新行首标志"""
-        if token.type in (IbcTokenType.NEWLINE, IbcTokenType.INDENT, IbcTokenType.DEDENT):
+        if token.type == IbcTokenType.NEWLINE:
             self.is_new_line_start = True
+        elif token.type in (IbcTokenType.INDENT, IbcTokenType.DEDENT):
+            # INDENT和DEDENT不改变行首状态，因为它们只是缩进标记
+            # 真正的内容token会在后续出现
+            pass
         else:
             self.is_new_line_start = False
     
