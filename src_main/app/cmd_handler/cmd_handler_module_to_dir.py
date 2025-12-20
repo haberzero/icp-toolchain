@@ -145,7 +145,7 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             user_prompt_str += "其中检测到了生成的内容存在以下问题:\n\n"
             for issue in self.issue_recorder.get_issues():
                 user_prompt_str += f"- {issue.issue_content}\n"
-            user_prompt_str += "\n请根据上述问题进行修正。\n"
+            user_prompt_str += "\n请根据检测到的问题，修改上一次生成内容中的错误，使其符合系统提示词的要求\n"
         
         return user_prompt_str
 

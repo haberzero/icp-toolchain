@@ -66,6 +66,17 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         max_attempts = 3
         for attempt in range(max_attempts):
             print(f"{self.role_dir_file_fill}正在进行第 {attempt + 1} 次尝试...")
+            
+            # ===== 临时代码: 保存用户提示词 =====
+            temp_prompt_file = os.path.join(self.work_data_dir_path, f'temp_user_prompt_attempt_{attempt + 1}.txt')
+            try:
+                with open(temp_prompt_file, 'w', encoding='utf-8') as f:
+                    f.write(user_prompt)
+                print(f"{Colors.OKBLUE}[临时] 已保存第 {attempt + 1} 次尝试的用户提示词到: {temp_prompt_file}{Colors.ENDC}")
+            except Exception as e:
+                print(f"{Colors.WARNING}[临时] 保存用户提示词失败: {e}{Colors.ENDC}")
+            # ===== 临时代码结束 =====
+            
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_dir_file_fill,
                 user_prompt=user_prompt
@@ -120,6 +131,17 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         
         # 调用AI生成实现规划
         for attempt in range(max_attempts):
+            
+            # ===== 临时代码: 保存用户提示词 =====
+            temp_prompt_file = os.path.join(self.work_data_dir_path, f'temp_plan_gen_prompt_attempt_{attempt + 1}.txt')
+            try:
+                with open(temp_prompt_file, 'w', encoding='utf-8') as f:
+                    f.write(user_prompt)
+                print(f"{Colors.OKBLUE}[临时] 已保存第 {attempt + 1} 次实现规划提示词到: {temp_prompt_file}{Colors.ENDC}")
+            except Exception as e:
+                print(f"{Colors.WARNING}[临时] 保存实现规划提示词失败: {e}{Colors.ENDC}")
+            # ===== 临时代码结束 =====
+            
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_plan_gen,
                 user_prompt=user_prompt
@@ -203,7 +225,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             for issue in self.issue_recorder.get_issues():
                 print("issue: ", issue.issue_content)
                 user_prompt_str += f"- {issue.issue_content}\n"
-            user_prompt_str += "\n请根据上述问题进行修正。\n"
+            user_prompt_str += "\n请根据检测到的问题，修改上一次生成内容中的错误，使其符合系统提示词的要求\n"
         
         return user_prompt_str
 
