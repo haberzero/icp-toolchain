@@ -202,7 +202,11 @@ class DirJsonFuncs:
         if isinstance(old_node, dict):
             # 新节点也必须是字典
             if not isinstance(new_node, dict):
-                errors.append(f"路径 '{path}': 旧节点是字典，但新节点不是字典")
+                if isinstance(new_node, str):
+                    errors.append(f"路径 '{path}': 旧节点是文件夹(dict)，新节点错误地变成了文件(str)")
+                else:
+                    node_type = type(new_node).__name__
+                    errors.append(f"路径 '{path}': 旧节点是文件夹(dict)，新节点出现了不应存在的类型 {node_type}")
                 return errors
             
             # 检查旧节点的所有键是否都存在于新节点中
@@ -224,13 +228,17 @@ class DirJsonFuncs:
                 new_value = new_node[key]
                 key_path = f"{path}/{key}" if path else key
                 
-                # 如果旧节点值是字典，递归比较
+                # 如果旧节点值是字典（文件夹），递归比较
                 if isinstance(old_value, dict):
                     sub_errors = DirJsonFuncs.compare_structure(old_value, new_value, key_path)
                     errors.extend(sub_errors)
-                # 如果旧节点值不是字典（叶节点），新节点对应位置也必须不是字典
-                elif isinstance(new_value, dict):
-                    errors.append(f"路径 '{key_path}': 旧节点是叶节点（非字典），但新节点是字典")
+                # 如果旧节点值是字符串（文件），新节点也必须是字符串
+                elif isinstance(old_value, str):
+                    if isinstance(new_value, dict):
+                        errors.append(f"路径 '{key_path}': 旧节点是文件(str)，新节点错误地变成了文件夹(dict)")
+                    elif not isinstance(new_value, str):
+                        node_type = type(new_value).__name__
+                        errors.append(f"路径 '{key_path}': 旧节点是文件(str)，新节点出现了不应存在的类型 {node_type}")
                         
         return errors
     

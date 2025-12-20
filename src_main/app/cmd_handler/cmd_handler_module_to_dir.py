@@ -1,6 +1,7 @@
 import sys, os
 import asyncio
 import json
+import re
 from typing import List, Dict, Any
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
@@ -208,7 +209,58 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         if _has_dot_in_keys(json_dict[required_key], "proj_root_dict"):
             return False
         
+        # 检查文件夹命名是否使用了 main_xxx 形式
+        error_msg = self._check_main_folder_naming(json_dict[required_key])
+        if error_msg:
+            print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
+            return False
+        
         return True
+    
+    def _check_main_folder_naming(self, proj_root_dict: Dict) -> str:
+        """
+        检查文件夹命名是否使用了 main_xxx 形式
+        
+        Args:
+            proj_root_dict: 项目根目录字典
+            
+        Returns:
+            str: 错误信息，通过检查时返回None
+        """
+        # 检测 main_xxx 或 Main_xxx 形式的文件夹命名模式
+        main_folder_patterns = [
+            r'^main_',
+            r'^Main_'
+        ]
+        
+        def matches_main_folder_pattern(name: str) -> bool:
+            """检查名称是否匹配 main_xxx 文件夹模式"""
+            for pattern in main_folder_patterns:
+                if re.match(pattern, name, re.IGNORECASE):
+                    return True
+            return False
+        
+        # 递归检查所有文件夹命名
+        main_folders = []
+        def collect_main_folders(node, path=""):
+            if isinstance(node, dict):
+                for key, value in node.items():
+                    current_path = f"{path}/{key}" if path else key
+                    # 只检查文件夹（值为dict的节点）
+                    if isinstance(value, dict):
+                        if matches_main_folder_pattern(key):
+                            main_folders.append(current_path)
+                        # 递归检查子节点
+                        collect_main_folders(value, current_path)
+        
+        collect_main_folders(proj_root_dict)
+        
+        # 如果发现 main_xxx 文件夹，返回错误信息
+        if main_folders:
+            return f"检测到使用 main_xxx 形式的文件夹命名: {', '.join(main_folders)}。建议避免直接使用 main_xxx 作为文件夹名，可以改为其他更具体的命名"
+        
+        return None
 
     def is_cmd_valid(self):
         """检查目录生成命令的必要条件是否满足"""

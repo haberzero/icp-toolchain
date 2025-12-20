@@ -299,61 +299,97 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             return False
 
         # 检查 proj_root_dict 下是否有主入口文件
-        if not self._validate_main_entry_file_exists(new_json_dict):
-            error_msg = "未检测到主入口文件，请添加名为 main 或 Main 的文件，优先放在 proj_root_dict 直接子节点下"
+        error_msg = self._check_main_entry_file_exists(new_json_dict)
+        if error_msg:
             print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
             self.issue_recorder.record_issue(error_msg)
             return False
 
         return True
 
-    def _validate_main_entry_file_exists(self, json_dict: Dict) -> bool:
+    def _check_main_entry_file_exists(self, json_dict: Dict) -> str:
         """
-        验证proj_root_dict下是否存在主入口文件
+        检查proj_root_dict下是否存在主入口文件
         
         主入口文件可以在：
         1. proj_root_dict 直接子节点（文件）
         2. proj_root_dict 直接子节点中的文件夹内
+        3. 文件夹名为 xxx_main 形式，其内包含合理的主入口文件
         
         Args:
             json_dict: 包含proj_root_dict的JSON字典
             
         Returns:
-            bool: 如果找到主入口文件返回true，否则返回false
+            str: 错误或警告信息，通过检查时返回None
         """
         proj_root_dict = json_dict["proj_root_dict"]
         
-        # 主入口文件命名模式
-        main_patterns = [
-            r'^main$',
-            r'^Main$'
+        # 标准主入口文件命名模式（以 main 或 Main 开头）
+        standard_main_patterns = [
+            r'^main',
+            r'^Main'
         ]
         
-        def matches_main_pattern(name: str) -> bool:
-            """检查名称是否匹配主入口文件模式"""
-            for pattern in main_patterns:
+        # 疑似主入口文件命名模式（包含 main 但不以 main 开头）
+        suspicious_main_patterns = [
+            r'.*_main$',
+            r'.*_Main$',
+            r'.*Main$'  # 如 AppMain
+        ]
+        
+        def matches_standard_pattern(name: str) -> bool:
+            """检查名称是否匹配标准主入口文件模式"""
+            for pattern in standard_main_patterns:
                 if re.match(pattern, name, re.IGNORECASE):
                     return True
             return False
         
-        # 1. 检查proj_root_dict直接子节点中的文件
+        def matches_suspicious_pattern(name: str) -> bool:
+            """检查名称是否匹配疑似主入口文件模式"""
+            for pattern in suspicious_main_patterns:
+                if re.match(pattern, name, re.IGNORECASE):
+                    return True
+            return False
+        
+        # 1. 检查proj_root_dict直接子节点中的文件（标准命名）
         for key, value in proj_root_dict.items():
             if isinstance(value, str):
-                if matches_main_pattern(key):
+                if matches_standard_pattern(key):
                     print(f"{Colors.OKGREEN}检测到主入口文件: {key}{Colors.ENDC}")
-                    return True
+                    return None
         
-        # 2. 检查proj_root_dict直接子节点中的文件夹内
+        # 2. 检查proj_root_dict直接子节点中的文件夹内（包括 xxx_main 文件夹）
+        for key, value in proj_root_dict.items():
+            if isinstance(value, dict):
+                # 检查文件夹内的文件
+                for sub_key, sub_value in value.items():
+                    if isinstance(sub_value, str):
+                        if matches_standard_pattern(sub_key):
+                            # 如果文件夹名为 xxx_main 形式，也认为合理
+                            print(f"{Colors.OKGREEN}检测到主入口文件: {key}/{sub_key}{Colors.ENDC}")
+                            return None
+        
+        # 3. 检查是否有疑似主入口文件（直接子节点）
+        suspicious_files = []
+        for key, value in proj_root_dict.items():
+            if isinstance(value, str):
+                if matches_suspicious_pattern(key):
+                    suspicious_files.append(key)
+        
+        # 4. 检查是否有疑似主入口文件（文件夹内）
         for key, value in proj_root_dict.items():
             if isinstance(value, dict):
                 for sub_key, sub_value in value.items():
                     if isinstance(sub_value, str):
-                        if matches_main_pattern(sub_key):
-                            print(f"{Colors.OKGREEN}检测到主入口文件: {key}/{sub_key}{Colors.ENDC}")
-                            return True
+                        if matches_suspicious_pattern(sub_key):
+                            suspicious_files.append(f"{key}/{sub_key}")
         
-        # 未找到主入口文件
-        return False
+        # 如果找到疑似主入口文件，返回警告信息
+        if suspicious_files:
+            return f"检测到疑似主入口文件: {', '.join(suspicious_files)}。如果是主入口文件，建议改名为 main_xxx 形式；如果不是，请在直接子节点下添加合理的主入口文件"
+        
+        # 未找到任何主入口文件
+        return "未检测到主入口文件，请添加名为 main_xxx 形式的文件，优先放在 proj_root_dict 直接子节点下"
 
     def is_cmd_valid(self):
         """检查目录文件填充命令的必要条件是否满足"""
