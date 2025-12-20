@@ -90,13 +90,13 @@ class IbcLexer:
         """处理包含符号引用的行使用$作为起始标记，后续连续的非保留符号作为引用内容，包含 . 符号 """
         i = 0
         n = len(content_line)
-        special_chars = '(){}[],:\\='
+        special_chars = '(){}[],:\\=$'  # 特殊符号集合
         while i < n:
             char = content_line[i]
             if char == '$':
                 i += 1
                 start = i
-                # 收集符号引用内容：直到遇到空白或保留符号为止，允许包含'.'
+                # 收集符号引用内容：直到遇到空白、保留符号（包括$）为止，允许包含'.'
                 while i < n and (content_line[i] not in special_chars) and (not content_line[i].isspace()):
                     i += 1
                 ref_content = content_line[start:i]
@@ -105,7 +105,7 @@ class IbcLexer:
                     self.tokens.append(Token(IbcTokenType.REF_IDENTIFIER, ref_content, self.line_num))
                 else:
                     print(f"Warning: Line {self.line_num}: Empty reference identifier after $, will be removed")
-                # 不消耗分隔符，继续由常规文本分词处理
+                # 不消耗分隔符（包括$），继续由常规文本分词处理
             else:
                 start = i
                 while i < n and content_line[i] != '$':
@@ -115,12 +115,12 @@ class IbcLexer:
                     self._tokenize_text_part(text_part)
     
     def _tokenize_text_part(self, text: str):
-        r"""对文本部分进行分词：识别 ( ) { } [ ] , : \ = 等特殊符号
+        r"""对文本部分进行分词：识别 ( ) { } [ ] , : \ = $ 等特殊符号
         其余所有连续非特殊字符（包括数字、字母、符号、空格等）视为 IDENTIFIER 即普通文本
         """
         i = 0
         n = len(text)
-        special_chars = '(){}[],:\\=' # 特殊字符集合
+        special_chars = '(){}[],:\\=$'  # 特殊符号集合
         
         while i < n:
             char = text[i]
@@ -154,6 +154,14 @@ class IbcLexer:
             elif char == '\\':
                 self.tokens.append(Token(IbcTokenType.BACKSLASH, '\\', self.line_num))
                 i += 1
+            elif char == '$':
+                # 在文本分词中遇到$，这是一个严重的逻辑错误
+                # 所有的$符号应该由_tokenize_line_with_refs处理
+                raise RuntimeError(
+                    f"Internal error at line {self.line_num}: "
+                    f"Unexpected $ symbol in _tokenize_text_part. "
+                    f"This indicates a bug in the lexer logic. Please contact the developer."
+                )
             else:
                 # 收集非保留符号的常规字符，包括空格也被直接作为常规字符收集
                 start = i
