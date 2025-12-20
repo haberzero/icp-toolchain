@@ -8,6 +8,7 @@ from typedef.ibc_data_types import (
     IbcBaseAstNode, ClassNode, FunctionNode, VariableNode, 
     BehaviorStepNode, SymbolType, VisibilityTypes, SymbolNode
 )
+from typedef.exception_types import SymbolNotFoundError
 
 class IbcFuncs:
     """IBC代码处理相关的静态工具函数集合"""
@@ -110,7 +111,7 @@ class IbcFuncs:
         symbol_table: Dict[str, SymbolNode],
         symbol_name: str,
         normalized_name: str
-    ) -> bool:
+    ) -> None:
         """
         更新符号的规范化名称
         
@@ -119,22 +120,21 @@ class IbcFuncs:
             symbol_name: 符号名称
             normalized_name: 规范化名称
             
-        Returns:
-            bool: 更新是否成功
+        Raises:
+            SymbolNotFoundError: 当符号不存在时抛出
         """
         symbol = symbol_table.get(symbol_name)
         if symbol is None:
-            return False
+            raise SymbolNotFoundError(symbol_name, "更新规范化名称")
         
         symbol.normalized_name = normalized_name
-        return True
     
     @staticmethod
     def update_symbol_visibility(
         symbol_table: Dict[str, SymbolNode],
         symbol_name: str,
         visibility: VisibilityTypes
-    ) -> bool:
+    ) -> None:
         """
         更新符号的可见性
         
@@ -143,15 +143,14 @@ class IbcFuncs:
             symbol_name: 符号名称
             visibility: 可见性
             
-        Returns:
-            bool: 更新是否成功
+        Raises:
+            SymbolNotFoundError: 当符号不存在时抛出
         """
         symbol = symbol_table.get(symbol_name)
         if symbol is None:
-            return False
+            raise SymbolNotFoundError(symbol_name, "更新可见性")
         
         symbol.visibility = visibility
-        return True
     
     @staticmethod
     def update_symbol_normalized_info(
@@ -159,7 +158,7 @@ class IbcFuncs:
         symbol_name: str,
         normalized_name: str,
         visibility: VisibilityTypes
-    ) -> bool:
+    ) -> None:
         """
         同时更新符号的规范化名称和可见性
         
@@ -169,16 +168,15 @@ class IbcFuncs:
             normalized_name: 规范化名称
             visibility: 可见性
             
-        Returns:
-            bool: 更新是否成功
+        Raises:
+            SymbolNotFoundError: 当符号不存在时抛出
         """
         symbol = symbol_table.get(symbol_name)
         if symbol is None:
-            return False
+            raise SymbolNotFoundError(symbol_name, "更新规范化信息")
         
         symbol.normalized_name = normalized_name
         symbol.visibility = visibility
-        return True
     
     # ==================== AST符号替换 ====================
     

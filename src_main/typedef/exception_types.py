@@ -50,3 +50,14 @@ class IbcParserError(IbcAnalyzerError):
             else:
                 return f"Parser Error at Line {self.line_num}: {self.message}"
         return f"Parser Error: {self.message}"
+
+
+class SymbolNotFoundError(Exception):
+    """符号未找到异常"""
+    def __init__(self, symbol_name: str, operation: str = ""):
+        self.symbol_name = symbol_name
+        self.operation = operation
+        message = f"符号 '{symbol_name}' 在符号表中不存在"
+        if operation:
+            message += f"，无法执行操作: {operation}"
+        super().__init__(message)
