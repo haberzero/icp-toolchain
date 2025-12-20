@@ -362,6 +362,9 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         Returns:
             bool: 是否包含所有必需的section
         """
+        # 清空上一次验证的问题记录
+        self.issue_recorder.clear()
+        
         # 定义所有必需的section关键字
         required_sections = ['class', 'func', 'var', 'behavior', 'description', 'import', 'external_lib']
         

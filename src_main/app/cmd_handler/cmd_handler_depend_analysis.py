@@ -191,6 +191,9 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         Returns:
             bool: 是否有效
         """
+        # 清空上一次验证的问题记录
+        self.issue_recorder.clear()
+        
         # 验证是否为有效的JSON
         try:
             new_json_dict = json.loads(cleaned_json_str)
@@ -208,20 +211,26 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             return False
         
         # 检查proj_root_dict结构是否与原始结构一致
-        if not DirJsonFuncs.compare_structure(self.old_json_dict["proj_root_dict"], new_json_dict["proj_root_dict"]):
-            error_msg = "proj_root_dict结构与原始结构不一致"
-            print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+        structure_errors = DirJsonFuncs.compare_structure(self.old_json_dict["proj_root_dict"], new_json_dict["proj_root_dict"])
+        if structure_errors:
+            error_msg = "proj_root_dict结构与原始结构不一致，具体问题如下：\n" + "\n".join(f"  - {err}" for err in structure_errors)
+            print(f"{Colors.WARNING}警告: proj_root_dict结构与原始结构不一致{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
+            return False
+        
+        # 检查是否有proj_root_dict中的文件在dependent_relation中缺失
+        missing_files = DirJsonFuncs.find_missing_files_in_dependent_relation(new_json_dict)
+        if missing_files:
+            error_msg = "dependent_relation 中缺少以下文件的依赖关系条目，请为每个文件添加对应条目（即使该文件没有依赖其他文件，也需要添加空列表 []）：\n" + "\n".join(f"  - {file}" for file in missing_files)
+            print(f"{Colors.WARNING}警告: dependent_relation 中缺少 {len(missing_files)} 个文件的条目{Colors.ENDC}")
             self.issue_recorder.record_issue(error_msg)
             return False
             
         # 检查dependent_relation中的依赖路径是否都存在于proj_root_dict中
-        is_valid, validation_errors = DirJsonFuncs.validate_dependent_paths(new_json_dict["dependent_relation"], new_json_dict["proj_root_dict"])
-        if not is_valid:
-            error_msg = "dependent_relation 中存在 proj_root_dict 下不存在的路径:\n" + "\n".join(validation_errors)
+        path_errors = DirJsonFuncs.check_dependent_paths_existence(new_json_dict["dependent_relation"], new_json_dict["proj_root_dict"])
+        if path_errors:
+            error_msg = "dependent_relation 中存在 proj_root_dict 下不存在的路径，具体问题如下：\n" + "\n".join(f"  - {err}" for err in path_errors)
             print(f"{Colors.WARNING}警告: dependent_relation 出现了 proj_root_dict 下不存在的路径{Colors.ENDC}")
-            print(f"{Colors.WARNING}具体错误如下:{Colors.ENDC}")
-            for error in validation_errors:
-                print(f"  - {error}")
             self.issue_recorder.record_issue(error_msg)
             return False
         
@@ -230,10 +239,8 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         circular_dependencies = DirJsonFuncs.detect_circular_dependencies(dependent_relation)
         
         if circular_dependencies:
-            error_msg = "循环依赖: " + "; ".join(circular_dependencies)
+            error_msg = "检测到循环依赖，具体循环路径如下：\n" + "\n".join(f"  - {cycle}" for cycle in circular_dependencies)
             print(f"{Colors.WARNING}警告: 检测到循环依赖{Colors.ENDC}")
-            for cycle in circular_dependencies:
-                print(f"  {Colors.WARNING}{cycle}{Colors.ENDC}")
             self.issue_recorder.record_issue(error_msg)
             return False
         

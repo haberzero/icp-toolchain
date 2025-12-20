@@ -200,6 +200,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             user_prompt_str += "```json\n" + self.last_generated_content + "\n```\n\n"
             user_prompt_str += "其中检测到了生成的内容存在以下问题:\n\n"
             for issue in self.issue_recorder.get_issues():
+                print("issue: ", issue.issue_content)
                 user_prompt_str += f"- {issue.issue_content}\n"
             user_prompt_str += "\n请根据上述问题进行修正。\n"
         
@@ -268,6 +269,9 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         Returns:
             bool: 是否有效
         """
+        # 清空上一次验证的问题记录
+        self.issue_recorder.clear()
+        
         # 验证是否为有效的JSON
         try:
             new_json_dict = json.loads(cleaned_json_str)
@@ -278,22 +282,24 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             return False
         
         # 检查新JSON内容结构是否与旧JSON内容结构一致
-        if not DirJsonFuncs.compare_structure(old_json_dict, new_json_dict):
-            error_msg = "生成的JSON结构不符合要求"
-            print(f"{Colors.WARNING}警告: {error_msg}，正在重新生成...{Colors.ENDC}")
+        structure_errors = DirJsonFuncs.compare_structure(old_json_dict, new_json_dict)
+        if structure_errors:
+            error_msg = "生成的JSON结构不符合要求，具体问题如下：\n" + "\n".join(f"  - {err}" for err in structure_errors)
+            print(f"{Colors.WARNING}警告: 生成的JSON结构不符合要求{Colors.ENDC}")
             self.issue_recorder.record_issue(error_msg)
             return False
             
         # 检查新添加的节点是否都为字符串类型
-        if not DirJsonFuncs.check_new_nodes_are_strings(new_json_dict):
-            error_msg = "生成的JSON包含非字符串类型的叶子节点"
-            print(f"{Colors.WARNING}警告: {error_msg}，正在重新生成...{Colors.ENDC}")
+        string_errors = DirJsonFuncs.check_new_nodes_are_strings(new_json_dict)
+        if string_errors:
+            error_msg = "生成的JSON包含非字符串类型的叶子节点，具体问题如下：\n" + "\n".join(f"  - {err}" for err in string_errors)
+            print(f"{Colors.WARNING}警告: 生成的JSON包含非字符串类型的叶子节点{Colors.ENDC}")
             self.issue_recorder.record_issue(error_msg)
             return False
 
         # 检查并确保 proj_root_dict 下有主入口文件
         if not self._ensure_main_entry_file(new_json_dict):
-            error_msg = "目录结构中的主入口文件检查/填充未成功"
+            error_msg = "目录结构中的主入口文件检查/填充未成功，未检测到合理的主入口文件"
             print(f"{Colors.WARNING}警告: {error_msg}，正在重新生成...{Colors.ENDC}")
             self.issue_recorder.record_issue(error_msg)
             return False

@@ -135,6 +135,9 @@ class CmdHandlerReqAnalysis(BaseCmdHandler):
         Returns:
             bool: 是否有效
         """
+        # 清空上一次验证的问题记录
+        self.issue_recorder.clear()
+        
         # 验证是否为有效的JSON
         try:
             json_dict = json.loads(cleaned_json_str)
