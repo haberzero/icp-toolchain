@@ -39,6 +39,8 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         self.chat_handler = ICPChatHandler()
         self.role_dir_file_fill = "4_dir_file_fill"
         self.role_plan_gen = "4_dir_file_fill_plan_gen"
+        self.sys_prompt_dir_file_fill = ""  # 系统提示词,在_init_ai_handlers中加载
+        self.sys_prompt_plan_gen = ""  # 系统提示词,在_init_ai_handlers中加载
         
         # 初始化issue recorder和上一次生成的内容
         self.issue_recorder = TextIssueRecorder()
@@ -79,6 +81,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_dir_file_fill,
+                sys_prompt=self.sys_prompt_dir_file_fill,
                 user_prompt=user_prompt
             ))
             
@@ -144,6 +147,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_plan_gen,
+                sys_prompt=self.sys_prompt_plan_gen,
                 user_prompt=user_prompt
             ))
             
@@ -440,14 +444,14 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: ChatInterface 未正确初始化{Colors.ENDC}")
             return False
         
-        # 检查角色1是否已加载
-        if not self.chat_handler.has_role(self.role_dir_file_fill):
-            print(f"  {Colors.FAIL}错误: 角色 {self.role_dir_file_fill} 未加载{Colors.ENDC}")
+        # 检查角色1的系统提示词是否加载
+        if not self.sys_prompt_dir_file_fill:
+            print(f"  {Colors.FAIL}错误: 系统提示词 {self.role_dir_file_fill} 未加载{Colors.ENDC}")
             return False
         
-        # 检查角色2是否已加载
-        if not self.chat_handler.has_role(self.role_plan_gen):
-            print(f"  {Colors.FAIL}错误: 角色 {self.role_plan_gen} 未加载{Colors.ENDC}")
+        # 检查角色2的系统提示词是否加载
+        if not self.sys_prompt_plan_gen:
+            print(f"  {Colors.FAIL}错误: 系统提示词 {self.role_plan_gen} 未加载{Colors.ENDC}")
             return False
             
         return True
@@ -493,7 +497,16 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         app_sys_prompt_file_path_1 = os.path.join(app_prompt_dir_path, prompt_file_name_1)
         app_sys_prompt_file_path_2 = os.path.join(app_prompt_dir_path, prompt_file_name_2)
         
-        # 从文件加载角色提示词
-        self.chat_handler.load_role_from_file(self.role_dir_file_fill, app_sys_prompt_file_path_1)
-        self.chat_handler.load_role_from_file(self.role_plan_gen, app_sys_prompt_file_path_2)
+        # 读取系统提示词文件
+        try:
+            with open(app_sys_prompt_file_path_1, 'r', encoding='utf-8') as f:
+                self.sys_prompt_dir_file_fill = f.read()
+        except Exception as e:
+            print(f"错误: 读取系统提示词文件失败 ({self.role_dir_file_fill}): {e}")
+        
+        try:
+            with open(app_sys_prompt_file_path_2, 'r', encoding='utf-8') as f:
+                self.sys_prompt_plan_gen = f.read()
+        except Exception as e:
+            print(f"错误: 读取系统提示词文件失败 ({self.role_plan_gen}): {e}")
     

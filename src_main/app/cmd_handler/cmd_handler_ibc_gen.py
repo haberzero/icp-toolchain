@@ -54,6 +54,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
 
         self.role_ibc_gen = "7_intent_behavior_code_gen"
         self.role_symbol_normalizer = "7_symbol_normalizer"
+        self.sys_prompt_ibc_gen = ""  # 系统提示词,在_init_ai_handlers中加载
+        self.sys_prompt_symbol_normalizer = ""  # 系统提示词,在_init_ai_handlers中加载
         self.chat_handler = ICPChatHandler()
         self._init_ai_handlers()
     
@@ -289,6 +291,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             # 调用AI生成IBC代码
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_ibc_gen,
+                sys_prompt=self.sys_prompt_ibc_gen,
                 user_prompt=user_prompt
             ))
             
@@ -518,8 +521,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             return False, {}
         
         # 检查AI处理器
-        if not self.chat_handler.has_role(self.role_symbol_normalizer):
-            print(f"    {Colors.FAIL}错误: 符号规范化AI处理器未初始化{Colors.ENDC}")
+        if not self.sys_prompt_symbol_normalizer:
+            print(f"    {Colors.FAIL}错误: 符号规范化系统提示词未加载{Colors.ENDC}")
             return False, {}
         
         # 带重试的规范化调用，因为本身是在单文件ibc源码生成的流程中再嵌套调用，所以重试次数设为2
@@ -534,6 +537,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             # 调用AI进行规范化
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_symbol_normalizer,
+                sys_prompt=self.sys_prompt_symbol_normalizer,
                 user_prompt=user_prompt
             ))
             
@@ -679,7 +683,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         if not ICPChatHandler.is_initialized():
             return False
         
-        if not self.chat_handler.has_role(self.role_ibc_gen):
+        if not self.sys_prompt_ibc_gen:
             return False
         
         return True
@@ -715,13 +719,22 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         if not ICPChatHandler.is_initialized():
             ICPChatHandler.initialize_chat_interface(chat_config)
         
+        # 加载系统提示词
         app_data_store = get_app_data_store()
         app_prompt_dir_path = app_data_store.get_prompt_dir()
         
         # 加载IBC生成角色
         sys_prompt_path_1 = os.path.join(app_prompt_dir_path, f"{self.role_ibc_gen}.md")
-        self.chat_handler.load_role_from_file(self.role_ibc_gen, sys_prompt_path_1)
+        try:
+            with open(sys_prompt_path_1, 'r', encoding='utf-8') as f:
+                self.sys_prompt_ibc_gen = f.read()
+        except Exception as e:
+            print(f"错误: 读取系统提示词文件失败 ({self.role_ibc_gen}): {e}")
         
         # 加载符号规范化角色
         sys_prompt_path_2 = os.path.join(app_prompt_dir_path, f"{self.role_symbol_normalizer}.md")
-        self.chat_handler.load_role_from_file(self.role_symbol_normalizer, sys_prompt_path_2)
+        try:
+            with open(sys_prompt_path_2, 'r', encoding='utf-8') as f:
+                self.sys_prompt_symbol_normalizer = f.read()
+        except Exception as e:
+            print(f"错误: 读取系统提示词文件失败 ({self.role_symbol_normalizer}): {e}")

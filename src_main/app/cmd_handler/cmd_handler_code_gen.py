@@ -39,6 +39,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
         
         self.role_name = "8_target_code_gen"
+        self.sys_prompt = ""  # 系统提示词,在_init_ai_handlers中加载
         
         # 使用ICPChatHandler和ICPEmbeddingHandler
         self.chat_handler = ICPChatHandler()
@@ -253,6 +254,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         # 调用AI生成目标代码
         response_str, success = asyncio.run(self.chat_handler.get_role_response(
             role_name=self.role_name,
+            sys_prompt=self.sys_prompt,
             user_prompt=user_prompt_str
         ))
         
@@ -337,9 +339,9 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             print(f"  {Colors.WARNING}警告: Chat处理器未初始化{Colors.ENDC}")
             return False
         
-        # 检查角色是否已加载
-        if not self.chat_handler.has_role(self.role_name):
-            print(f"  {Colors.WARNING}警告: 角色 {self.role_name} 未加载{Colors.ENDC}")
+        # 检查系统提示词是否加载
+        if not self.sys_prompt:
+            print(f"  {Colors.WARNING}警告: 系统提示词 {self.role_name} 未加载{Colors.ENDC}")
             return False
         
         # 检查EmbeddingHandler是否初始化
@@ -379,11 +381,16 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         if not ICPChatHandler.is_initialized():
             ICPChatHandler.initialize_chat_interface(chat_handler_config)
         
-        # 加载角色
+        # 加载系统提示词
         app_data_store = get_app_data_store()
         app_prompt_dir_path = app_data_store.get_prompt_dir()
         app_sys_prompt_file_path = os.path.join(app_prompt_dir_path, f"{self.role_name}.md")
-        self.chat_handler.load_role_from_file(self.role_name, app_sys_prompt_file_path)
+        
+        try:
+            with open(app_sys_prompt_file_path, 'r', encoding='utf-8') as f:
+                self.sys_prompt = f.read()
+        except Exception as e:
+            print(f"错误: 读取系统提示词文件失败: {e}")
         
         # Embedding处理器配置
         if 'embedding_handler' in config_json_dict:

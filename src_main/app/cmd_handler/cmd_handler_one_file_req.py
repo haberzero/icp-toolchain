@@ -35,6 +35,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
 
         self.chat_handler = ICPChatHandler()
         self.role_one_file_req = "6_one_file_req_gen"
+        self.sys_prompt = ""  # 系统提示词,在_init_ai_handlers中加载
         
         # 初始化issue recorder和上一次生成的内容
         self.issue_recorder = TextIssueRecorder()
@@ -177,6 +178,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             # 获取模型输出
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_one_file_req,
+                sys_prompt=self.sys_prompt,
                 user_prompt=user_prompt_ofr
             ))
             
@@ -439,8 +441,8 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         if not ICPChatHandler.is_initialized():
             print(f"  {Colors.FAIL}错误: ChatInterface 未正确初始化{Colors.ENDC}")
             return False
-        if not self.chat_handler.has_role(self.role_one_file_req):
-            print(f"  {Colors.FAIL}错误: 角色 {self.role_one_file_req} 未加载{Colors.ENDC}")
+        if not self.sys_prompt:
+            print(f"  {Colors.FAIL}错误: 系统提示词 {self.role_one_file_req} 未加载{Colors.ENDC}")
             return False
         return True
     
@@ -474,8 +476,13 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         if not ICPChatHandler.is_initialized():
             ICPChatHandler.initialize_chat_interface(handler_config)
         
+        # 加载系统提示词
         app_data_store = get_app_data_store()
         app_prompt_dir_path = app_data_store.get_prompt_dir()
         app_sys_prompt_file_path = os.path.join(app_prompt_dir_path, self.role_one_file_req + ".md")
         
-        self.chat_handler.load_role_from_file(self.role_one_file_req, app_sys_prompt_file_path)
+        try:
+            with open(app_sys_prompt_file_path, 'r', encoding='utf-8') as f:
+                self.sys_prompt = f.read()
+        except Exception as e:
+            print(f"错误: 读取系统提示词文件失败: {e}")

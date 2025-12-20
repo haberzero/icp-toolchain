@@ -37,6 +37,7 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         # 使用新的 ICPChatHandler
         self.chat_handler = ICPChatHandler()
         self.role_name = "5_depend_analyzer"
+        self.sys_prompt = ""  # 系统提示词,在_init_ai_handlers中加载
         
         # 初始化issue recorder和上一次生成的内容
         self.issue_recorder = TextIssueRecorder()
@@ -67,6 +68,7 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             print(f"{self.role_name}正在进行第 {attempt + 1} 次尝试...")
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_name,
+                sys_prompt=self.sys_prompt,
                 user_prompt=user_prompt
             ))
             
@@ -273,9 +275,9 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: ChatInterface 未正确初始化{Colors.ENDC}")
             return False
         
-        # 检查角色是否已加载
-        if not self.chat_handler.has_role(self.role_name):
-            print(f"  {Colors.FAIL}错误: 角色 {self.role_name} 未加载{Colors.ENDC}")
+        # 检查系统提示词是否加载
+        if not self.sys_prompt:
+            print(f"  {Colors.FAIL}错误: 系统提示词 {self.role_name} 未加载{Colors.ENDC}")
             return False
             
         return True
@@ -319,5 +321,9 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         prompt_file_name = self.role_name + ".md"
         app_sys_prompt_file_path = os.path.join(app_prompt_dir_path, prompt_file_name)
         
-        # 从文件加载角色提示词
-        self.chat_handler.load_role_from_file(self.role_name, app_sys_prompt_file_path)
+        # 读取系统提示词文件
+        try:
+            with open(app_sys_prompt_file_path, 'r', encoding='utf-8') as f:
+                self.sys_prompt = f.read()
+        except Exception as e:
+            print(f"错误: 读取系统提示词文件失败: {e}")
