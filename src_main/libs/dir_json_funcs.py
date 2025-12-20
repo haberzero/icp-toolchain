@@ -60,11 +60,15 @@ class DirJsonFuncs:
         return circular_dependencies if circular_dependencies else []
     
     @staticmethod
-    def ensure_all_files_in_dependent_relation(json_content: Dict) -> bool:
+    def find_missing_files_in_dependent_relation(json_content: Dict) -> List[str]:
         """
-        确保proj_root_dict下的所有文件都在dependent_relation中有对应的条目
-        如果没有，则添加一个空的依赖列表
-        返回是否进行了修改
+        检查proj_root_dict下的所有文件是否都在dependent_relation中有对应的条目
+        
+        Args:
+            json_content: 包含proj_root_dict和dependent_relation的JSON字典
+            
+        Returns:
+            List[str]: 缺失文件路径列表，空列表表示所有文件都有对应条目
         """
         proj_root_dict = json_content.get("proj_root_dict", {})
         dependent_relation = json_content.get("dependent_relation", {})
@@ -85,15 +89,8 @@ class DirJsonFuncs:
         dependent_files = set(dependent_relation.keys())
         missing_files = proj_root_dict_paths - dependent_files
         
-        # 为缺失的文件添加空的依赖列表
-        modified = False
-        for file_path in missing_files:
-            dependent_relation[file_path] = []
-            modified = True
-        
-        # 更新json_content中的dependent_relation
-        json_content["dependent_relation"] = dependent_relation
-        return modified
+        # 返回排序后的缺失文件列表（不做任何修改）
+        return sorted(missing_files)
 
     @staticmethod
     def build_file_creation_order(dependencies: Dict[str, List[str]]) -> List[str]:
@@ -185,53 +182,86 @@ class DirJsonFuncs:
         return result
 
     @staticmethod
-    def compare_structure(old_node: Any, new_node: Any) -> bool:
+    def compare_structure(old_node: Any, new_node: Any, path: str = "") -> List[str]:
         """
         递归比较结构
         检查新节点结构是否与旧节点结构一致
         主要提供给dir_file_fill命令使用
+        
+        Args:
+            old_node: 旧节点
+            new_node: 新节点
+            path: 当前路径（用于错误信息）
+            
+        Returns:
+            List[str]: 不一致的错误列表，空列表表示结构一致
         """
+        errors = []
+        
         # 如果旧节点是字典
         if isinstance(old_node, dict):
             # 新节点也必须是字典
             if not isinstance(new_node, dict):
-                return False
+                errors.append(f"路径 '{path}': 旧节点是字典，但新节点不是字典")
+                return errors
             
             # 检查旧节点的所有键是否都存在于新节点中
             old_keys = set(old_node.keys())
             new_keys = set(new_node.keys())
             
             # 旧键集合必须是新键集合的子集
-            if not old_keys.issubset(new_keys):
-                return False
+            missing_keys = old_keys - new_keys
+            if missing_keys:
+                for key in missing_keys:
+                    key_path = f"{path}/{key}" if path else key
+                    errors.append(f"路径 '{key_path}': 旧节点中存在的键在新节点中缺失")
             
             # 递归检查每个键的值
             for key, old_value in old_node.items():
+                if key not in new_node:
+                    continue  # 已经在上面报告过了
+                    
                 new_value = new_node[key]
+                key_path = f"{path}/{key}" if path else key
+                
                 # 如果旧节点值是字典，递归比较
                 if isinstance(old_value, dict):
-                    if not DirJsonFuncs.compare_structure(old_value, new_value):
-                        return False
+                    sub_errors = DirJsonFuncs.compare_structure(old_value, new_value, key_path)
+                    errors.extend(sub_errors)
                 # 如果旧节点值不是字典（叶节点），新节点对应位置也必须不是字典
                 elif isinstance(new_value, dict):
-                    return False
+                    errors.append(f"路径 '{key_path}': 旧节点是叶节点（非字典），但新节点是字典")
                         
-        return True
+        return errors
     
     @staticmethod
-    def check_new_nodes_are_strings(node):
-        """检查是否只添加了字符串类型的叶子节点"""
+    def check_new_nodes_are_strings(node, path: str = "") -> List[str]:
+        """
+        检查是否只添加了字符串类型的叶子节点
+        
+        Args:
+            node: 要检查的节点
+            path: 当前路径（用于错误信息）
+            
+        Returns:
+            List[str]: 非字符串叶子节点的错误列表，空列表表示所有叶子节点都是字符串
+        """
+        errors = []
+        
         if isinstance(node, dict):
             for key, value in node.items():
+                key_path = f"{path}/{key}" if path else key
+                
                 # 如果值是字典，递归检查
                 if isinstance(value, dict):
-                    if not DirJsonFuncs.check_new_nodes_are_strings(value):
-                        return False
+                    sub_errors = DirJsonFuncs.check_new_nodes_are_strings(value, key_path)
+                    errors.extend(sub_errors)
                 # 如果值不是字典，那它必须是字符串（文件描述）
                 elif not isinstance(value, str):
-                    return False
-            return True
-        return True
+                    value_type = type(value).__name__
+                    errors.append(f"路径 '{key_path}': 叶子节点不是字符串类型（实际类型: {value_type}，值: {value}）")
+        
+        return errors
 
     @staticmethod
     def _collect_paths(node: Any, current_path: str = "", paths: Optional[Set[str]] = None) -> Set[str]:
@@ -283,16 +313,22 @@ class DirJsonFuncs:
         return list(paths)
 
     @staticmethod
-    def validate_dependent_paths(dependent_relation: Dict[str, Any], proj_root_dict: Dict[str, Any]) -> tuple[bool, List[str]]:
+    def check_dependent_paths_existence(dependent_relation: Dict[str, Any], proj_root_dict: Dict[str, Any]) -> List[str]:
         """
         检查dependent_relation中的依赖路径是否都存在于proj_root_dict中
-        返回: (是否有效, 错误信息列表)
+        
+        Args:
+            dependent_relation: 依赖关系字典
+            proj_root_dict: 项目根目录字典
+            
+        Returns:
+            List[str]: 错误信息列表，空列表表示所有路径都存在
         """
         errors = []
         
         if not isinstance(dependent_relation, dict):
             errors.append("dependent_relation 不是有效的字典类型")
-            return False, errors
+            return errors
             
         # 收集proj_root_dict中的所有路径
         proj_root_dict_paths = DirJsonFuncs._collect_paths(proj_root_dict)
@@ -313,4 +349,4 @@ class DirJsonFuncs:
                 if sub_dep_key not in proj_root_dict_paths:
                     errors.append(f"dependent_relation 中 '{dep_key}' 依赖的路径 '{sub_dep_key}' 在 proj_root_dict 中不存在")
         
-        return len(errors) == 0, errors
+        return errors

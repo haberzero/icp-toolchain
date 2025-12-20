@@ -63,11 +63,11 @@ def test_detect_circular_dependencies():
     assert len(cycles) == 0, "不应该检测到循环依赖"
     print("  ✓ 成功确认无循环依赖")
 
-def test_ensure_all_files_in_dependent_relation():
-    """测试确保所有文件在依赖关系中"""
-    print("测试 ensure_all_files_in_dependent_relation 函数...")
+def test_find_missing_files_in_dependent_relation():
+    """测试查找缺失文件功能"""
+    print("测试 find_missing_files_in_dependent_relation 函数...")
     
-    # 测试用例: 包含文件但缺少依赖关系条目的JSON
+    # 测试用例1: 包含文件但缺少依赖关系条目的JSON
     json_content = {
         "proj_root_dict": {
             "src": {
@@ -101,25 +101,42 @@ def test_ensure_all_files_in_dependent_relation():
     original_size = len(json_content["dependent_relation"])
     
     # 执行函数
-    modified = DirJsonFuncs.ensure_all_files_in_dependent_relation(json_content)
+    missing_files = DirJsonFuncs.find_missing_files_in_dependent_relation(json_content)
     
     # 验证结果
-    assert modified, "应该对JSON内容进行了修改"
-    assert len(json_content["dependent_relation"]) > original_size, "dependent_relation应该增加了条目"
+    assert len(missing_files) > 0, f"应该发现缺失的文件，但返回: {missing_files}"
+    print(f"  ✓ 成功检测到 {len(missing_files)} 个缺失文件: {missing_files}")
     
-    # 验证所有文件都有对应的依赖关系条目
-    expected_files = {
-        "src/models/Heptagon",
-        "src/models/Ball",
-        "src/controllers/PhysicsEngine",
-        "src/controllers/CollisionDetector",
-        "src/services/Renderer",
-        "src/views/SimulationLoop"
+    # 验证函数没有修改JSON内容
+    assert len(json_content["dependent_relation"]) == original_size, "dependent_relation不应该被修改"
+    print("  ✓ 确认函数没有自动修改dependent_relation")
+    
+    # 测试用例2: 所有文件都有对应条目
+    complete_json = {
+        "proj_root_dict": {
+            "src": {
+                "models": {
+                    "Heptagon": "管理正七边形几何属性与边界检测",
+                    "Ball": "封装球体物理状态与自转渲染逻辑"
+                },
+                "controllers": {
+                    "PhysicsEngine": "实现重力、摩擦与碰撞响应算法"
+                }
+            }
+        },
+        "dependent_relation": {
+            "src/models/Heptagon": [],
+            "src/models/Ball": [],
+            "src/controllers/PhysicsEngine": [
+                "src/models/Ball",
+                "src/models/Heptagon"
+            ]
+        }
     }
     
-    actual_files = set(json_content["dependent_relation"].keys())
-    assert expected_files.issubset(actual_files), "所有文件都应该在dependent_relation中有条目"
-    print("  ✓ 成功为缺失的文件添加了依赖关系条目")
+    missing_files = DirJsonFuncs.find_missing_files_in_dependent_relation(complete_json)
+    assert len(missing_files) == 0, f"不应该有缺失文件，但发现: {missing_files}"
+    print("  ✓ 成功验证无缺失文件时返回空列表")
 
 
 def test_build_file_creation_order():
@@ -223,7 +240,7 @@ def test_compare_structure():
     }
     
     result = DirJsonFuncs.compare_structure(old_structure, new_structure)
-    assert result, "结构应该匹配"
+    assert len(result) == 0, f"结构应该匹配，但发现错误: {result}"
     print("  ✓ 成功比较了结构一致性")
     
     # 测试用例2: 不同结构
@@ -236,8 +253,8 @@ def test_compare_structure():
     }
     
     result = DirJsonFuncs.compare_structure(old_structure, different_structure)
-    assert not result, "结构应该不匹配"
-    print("  ✓ 成功检测到结构不一致")
+    assert len(result) > 0, "结构应该不匹配"
+    print(f"  ✓ 成功检测到结构不一致: {result}")
 
 def test_collect_paths():
     """测试路径收集功能"""
@@ -270,9 +287,9 @@ def test_collect_paths():
     print("  ✓ 成功收集了所有文件路径")
     print(f"  收集到的路径: {paths}")
 
-def test_validate_dependent_paths():
-    """测试依赖路径验证功能"""
-    print("测试 validate_dependent_paths 函数...")
+def test_check_dependent_paths_existence():
+    """测试依赖路径存在性检查功能"""
+    print("测试 check_dependent_paths_existence 函数...")
     
     proj_root_dict = {
         "src": {
@@ -294,8 +311,8 @@ def test_validate_dependent_paths():
         ]
     }
     
-    result, _ = DirJsonFuncs.validate_dependent_paths(valid_dependent_relation, proj_root_dict)
-    assert result, "依赖路径应该有效"
+    errors = DirJsonFuncs.check_dependent_paths_existence(valid_dependent_relation, proj_root_dict)
+    assert len(errors) == 0, f"依赖路径应该有效，但发现错误: {errors}"
     print("  ✓ 成功验证了有效的依赖路径")
     
     # 测试用例2: 无效的依赖关系
@@ -305,9 +322,9 @@ def test_validate_dependent_paths():
         ]
     }
     
-    result, _ = DirJsonFuncs.validate_dependent_paths(invalid_dependent_relation, proj_root_dict)
-    assert not result, "依赖路径应该无效"
-    print("  ✓ 成功检测到无效的依赖路径")
+    errors = DirJsonFuncs.check_dependent_paths_existence(invalid_dependent_relation, proj_root_dict)
+    assert len(errors) > 0, "依赖路径应该无效"
+    print(f"  ✓ 成功检测到无效的依赖路径: {errors}")
 
 def test_check_new_nodes_are_strings():
     """测试检查新节点是否为字符串功能"""
@@ -327,7 +344,7 @@ def test_check_new_nodes_are_strings():
     }
     
     result = DirJsonFuncs.check_new_nodes_are_strings(valid_node)
-    assert result, "所有新节点都是字符串，应该返回True"
+    assert len(result) == 0, f"所有新节点都是字符串，应该返回空列表，但发现错误: {result}"
     print("  ✓ 成功验证了所有节点都是字符串")
     
     # 测试用例2: 包含非字符串叶子节点（错误情况）
@@ -341,8 +358,8 @@ def test_check_new_nodes_are_strings():
     }
     
     result = DirJsonFuncs.check_new_nodes_are_strings(invalid_node)
-    assert not result, "包含非字符串叶子节点，应该返回False"
-    print("  ✓ 成功检测到非字符串节点")
+    assert len(result) > 0, "包含非字符串叶子节点，应该返回错误列表"
+    print(f"  ✓ 成功检测到非字符串节点: {result}")
     
     # 测试用例3: 包含嵌套字典但叶子节点都是字符串（正确情况）
     nested_valid_node = {
@@ -360,7 +377,7 @@ def test_check_new_nodes_are_strings():
     }
     
     result = DirJsonFuncs.check_new_nodes_are_strings(nested_valid_node)
-    assert result, "所有叶子节点都是字符串，应该返回True"
+    assert len(result) == 0, f"所有叶子节点都是字符串，应该返回空列表，但发现错误: {result}"
     print("  ✓ 成功验证了嵌套结构中所有节点都是字符串")
 
 if __name__ == "__main__":
@@ -370,7 +387,7 @@ if __name__ == "__main__":
         test_detect_circular_dependencies()
         print()
         
-        test_ensure_all_files_in_dependent_relation()
+        test_find_missing_files_in_dependent_relation()
         print()
         
         test_build_file_creation_order()
@@ -385,7 +402,7 @@ if __name__ == "__main__":
         test_collect_paths()
         print()
         
-        test_validate_dependent_paths()
+        test_check_dependent_paths_existence()
         print()
         
         test_check_new_nodes_are_strings()
