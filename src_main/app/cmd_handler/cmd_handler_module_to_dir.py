@@ -13,7 +13,7 @@ from data_store.user_data_store import get_instance as get_user_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
-from utils.issue_recorder import JsonIssueRecorder
+from utils.issue_recorder import TextIssueRecorder
 
 
 
@@ -43,7 +43,7 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         self.user_prompt_retry_part = ""  # 用户提示词重试部分
         
         # 初始化issue recorder和上一次生成的内容
-        self.issue_recorder = JsonIssueRecorder()
+        self.issue_recorder = TextIssueRecorder()
         self.last_generated_content = None  # 上一次生成的内容
         
         self._init_ai_handlers()
