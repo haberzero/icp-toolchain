@@ -15,13 +15,15 @@ IBC的关键字只在行开头被认为是关键字，其它地方出现的关�
 - 必须在文件顶部，`module` 关键字只在行开头有效
 - 模块路径用 `.` 分隔，如 `utils.logger` → `utils/logger.ibc`
 - 不包含扩展名
+- 引用的模块/符号在当前文件中始终保持可见，可以使用`$`符号直接引用
 
 **示例**：
 
 ```Intent Behavior Code
 module utils.logger: 日志工具模块
-module threading: Python系统线程库
-module database.conn.pool: 数据库连接池
+
+func 初始化应用():
+    日志器 = $logger.Logger(配置对象.log_level)
 ```
 
 ### 2. 函数定义 (func)
