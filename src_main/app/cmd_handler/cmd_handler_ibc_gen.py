@@ -9,7 +9,7 @@ from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
 from typedef.ibc_data_types import (
     IbcBaseAstNode, AstNodeType, ClassNode, FunctionNode, VariableNode, 
-    VisibilityTypes, SymbolType, SymbolNode
+    VisibilityTypes, SymbolType
 )
 
 from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
@@ -53,9 +53,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self.work_icp_config_file_path = os.path.join(self.work_config_dir_path, 'icp_config.json')
 
         self.role_ibc_gen = "7_intent_behavior_code_gen"
-        self.role_symbol_normalizer = "7_symbol_normalizer"
         self.sys_prompt_ibc_gen = ""  # 系统提示词,在_init_ai_handlers中加载
-        self.sys_prompt_symbol_normalizer = ""  # 系统提示词,在_init_ai_handlers中加载
         self.chat_handler = ICPChatHandler()
         self._init_ai_handlers()
     
@@ -336,13 +334,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             else:
                 print(f"    {Colors.WARNING}警告: AST保存失败{Colors.ENDC}")
             
-            # 创建规范化符号（带重试）
-            # normalized_symbols_dict = self._create_normalized_symbols(icp_json_file_path, symbol_table, ibc_code)
-            # if not normalized_symbols_dict:
-            #     print(f"    {Colors.WARNING}警告: 符号规范化失败{Colors.ENDC}")
-            #     continue
-            
-            # 符号规范化成功，返回成功
+            # IBC代码和AST保存成功，返回成功
             return True
         
         # 达到最大重试次数
@@ -507,124 +499,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             str: 可用符号的文本描述
         """
         return IbcFuncs.build_available_symbols_text(dependencies, work_ibc_dir_path)
-    
-    def _create_normalized_symbols(
-        self, 
-        icp_json_file_path: str,
-        symbol_table: Dict[str, SymbolNode],
-        ibc_code: str
-    ):
-        """创建规范化符号（带重试机制）
-        
-        Args:
-            icp_json_file_path: 文件路径
-            symbol_table: 符号表字典
-            ibc_code: IBC代码
-            
-        Returns:
-            Optional[Dict[str, Dict[str, str]]]: 成功时返回规范化符号字典，失败时返回None
-        """
-        print(f"    正在进行符号规范化...")
-        
-        symbols = symbol_table
-        if not symbols:
-            print(f"    {Colors.WARNING}警告: 未从符号表中提取到符号{Colors.ENDC}")
-            return False, {}
-        
-        # 检查AI处理器
-        if not self.sys_prompt_symbol_normalizer:
-            print(f"    {Colors.FAIL}错误: 符号规范化系统提示词未加载{Colors.ENDC}")
-            return False, {}
-        
-        # 带重试的规范化调用，因为本身是在单文件ibc源码生成的流程中再嵌套调用，所以重试次数设为2
-        max_attempts = 2
-        for attempt in range(max_attempts):
-            if attempt > 0:
-                print(f"    正在重试符号规范化... (尝试 {attempt + 1}/{max_attempts})")
-            
-            # 构建提示词
-            user_prompt = self._build_user_prompt_for_symbol_normalizer(icp_json_file_path, symbols, ibc_code)
-            
-            # 调用AI进行规范化
-            response_content, success = asyncio.run(self.chat_handler.get_role_response(
-                role_name=self.role_symbol_normalizer,
-                sys_prompt=self.sys_prompt_symbol_normalizer,
-                user_prompt=user_prompt
-            ))
-            
-            if not success:
-                print(f"    {Colors.WARNING}警告: AI响应失败{Colors.ENDC}")
-                continue
-            
-            # 解析响应
-            cleaned_response = ICPChatHandler.clean_code_block_markers(response_content)
-            normalized_symbols = IbcFuncs.parse_symbol_normalizer_response(cleaned_response)
-            if normalized_symbols:
-                return True, normalized_symbols
-            else:
-                print(f"    {Colors.WARNING}警告: AI返回的符号规范化结果为空{Colors.ENDC}")
-                continue
-        
-        # 达到最大重试次数
-        print(f"    {Colors.FAIL}符号规范化失败：AI未能返回有效结果（已重试{max_attempts}次）{Colors.ENDC}")
-        return False, {}
-
-    def _build_user_prompt_for_symbol_normalizer(self, icp_json_file_path: str, symbols: Dict[str, SymbolNode], ibc_code: str) -> str:
-        """
-        构建符号规范化的用户提示词（role_symbol_normalizer）
-        
-        从配置文件中直接读取所需信息，无需外部参数传递。
-        
-        Args:
-            icp_json_file_path: 当前文件路径
-            symbols: 当前符号字典
-            ibc_code: 当前IBC代码
-        
-        Returns:
-            str: 完整的用户提示词，失败时抛出RuntimeError
-        """
-        # 读取提示词模板
-        app_data_store = get_app_data_store()
-        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'symbol_normalizer_user.md')
-        try:
-            with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
-                user_prompt_template_str = f.read()
-        except Exception as e:
-            raise RuntimeError(f"读取符号规范化提示词失败: {e}")
-        
-        # 获取目标语言
-        target_language = self._get_target_language()
-        
-        # 格式化符号列表
-        symbols_text = self._format_symbols_for_prompt(symbols)
-        
-        # 填充占位符
-        user_prompt_str = user_prompt_template_str.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
-        user_prompt_str = user_prompt_str.replace('FILE_PATH_PLACEHOLDER', icp_json_file_path)
-        user_prompt_str = user_prompt_str.replace('CONTEXT_INFO_PLACEHOLDER', ibc_code)
-        user_prompt_str = user_prompt_str.replace('AST_SYMBOLS_PLACEHOLDER', symbols_text)
-        
-        return user_prompt_str
-
-    def _get_target_language(self) -> str:
-        """获取目标编程语言"""
-        work_icp_config_file_path = os.path.join(self.work_config_dir_path, 'icp_config.json')
-        try:
-            with open(work_icp_config_file_path, 'r', encoding='utf-8') as f:
-                icp_config_json_dict = json.load(f)
-            return icp_config_json_dict.get('target_language', 'python')
-        except Exception as e:
-            print(f"{Colors.WARNING}警告: 读取配置文件失败: {e}，使用默认语言python{Colors.ENDC}")
-            return 'python'
-    
-    def _format_symbols_for_prompt(self, symbols: Dict[int, SymbolNode]) -> str:
-        """格式化符号列表用于提示词"""
-        lines = []
-        for uid, symbol in symbols.items():
-            symbol_type = symbol.symbol_type.value if symbol.symbol_type else '未知'
-            description = symbol.description if symbol.description else '无描述'
-            lines.append(f"- {symbol.symbol_name} ({symbol_type}, 描述: {description})")
-        return '\n'.join(lines)
         
 
     def is_cmd_valid(self):
@@ -735,17 +609,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         app_prompt_dir_path = app_data_store.get_prompt_dir()
         
         # 加载IBC生成角色
-        sys_prompt_path_1 = os.path.join(app_prompt_dir_path, f"{self.role_ibc_gen}.md")
+        sys_prompt_path = os.path.join(app_prompt_dir_path, f"{self.role_ibc_gen}.md")
         try:
-            with open(sys_prompt_path_1, 'r', encoding='utf-8') as f:
+            with open(sys_prompt_path, 'r', encoding='utf-8') as f:
                 self.sys_prompt_ibc_gen = f.read()
         except Exception as e:
             print(f"错误: 读取系统提示词文件失败 ({self.role_ibc_gen}): {e}")
-        
-        # 加载符号规范化角色
-        sys_prompt_path_2 = os.path.join(app_prompt_dir_path, f"{self.role_symbol_normalizer}.md")
-        try:
-            with open(sys_prompt_path_2, 'r', encoding='utf-8') as f:
-                self.sys_prompt_symbol_normalizer = f.read()
-        except Exception as e:
-            print(f"错误: 读取系统提示词文件失败 ({self.role_symbol_normalizer}): {e}")

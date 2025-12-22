@@ -55,7 +55,7 @@ class IbcFuncs:
         """
         try:
             # 解析JSON
-            result = json.loads(cleaned_response)
+            result = json.loads(response)
             
             # 有效的可见性值列表
             valid_visibilities = [v.value for v in VisibilityTypes]

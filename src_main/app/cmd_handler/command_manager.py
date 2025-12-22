@@ -10,6 +10,7 @@ from .cmd_handler_dir_file_fill import CmdHandlerDirFileFill
 from .cmd_handler_depend_analysis import CmdHandlerDependAnalysis
 from .cmd_handler_one_file_req import CmdHandlerOneFileReq
 from .cmd_handler_ibc_gen import CmdHandlerIbcGen
+from .cmd_handler_symbol_normalize import CmdHandlerSymbolNormalize
 # from .cmd_handler_code_gen import CmdHandlerCodeGen
 
 
@@ -93,6 +94,10 @@ class CommandManager:
         # 半自然语言行为描述代码生成命令
         intent_behavior_code_gen_cmd = CmdHandlerIbcGen()
         commands.append(intent_behavior_code_gen_cmd)
+
+        # 符号规范化命令
+        symbol_normalize_cmd = CmdHandlerSymbolNormalize()
+        commands.append(symbol_normalize_cmd)
 
         # 目标代码生成命令
         # code_gen_cmd = CmdHandlerCodeGen()
