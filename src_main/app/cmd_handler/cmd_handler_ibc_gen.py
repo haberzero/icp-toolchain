@@ -22,6 +22,7 @@ from utils.icp_ai_handler import ICPChatHandler
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.ibc_funcs import IbcFuncs
+from utils.issue_recorder import IbcIssueRecorder
 
 
 class CmdHandlerIbcGen(BaseCmdHandler):
@@ -55,6 +56,11 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self.role_ibc_gen = "7_intent_behavior_code_gen"
         self.sys_prompt_ibc_gen = ""  # 系统提示词,在_init_ai_handlers中加载
         self.chat_handler = ICPChatHandler()
+
+        # 初始化issue recorder和上一次生成的内容
+        self.ibc_issue_recorder = IbcIssueRecorder()
+        self.last_generated_ibc_content = None  # 上一次生成的内容
+
         self._init_ai_handlers()
     
     def execute(self):
@@ -256,22 +262,19 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                     # 递归传播
                     self._propagate_update_to_dependents(potential_dependent, need_update_flag_dict)
     
-    def _create_single_ibc_file(self, icp_json_file_path: str) -> bool:
+    def _create_single_ibc_file(self, icp_json_file_path: str):
         """为单个文件生成IBC代码（包含重试机制）
         
         Args:
             icp_json_file_path: 文件路径
-            
-        Returns:
-            bool: 是否成功生成
         """
         print(f"  {Colors.OKBLUE}正在处理文件: {icp_json_file_path}{Colors.ENDC}")
         
         # 检查是否需要更新
         if not self.need_update_flag_dict.get(icp_json_file_path, False):
             print(f"    {Colors.WARNING}文件及其依赖均未变化，跳过生成: {icp_json_file_path}{Colors.ENDC}")
-            return True
-        
+            return
+
         # 带重试的生成逻辑
         max_attempts = 3
         for attempt in range(max_attempts):
@@ -281,7 +284,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             user_prompt = self._build_user_prompt_for_ibc_generator(icp_json_file_path)
             if not user_prompt:
                 print(f"{Colors.FAIL}错误: 用户提示词构建失败，终止执行{Colors.ENDC}")
-                return False
+                return
             
             # 将用户提示词保存到stage文件夹以便查看生成过程
             self._save_user_prompt_to_stage(icp_json_file_path, user_prompt, attempt + 1)
@@ -301,18 +304,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             ibc_code = ICPChatHandler.clean_code_block_markers(response_content)
 
             # 解析IBC代码生成AST
-            print(f"    正在分析IBC代码生成AST...")
-            try:
-                ast_dict, symbol_table = analyze_ibc_code(ibc_code)
-            except Exception as e:
-                # 捕获非预期IBC分析错误
-                print(f"    {Colors.FAIL}错误: IBC分析过程出错，遇到非预期的错误{Colors.ENDC}")
-                print(f"    {Colors.FAIL}错误类型: {type(e).__name__}{Colors.ENDC}")
-                print(f"    {Colors.FAIL}错误信息: {str(e)}{Colors.ENDC}")
-                import traceback
-                print(f"    {Colors.FAIL}错误堆栈:{Colors.ENDC}")
-                traceback.print_exc()
-                return False
+            print(f"    {Colors.OKBLUE}正在分析IBC代码生成AST...{Colors.ENDC}")
+            ast_dict, symbol_table = analyze_ibc_code(ibc_code, self.ibc_issue_recorder)
             
             # 检查是否得到有效的AST和符号表
             if not ast_dict or not symbol_table:
@@ -331,11 +324,11 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             print(f"    {Colors.OKGREEN}AST已保存: {ast_path}{Colors.ENDC}")
             
             # IBC代码和AST保存成功，返回成功
-            return True
+            return
         
         # 达到最大重试次数
         print(f"  {Colors.FAIL}已达到最大重试次数({max_attempts})，跳过该文件{Colors.ENDC}")
-        return False
+        return
 
     def _build_user_prompt_for_ibc_generator(self, icp_json_file_path: str) -> str:
         """
@@ -349,19 +342,11 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         Returns:
             str: 完整的用户提示词，失败时返回空字符串
         """
-        # 读取文件需求描述
-        req_file_path = os.path.join(self.work_staging_dir_path, f"{icp_json_file_path}_one_file_req.txt")
-        try:
-            with open(req_file_path, 'r', encoding='utf-8') as f:
-                file_req_str = f.read()
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取文件需求描述失败: {e}{Colors.ENDC}")
-            return ""
         
         # 构建可用符号文本
         try:
             dependencies = self.dependent_relation.get(icp_json_file_path, [])
-            available_symbols_text = self._build_available_symbols_text(dependencies, self.work_ibc_dir_path)
+            available_symbols_text = IbcFuncs.build_available_symbols_text(dependencies, work_ibc_dir_path)
         except Exception as e:
             print(f"  {Colors.WARNING}警告: 构建可用符号失败: {e}，继续生成{Colors.ENDC}")
             available_symbols_text = '暂无可用的依赖符号'
@@ -375,8 +360,16 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         except Exception as e:
             print(f"  {Colors.WARNING}警告: 读取文件级实现规划失败: {e} {Colors.ENDC}")
             return ""
-        
-        # 提取各个部分的内容
+
+        # 读取文件需求描述
+        req_file_path = os.path.join(self.work_staging_dir_path, f"{icp_json_file_path}_one_file_req.txt")
+        try:
+            with open(req_file_path, 'r', encoding='utf-8') as f:
+                file_req_str = f.read()
+        except Exception as e:
+            print(f"  {Colors.FAIL}错误: 读取文件需求描述失败: {e}{Colors.ENDC}")
+            return ""
+
         class_content = self._extract_section_content(file_req_str, 'class')
         func_content = self._extract_section_content(file_req_str, 'func')
         var_content = self._extract_section_content(file_req_str, 'var')
@@ -483,19 +476,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                     section_lines.append(line)
         
         return '\n'.join(section_lines)
-    
-    def _build_available_symbols_text(self, dependencies: List[str], work_ibc_dir_path: str) -> str:
-        """构建可用符号的文本描述
-        
-        Args:
-            dependencies: 依赖文件列表
-            work_ibc_dir_path: IBC根目录路径
-            
-        Returns:
-            str: 可用符号的文本描述
-        """
-        return IbcFuncs.build_available_symbols_text(dependencies, work_ibc_dir_path)
-        
 
     def is_cmd_valid(self):
         return self._check_cmd_requirement() and self._check_ai_handler()
