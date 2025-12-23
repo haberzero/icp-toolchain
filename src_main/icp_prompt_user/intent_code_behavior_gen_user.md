@@ -52,7 +52,10 @@ CURRENT_FILE_PATH_PLACEHOLDER
 
 **可用的依赖符号：**
 
-以下是你可以在当前文件中调用的依赖文件中的符号（类、函数、变量）及其功能描述：
+以下是你可以在当前文件中调用的依赖文件中的符号（类、函数、变量）及其功能描述。
+
+- 每一行使用 `path.to.symbol` 的点号路径形式，对应一个可用符号
+- 行的基本格式为：`path.to.symbol: <符号的对外功能描述>`
 
 AVAILABLE_SYMBOLS_PLACEHOLDER
 
