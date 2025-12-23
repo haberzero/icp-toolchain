@@ -1,9 +1,9 @@
 """
 IBC可见符号表构建器
 
-负责构建当前文件的可见符号表。
-基于dependent_relation中定义的依赖关系，从依赖文件中提取public符号，
-结合proj_root_dict构建成树状结构。
+负责构建当前文件的可见符号树。
+调用方根据 dependent_relation 从依赖文件中加载符号表后传入本构建器，
+本构建器负责按可见性过滤并结合proj_root_dict构建成树状结构。
 """
 import os
 import json
@@ -17,44 +17,37 @@ class VisibleSymbolBuilder:
     可见符号表构建器
     
     职责：
-    1. 根据dependent_relation确定当前文件可见的依赖文件列表
-    2. 从这些依赖文件中加载符号表
-    3. 过滤掉private符号，只保留对外可见的符号
-    4. 结合proj_root_dict的结构，构建树状的可见符号表
+    1. 基于调用方传入的依赖符号表，构建当前文件可见的符号树
+    2. 过滤掉private符号，只保留对外可见的符号
+    3. 结合proj_root_dict的结构，构建树状的可见符号表
     """
     
-    def __init__(self, proj_root_dict: Dict, dependent_relation: Dict[str, List[str]]):
-        """
-        初始化可见符号表构建器
+    def __init__(self, proj_root_dict: Dict):
+        """初始化可见符号表构建器
         
         Args:
             proj_root_dict: 项目根目录字典，描述文件/文件夹结构
-            dependent_relation: 依赖关系字典，格式为 {文件路径: [依赖文件列表]}
         """
         self.proj_root_dict = proj_root_dict
-        self.dependent_relation = dependent_relation
         
         print(f"初始化可见符号表构建器")
         print(f"  项目文件总数: {len(DirJsonFuncs.get_all_file_paths(proj_root_dict))}")
-        print(f"  依赖关系条目: {len(dependent_relation)}")
     
     def build_visible_symbol_tree(
         self, 
-        current_file_path: str, 
-        work_ibc_dir_path: str
+        current_file_path: str,
+        dependency_symbol_tables: Dict[str, Dict[str, SymbolNode]]
     ) -> Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]:
-        """
-        构建当前文件的可见符号树
+        """构建当前文件的可见符号树
         
         处理流程：
-        1. 从dependent_relation获取当前文件的依赖列表
-        2. 对每个依赖文件，加载其符号表
-        3. 过滤private符号
-        4. 将符号组织成树状结构，元数据单独存储
+        1. 调用方根据 dependent_relation 从 IBC 目录加载依赖符号表
+        2. 本方法对符号表进行可见性过滤
+        3. 将符号组织成树状结构，元数据单独存储
         
         Args:
-            current_file_path: 当前正在处理的文件路径（relative path）
-            work_ibc_dir_path: IBC文件根目录的绝对路径
+            current_file_path: 当前正在处理的文件路径（relative path，仅用于日志输出）
+            dependency_symbol_tables: 依赖文件路径到符号表的映射
             
         Returns:
             Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]:
@@ -65,25 +58,21 @@ class VisibleSymbolBuilder:
         """
         print(f"开始构建可见符号树: {current_file_path}")
         
-        # 获取当前文件的依赖列表
-        dependencies = self.dependent_relation.get(current_file_path, [])
-        if not dependencies:
-            print(f"  当前文件无依赖，返回空符号树")
+        if not dependency_symbol_tables:
+            print(f"  当前文件无可用依赖符号，返回空符号树")
             return {}, {}
         
-        print(f"  依赖文件数: {len(dependencies)}")
+        print(f"  依赖文件数: {len(dependency_symbol_tables)}")
         
         # 构建可见符号树和元数据
-        symbols_tree = {}
-        symbols_metadata = {}
+        symbols_tree: Dict[str, Any] = {}
+        symbols_metadata: Dict[str, Dict[str, Any]] = {}
         
-        for dep_file_path in dependencies:
+        for dep_file_path, dep_symbols in dependency_symbol_tables.items():
             print(f"  处理依赖: {dep_file_path}")
             
-            # 加载依赖文件的符号表
-            dep_symbols = self._load_dependency_symbols(dep_file_path, work_ibc_dir_path)
             if not dep_symbols:
-                print(f"    警告: 无法加载符号表或符号表为空")
+                print(f"    警告: 依赖符号表为空")
                 continue
             
             # 过滤private符号
@@ -99,47 +88,12 @@ class VisibleSymbolBuilder:
         print(f"  可见符号树构建完成")
         return symbols_tree, symbols_metadata
     
-    def _load_dependency_symbols(
-        self, 
-        file_path: str, 
-        work_ibc_dir_path: str
-    ) -> Dict[str, SymbolNode]:
-        """
-        加载依赖文件的符号表
-        
-        Args:
-            file_path: 依赖文件路径（相对路径）
-            work_ibc_dir_path: IBC文件根目录的绝对路径
-            
-        Returns:
-            Dict[str, SymbolNode]: 符号表字典
-        """
-        try:
-            from data_store.ibc_data_store import get_instance as get_ibc_data_store
-            
-            ibc_data_store = get_ibc_data_store()
-            symbols_path = ibc_data_store.build_symbols_path(work_ibc_dir_path, file_path)
-            
-            # 检查文件是否存在
-            if not os.path.exists(symbols_path):
-                print(f"    符号表文件不存在: {symbols_path}")
-                return {}
-            
-            file_name = os.path.basename(file_path)
-            symbol_table = ibc_data_store.load_symbols(symbols_path, file_name)
-            
-            return symbol_table
-            
-        except Exception as e:
-            print(f"    加载符号表失败: {e}")
-            return {}
     
     def _filter_public_symbols(
         self, 
         symbol_table: Dict[str, SymbolNode]
     ) -> Dict[str, SymbolNode]:
-        """
-        过滤出对外可见的符号（排除private）
+        """过滤出对外可见的符号（排除private）
         
         Args:
             symbol_table: 完整符号表
@@ -147,7 +101,7 @@ class VisibleSymbolBuilder:
         Returns:
             Dict[str, SymbolNode]: 只包含public/protected符号的字典
         """
-        public_symbols = {}
+        public_symbols: Dict[str, SymbolNode] = {}
         
         for symbol_name, symbol in symbol_table.items():
             # 只保留非private的符号
@@ -163,8 +117,7 @@ class VisibleSymbolBuilder:
         file_path: str, 
         symbols: Dict[str, SymbolNode]
     ) -> None:
-        """
-        将符号插入到树状结构中，元数据单独存储
+        """将符号插入到树状结构中，元数据单独存储
         
         文件路径会被解析为目录层级，符号会挂载到文件节点下。
         
@@ -275,8 +228,7 @@ class VisibleSymbolBuilder:
         parent_node[symbol_name] = symbol_node
     
     def _get_file_description(self, file_path: str) -> str:
-        """
-        从proj_root_dict获取文件描述
+        """从proj_root_dict获取文件描述
         
         Args:
             file_path: 文件路径，如 "src/ball/ball_entity"

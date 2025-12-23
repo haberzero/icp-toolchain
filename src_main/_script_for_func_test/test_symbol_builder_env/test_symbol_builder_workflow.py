@@ -278,7 +278,6 @@ class SymbolBuilderWorkflowTest:
         # 3.1 创建VisibleSymbolBuilder（真实流程中在cmd_handler_ibc_gen中创建）
         builder = VisibleSymbolBuilder(
             proj_root_dict=proj_root_dict,
-            dependent_relation=dependent_relation
         )
         print(f"  [OK] VisibleSymbolBuilder已创建")
         
@@ -294,10 +293,22 @@ class SymbolBuilderWorkflowTest:
             print(f"\n  测试用例: {file_path} ({description})")
             
             # 使用真实的build_visible_symbol_tree方法
-            symbols_tree, symbols_metadata = builder.build_visible_symbol_tree(
+            if not self.ibc_data_store.is_dependency_symbol_tables_valid(
+                ibc_root=self.work_ibc_dir_path,
+                dependent_relation=dependent_relation,
                 current_file_path=file_path,
-                work_ibc_dir_path=self.work_ibc_dir_path
-            )
+            ):
+                symbols_tree, symbols_metadata = {}, {}
+            else:
+                dependency_symbol_tables = self.ibc_data_store.load_dependency_symbol_tables(
+                    ibc_root=self.work_ibc_dir_path,
+                    dependent_relation=dependent_relation,
+                    current_file_path=file_path,
+                )
+                symbols_tree, symbols_metadata = builder.build_visible_symbol_tree(
+                    current_file_path=file_path,
+                    dependency_symbol_tables=dependency_symbol_tables,
+                )
             
             results[file_path] = (symbols_tree, symbols_metadata)
             
@@ -380,15 +391,26 @@ class TestPhysics():
         # 5.1 重新创建VisibleSymbolBuilder
         builder = VisibleSymbolBuilder(
             proj_root_dict=proj_root_dict,
-            dependent_relation=dependent_relation
         )
         
         # 5.2 为测试文件构建可见符号树
         print(f"\n  为 {test_file_path} 构建可见符号树...")
-        symbols_tree, symbols_metadata = builder.build_visible_symbol_tree(
+        if not self.ibc_data_store.is_dependency_symbol_tables_valid(
+            ibc_root=self.work_ibc_dir_path,
+            dependent_relation=dependent_relation,
             current_file_path=test_file_path,
-            work_ibc_dir_path=self.work_ibc_dir_path
-        )
+        ):
+            symbols_tree, symbols_metadata = {}, {}
+        else:
+            dependency_symbol_tables = self.ibc_data_store.load_dependency_symbol_tables(
+                ibc_root=self.work_ibc_dir_path,
+                dependent_relation=dependent_relation,
+                current_file_path=test_file_path,
+            )
+            symbols_tree, symbols_metadata = builder.build_visible_symbol_tree(
+                current_file_path=test_file_path,
+                dependency_symbol_tables=dependency_symbol_tables,
+            )
         
         # 5.3 验证结果
         if symbols_tree:

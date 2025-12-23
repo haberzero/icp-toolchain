@@ -156,7 +156,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 初始化可见符号表构建器
         self.visible_symbol_builder = VisibleSymbolBuilder(
             proj_root_dict=self.proj_root_dict,
-            dependent_relation=self.dependent_relation
         )
         
         # 初始化更新状态.需要依赖self.file_creation_order_list等内容
@@ -352,23 +351,49 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         """
         
         # 使用可见符号表构建器构建当前文件的可见符号树
-        try:
-            symbols_tree, symbols_metadata = self.visible_symbol_builder.build_visible_symbol_tree(
-                current_file_path=icp_json_file_path,
-                work_ibc_dir_path=self.work_ibc_dir_path
-            )
-            
-            # TODO: 根据symbols_tree和symbols_metadata构建AI提示词
-            # 这里需要按照提示词格式要求来组织符号信息
-            # 暂时使用占位符
-            if symbols_tree:
-                available_symbols_text = "可用的依赖符号：\n\n[待实现：根据symbols_tree和symbols_metadata构建提示词]"
-            else:
-                available_symbols_text = '暂无可用的依赖符号'
-                
-        except Exception as e:
-            print(f"  {Colors.WARNING}警告: 构建可见符号失败: {e}，继续生成{Colors.ENDC}")
+        ibc_data_store = get_ibc_data_store()
+
+        # 先检查依赖符号表是否可用
+        if not ibc_data_store.is_dependency_symbol_tables_valid(
+            ibc_root=self.work_ibc_dir_path,
+            dependent_relation=self.dependent_relation,
+            current_file_path=icp_json_file_path,
+        ):
+            # 依赖符号不可用时，认为用户提示词构建失败
+            return ""
+
+        dependency_symbol_tables = ibc_data_store.load_dependency_symbol_tables(
+            ibc_root=self.work_ibc_dir_path,
+            dependent_relation=self.dependent_relation,
+            current_file_path=icp_json_file_path,
+        )
+
+        symbols_tree, symbols_metadata = self.visible_symbol_builder.build_visible_symbol_tree(
+            current_file_path=icp_json_file_path,
+            dependency_symbol_tables=dependency_symbol_tables,
+        )
+        
+        # 根据symbols_metadata构建可用依赖符号文本
+        # symbols_metadata的键为点号分隔的路径（如 src.ball.ball_entity.BallEntity.get_position）
+        # 这里只关心具体符号节点，忽略type为folder/file的元数据
+        available_symbol_lines = []
+        for symbol_path, meta in symbols_metadata.items():
+            meta_type = meta.get("type")
+            if meta_type in ("folder", "file"):
+                continue
+
+            desc = meta.get("description")
+            if not desc:
+                print(f"  {Colors.WARNING}警告: 依赖符号缺少对外功能描述: {symbol_path}{Colors.ENDC}")
+                desc = "没有对外功能描述"
+
+            available_symbol_lines.append(f"{symbol_path} ：{desc}")
+
+        if available_symbol_lines:
+            available_symbols_text = "可用的依赖符号（path.to.symbol ：对外功能描述）：\n\n" + "\n".join(available_symbol_lines)
+        else:
             available_symbols_text = '暂无可用的依赖符号'
+        
         
         # 读取文件级实现规划
         implementation_plan_file = os.path.join(self.work_data_dir_path, 'icp_implementation_plan.txt')

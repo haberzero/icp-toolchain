@@ -230,6 +230,79 @@ class IbcDataStore:
             symbol_table[symbol_name] = symbol_node
         return symbol_table
     
+    def load_dependency_symbol_tables(
+        self,
+        ibc_root: str,
+        dependent_relation: Dict[str, List[str]],
+        current_file_path: str
+    ) -> Dict[str, Dict[str, SymbolNode]]:
+        """根据依赖关系为单个文件批量加载依赖符号表
+        
+        说明：
+            - 仅负责从 IBC 目录中加载符号表数据，不做可见性等业务过滤
+            - 返回值为 {依赖文件路径: 符号表dict} 的映射
+        
+        Args:
+            ibc_root: IBC 根目录路径
+            dependent_relation: 依赖关系字典 {文件路径: [依赖文件列表]}
+            current_file_path: 当前正在处理的文件路径
+        
+        Returns:
+            Dict[str, Dict[str, SymbolNode]]: 依赖文件到符号表的映射
+        """
+        dependencies = dependent_relation.get(current_file_path, [])
+        if not dependencies:
+            return {}
+
+        result: Dict[str, Dict[str, SymbolNode]] = {}
+
+        for dep_file_path in dependencies:
+            symbols_path = self.build_symbols_path(ibc_root, dep_file_path)
+            if not os.path.exists(symbols_path):
+                continue
+
+            file_name = os.path.basename(dep_file_path)
+            symbol_table = self.load_symbols(symbols_path, file_name)
+
+            if not symbol_table:
+                continue
+
+            result[dep_file_path] = symbol_table
+
+        return result
+
+    def is_dependency_symbol_tables_valid(
+        self,
+        ibc_root: str,
+        dependent_relation: Dict[str, List[str]],
+        current_file_path: str
+    ) -> bool:
+        """检查当前文件的依赖符号表是否都存在且有内容
+        
+        说明：
+            - 不进行任何print，仅通过返回值告知调用方是否可以继续后续动作
+            - 检查规则：
+              * 如果不存在依赖，则认为没有可用符号，返回 False
+              * 如果任一依赖文件的符号表文件不存在或无内容，则返回 False
+              * 仅当所有依赖的符号表文件都存在且有内容时返回 True
+        """
+        dependencies = dependent_relation.get(current_file_path, [])
+        if not dependencies:
+            return False
+
+        for dep_file_path in dependencies:
+            symbols_path = self.build_symbols_path(ibc_root, dep_file_path)
+            if not os.path.exists(symbols_path):
+                return False
+
+            # 只检查原始JSON数据是否存在对应文件项，不反序列化为 SymbolNode
+            file_name = os.path.basename(dep_file_path)
+            dir_symbols = self._load_dir_symbols(symbols_path)
+            file_symbol_data = dir_symbols.get(file_name, {})
+            if not file_symbol_data:
+                return False
+
+        return True
     def update_symbol_info(
         self,
         symbols_path: str,
