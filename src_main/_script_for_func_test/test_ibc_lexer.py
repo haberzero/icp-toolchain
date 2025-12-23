@@ -573,13 +573,13 @@ def test_visibility_keywords():
     print("测试 visibility_keywords 函数...")
     
     code = """class TestClass():
-    public:
+    public
     var public_member: 公开成员
     
-    protected:
+    protected
     var protected_member: 保护成员
     
-    private:
+    private
     var private_member: 私有成员
 """
     

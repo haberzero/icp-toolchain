@@ -1193,7 +1193,6 @@ class BehaviorStepState(BaseState):
 
 # 可见性声明的子状态枚举
 class VisibilityDeclSubState(Enum):
-    EXPECTING_COLON = "EXPECTING_COLON"
     EXPECTING_NEWLINE = "EXPECTING_NEWLINE"
 
 
@@ -1203,22 +1202,13 @@ class VisibilityDeclState(BaseState):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
         self.state_type = ParserState.VISIBILITY_DECL
         self.visibility_keyword = ""  # 保存关键字名称
-        self.sub_state = VisibilityDeclSubState.EXPECTING_COLON
+        self.sub_state = VisibilityDeclSubState.EXPECTING_NEWLINE
         self.pop_flag = False
     
     def process_token(self, token: Token) -> None:
         self.current_token = token
         
-        if self.sub_state == VisibilityDeclSubState.EXPECTING_COLON:
-            if token.type == IbcTokenType.COLON:
-                self.sub_state = VisibilityDeclSubState.EXPECTING_NEWLINE
-            else:
-                raise IbcParserError(
-                    message=f"VisibilityDeclState: Expecting colon after visibility keyword but got {token.type}",
-                    line_num=token.line_num
-                )
-        
-        elif self.sub_state == VisibilityDeclSubState.EXPECTING_NEWLINE:
+        if self.sub_state == VisibilityDeclSubState.EXPECTING_NEWLINE:
             if token.type == IbcTokenType.NEWLINE:
                 self.pop_flag = True
             else:
@@ -1243,4 +1233,5 @@ class VisibilityDeclState(BaseState):
         elif self.visibility_keyword == "private":
             return VisibilityTypes.PRIVATE
         else:
-            return VisibilityTypes.DEFAULT
+            print("IBC Parser: get_visibility_type() - Unexpected error, contact dev please")
+            raise Exception("IBC Parser: get_visibility_type() - Unexpected error, contact dev please")

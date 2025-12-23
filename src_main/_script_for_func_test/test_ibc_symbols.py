@@ -526,14 +526,14 @@ def test_visibility_from_ast():
     print("=" * 60)
     
     code = """class DataProcessor():
-    private:
+    private
     var _buffer: 缓冲区
     
-    protected:
+    protected
     func _process():
         执行内部处理
     
-    public:
+    public
     func process():
         调用内部处理
 """

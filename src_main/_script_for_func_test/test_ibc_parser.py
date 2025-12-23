@@ -1617,18 +1617,18 @@ def test_visibility_basic():
     print("\n测试 visibility_basic 函数...")
     
     code = """class DataProcessor():
-    private:
+    private
     var _internal_buffer: 内部缓存区
     var _cache: 缓存数据
     
     func _validate_data(原始数据):
         验证数据格式
     
-    protected:
+    protected
     func _process_internal(原始数据):
         预处理数据
     
-    public:
+    public
     func process_data(输入数据):
         处理输入数据
     
@@ -1727,15 +1727,15 @@ def test_visibility_nested_class():
     code = """class OuterClass():
     var outer_member: 外部类成员
     
-    private:
+    private
     class InnerPrivateClass():
         var inner_member: 内部私有类成员
     
-    protected:
+    protected
     class InnerProtectedClass():
         var inner_member: 内部保护类成员
     
-    public:
+    public
     class InnerPublicClass():
         var inner_member: 内部公开类成员
 """
@@ -1777,7 +1777,7 @@ def test_visibility_func_nested():
     print("\n测试 visibility_func_nested 函数...")
     
     code = """class OuterClass():
-    public:
+    public
     func outer_method():
         class LocalClass():
             var local_member: 局部类成员
