@@ -60,7 +60,7 @@ class VisibleSymbolBuilder:
             Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]:
                 - symbols_tree: 纯树状结构，所有节点都是{}
                 - symbols_metadata: 符号元数据字典，使用点分隔的路径作为键
-                  
+        
         注：详细的数据结构示例请参考测试脚本 test_symbol_builder_workflow.py
         """
         print(f"开始构建可见符号树: {current_file_path}")

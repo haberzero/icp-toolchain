@@ -6,7 +6,6 @@ class IbcIssueRecorder:
     """IBC分析问题记录器
     
     用于收集IBC分析过程中出现的错误信息，供上层代码进行后续操作使用。
-    注意：此类与data_store中的issue_recorder没有直接关联。
     """
     
     def __init__(self):
