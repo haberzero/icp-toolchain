@@ -95,11 +95,11 @@ class IcpCmdCli:
         
         while not _should_exit:
             if self.current_state == CliState.WAITING_INPUT:
-                self._handle_waiting_input()
+                self._handle_input()
             elif self.current_state == CliState.EXITING:
                 break
     
-    def _handle_waiting_input(self):
+    def _handle_input(self):
         """处理等待输入状态"""
         global _current_cli_state
         
@@ -109,8 +109,9 @@ class IcpCmdCli:
             self.current_state = CliState.WAITING_INPUT
             
             # 获取用户输入
-            user_input = self._get_user_input()
+            user_input = input("\n请输入命令: ").strip()
             if user_input is None:
+                print("指令为空")
                 return
             
             # 获取命令处理器
@@ -118,61 +119,35 @@ class IcpCmdCli:
             if cmd_handler is None:
                 print("未知命令，请重新输入")
                 return
+
+            # 检查是否为退出命令
+            if self.command_manager.is_quit_command(user_input):
+                cmd_handler.execute()
+                self.current_state = CliState.EXITING
+                return
             
-            # 处理命令
-            self._process_command(user_input, cmd_handler)
+            # 检查是否为帮助命令
+            if self.command_manager.is_help_command(user_input):
+                cmd_handler.execute()
+                return
+            
+            # 检查命令是否有效
+            if not cmd_handler.is_cmd_valid():
+                self._show_status()
+                self._show_help()
+                print(f"{Colors.FAIL}Command invalid. Please check command requirements.{Colors.ENDC}")
+                return
+            
+            # 执行命令
+            self._execute_command(cmd_handler)
+
             
         except KeyboardInterrupt:
             # 等待输入时被中断，退出
             self.current_state = CliState.EXITING
-        except EOFError:
-            # 处理EOF
-            print(f"\n{Colors.WARNING}检测到EOF，正在退出...{Colors.ENDC}")
-            self.current_state = CliState.EXITING
         except Exception as e:
             print(f"发生错误: {e}")
             print(f"{Colors.WARNING}返回命令行...{Colors.ENDC}")
-    
-    def _get_user_input(self) -> Optional[str]:
-        """获取用户输入
-        
-        Returns:
-            用户输入的命令，如果被中断则返回None
-        """
-        try:
-            user_input = input("\n请输入命令: ").strip()
-            return user_input
-        except KeyboardInterrupt:
-            # 在input阶段被中断
-            raise
-    
-    def _process_command(self, user_input: str, cmd_handler: BaseCmdHandler):
-        """处理命令执行
-        
-        Args:
-            user_input: 用户输入的命令
-            cmd_handler: 命令处理器
-        """
-        # 检查是否为退出命令
-        if self.command_manager.is_quit_command(user_input):
-            cmd_handler.execute()
-            self.current_state = CliState.EXITING
-            return
-        
-        # 检查是否为帮助命令
-        if self.command_manager.is_help_command(user_input):
-            cmd_handler.execute()
-            return
-        
-        # 检查命令是否有效
-        if not cmd_handler.is_cmd_valid():
-            self._show_status()
-            self._show_help()
-            print(f"{Colors.FAIL}Command invalid. Please check command requirements.{Colors.ENDC}")
-            return
-        
-        # 执行命令
-        self._execute_command(cmd_handler)
     
     def _execute_command(self, cmd_handler: BaseCmdHandler):
         """执行命令
