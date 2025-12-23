@@ -1,0 +1,21 @@
+{
+  "proj_root_dict": {
+    "src": {
+      "ball": {
+        "ball_entity": "表示球体状态及其颜色编号管理"
+      },
+      "heptagon": {
+        "heptagon_shape": "表示七边形几何属性及边界检测"
+      },
+      "test_physics": "测试物理引擎"
+    }
+  },
+  "dependent_relation": {
+    "src/ball/ball_entity": [],
+    "src/heptagon/heptagon_shape": [],
+    "src/test_physics": [
+      "src/ball/ball_entity",
+      "src/heptagon/heptagon_shape"
+    ]
+  }
+}

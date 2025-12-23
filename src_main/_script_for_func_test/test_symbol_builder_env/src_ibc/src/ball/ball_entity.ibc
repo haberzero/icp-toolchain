@@ -1,0 +1,74 @@
+module math: 数学运算库
+module numpy: 向量运算库
+module dataclasses: 数据类装饰器库
+
+description: 球体实体类，管理单个球体的状态信息
+@ 基础层组件，被physics_engine模块调用
+class BallEntity():
+    var _position: 球体当前位置，类型为 $numpy.ndarray
+    var _velocity: 球体当前速度向量，类型为 $numpy.ndarray
+    var _rotation: 球体当前旋转角度
+    var _angular_velocity: 球体自旋角速度
+    var _color: 球体填充颜色值
+    var _number: 球体编号，用于标识不同球体
+    var _radius: 球体半径，用于碰撞检测和绘制
+    
+    description: 初始化球体实例
+    @ 设置初始位置、颜色、编号及物理属性
+    func __init__(
+        初始位置: 球体初始坐标位置,
+        颜色值: 球体颜色值,
+        编号: 球体编号
+    ):
+        初始化 _position = $numpy.array(初始位置)
+        初始化 _velocity = $numpy.array([0.0, 0.0])
+        初始化 _rotation = 0.0
+        初始化 _angular_velocity = 0.0
+        设置 _color = 颜色值
+        设置 _number = 编号
+        设置 _radius = 15.0
+    
+    description: 根据当前速度更新球体的位置坐标
+    @ 更新位置时考虑速度和时间步长
+    func update_position(时间步长: 时间间隔):
+        _position = _position + _velocity × 时间步长
+    
+    description: 更新球体的旋转角度，反映自旋状态
+    @ 旋转角度受角速度影响，需考虑时间步长
+    func update_rotation(时间步长: 时间间隔):
+        _rotation = _rotation + _angular_velocity × 时间步长
+    
+    description: 返回球体的颜色值用于渲染
+    @ 提供给renderer模块进行绘图
+    func get_color():
+        返回 _color
+    
+    description: 返回球体上的编号用于显示
+    @ 提供给renderer模块进行数字绘制
+    func get_number():
+        返回 _number
+    
+    description: 返回球体的半径用于碰撞检测
+    @ 提供给physics_engine模块进行碰撞计算
+    func get_radius():
+        返回 _radius
+    
+    description: 获取球体中心点坐标用于碰撞判断
+    @ 提供给physics_engine模块进行边界和球间碰撞检测
+    func get_center():
+        返回 _position
+    
+    description: 应用力到球体上，影响其速度变化
+    @ 通过牛顿第二定律更新速度向量
+    func apply_force(力向量: 力的方向和大小):
+        _velocity = _velocity + 力向量 / _radius
+    
+    description: 设置球体的速度向量
+    @ 外部模块可调用此方法修改球体运动状态
+    func set_velocity(速度向量: 新的速度向量):
+        _velocity = 速度向量
+    
+    description: 获取球体当前速度向量
+    @ 提供给physics_engine模块进行物理计算
+    func get_velocity():
+        返回 _velocity

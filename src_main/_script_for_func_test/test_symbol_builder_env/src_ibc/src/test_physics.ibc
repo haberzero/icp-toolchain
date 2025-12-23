@@ -1,0 +1,12 @@
+module src.ball.ball_entity: 球体实体模块
+module src.heptagon.heptagon_shape: 七边形模块
+
+description: 简化的物理引擎，用于测试符号引用
+class TestPhysics():
+    var ball: 球体实例，类型为 $ball_entity.BallEntity
+    var shape: 七边形实例，类型为 $heptagon_shape.HeptagonShape
+    
+    func check_collision():
+        球体位置 = self.ball.get_center()
+        是否碰撞 = self.shape.is_point_inside(球体位置)
+        返回 是否碰撞

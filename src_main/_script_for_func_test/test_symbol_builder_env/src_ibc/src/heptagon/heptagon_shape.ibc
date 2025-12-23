@@ -1,0 +1,79 @@
+module math: 数学计算库
+module numpy: 数值计算库
+
+description: 旋转七边形几何模型，提供边界检测和几何计算功能
+@ 基础几何计算，被physics_engine和renderer调用
+class HeptagonShape():
+    var center: 七边形中心坐标，类型为 $numpy.ndarray
+    var radius: 外接圆半径
+    var angle: 当前旋转角度
+    var rotation_speed: 每秒旋转角度，固定为 72 度每秒（360度/5秒）
+    var num_sides: 边数，固定为7
+    
+    description: 初始化七边形参数
+    func __init__(
+        中心坐标: 二维坐标点，类型为 $numpy.ndarray, 
+        半径: 正数，表示外接圆半径
+    ):
+        设置 self.center = 中心坐标
+        设置 self.radius = 半径
+        设置 self.angle = 0
+        设置 self.rotation_speed = 72
+        设置 self.num_sides = 7
+    
+    description: 根据时间更新旋转角度
+    @ 时间单位为秒
+    func update_rotation(时间间隔: 浮点数，表示两次更新之间的时间差):
+        更新 self.angle = self.angle + self.rotation_speed * 时间间隔
+        如果 self.angle >= 360:
+            self.angle = self.angle - 360
+    
+    description: 计算并返回当前旋转角度下的七边形顶点坐标
+    func get_vertices():
+        初始化 顶点列表 = []
+        对于 i 从 0 到 self.num_sides - 1:
+            角度 = self.angle + i * 360 / self.num_sides
+            x = self.center[0] + self.radius * cos(角度)
+            y = self.center[1] + self.radius * sin(角度)
+            添加 [x, y] 到 顶点列表
+        返回 顶点列表
+    
+    description: 判断一个点是否位于七边形内部
+    func is_point_inside(测试点: 二维坐标点，类型为 $numpy.ndarray):
+        顶点列表 = self.get_vertices()
+        设置 交叉次数 = 0
+        对于 i 从 0 到 self.num_sides - 1:
+            当 前顶点 = 顶点列表[i]
+            当 后顶点 = 顶点列表[(i + 1) % self.num_sides]
+            如果 测试点[1] > 前顶点[1] 和 测试点[1] <= 后顶点[1]:
+                如果 测试点[0] < (后顶点[0] - 前顶点[0]) * (测试点[1] - 前顶点[1]) / (后顶点[1] - 前顶点[1]) + 前顶点[0]:
+                    交叉次数 = 交叉次数 + 1
+            否则 如果 测试点[1] <= 前顶点[1] 和 测试点[1] > 后顶点[1]:
+                如果 测试点[0] < (后顶点[0] - 前顶点[0]) * (测试点[1] - 前顶点[1]) / (后顶点[1] - 前顶点[1]) + 前顶点[0]:
+                    交叉次数 = 交叉次数 + 1
+        如果 交叉次数 % 2 == 1:
+            返回 True
+        否则:
+            返回 False
+    
+    description: 获取指定墙面的法向量用于碰撞响应计算
+    func get_wall_normal(墙面索引: 整数，表示第几个墙面):
+        顶点列表 = self.get_vertices()
+        当 前顶点 = 顶点列表[墙面索引]
+        当 后顶点 = 顶点列表[(墙面索引 + 1) % self.num_sides]
+        边向量 = [后顶点[0] - 前顶点[0], 后顶点[1] - 前顶点[1]]
+        法向量 = [-边向量[1], 边向量[0]]
+        归一化法向量 = 法向量 / sqrt(法向量[0]^2 + 法向量[1]^2)
+        返回 归一化法向量
+    
+    description: 计算点到最近边界的距离
+    func distance_to_boundary(测试点: 二维坐标点，类型为 $numpy.ndarray):
+        顶点列表 = self.get_vertices()
+        最小距离 = 无穷大
+        对于 i 从 0 到 self.num_sides - 1:
+            当 前顶点 = 顶点列表[i]
+            当 后顶点 = 顶点列表[(i + 1) % self.num_sides]
+            距离 = 点到线段距离(测试点, 前顶点, 后顶点)
+            如果 距离 < 最小距离:
+                最小距离 = 距离
+        返回 最小距离
