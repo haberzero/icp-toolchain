@@ -77,8 +77,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 所有文件处理完毕，统一更新ibc文件的MD5值
         print(f"  {Colors.OKBLUE}开始更新ibc文件校验码...{Colors.ENDC}")
         ibc_data_store = get_ibc_data_store()
-        result = ibc_data_store.batch_update_verify_codes(self.work_ibc_dir_path, self.file_creation_order_list)
-        print(f"  {Colors.OKGREEN}ibc文件校验码更新完毕: {result['success']} 成功{Colors.ENDC}")
+        ibc_data_store.batch_update_verify_codes(self.work_ibc_dir_path, self.file_creation_order_list)
+        print(f"  {Colors.OKGREEN}ibc文件校验码更新完毕{Colors.ENDC}")
         
         print(f"{Colors.OKGREEN}半自然语言行为描述代码生成完毕!{Colors.ENDC}")
     
@@ -322,17 +322,13 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             # 保存IBC代码
             ibc_data_store = get_ibc_data_store()
             ibc_path = ibc_data_store.build_ibc_path(self.work_ibc_dir_path, icp_json_file_path)
-            if not ibc_data_store.save_ibc_code(ibc_path, ibc_code):
-                print(f"    {Colors.WARNING}警告: IBC代码保存失败{Colors.ENDC}")
-                continue
+            ibc_data_store.save_ibc_code(ibc_path, ibc_code)
             print(f"    {Colors.OKGREEN}IBC代码已保存: {ibc_path}{Colors.ENDC}")
             
             # 保存AST
             ast_path = ibc_data_store.build_ast_path(self.work_ibc_dir_path, icp_json_file_path)
-            if ibc_data_store.save_ast(ast_path, ast_dict):
-                print(f"    {Colors.OKGREEN}AST已保存: {ast_path}{Colors.ENDC}")
-            else:
-                print(f"    {Colors.WARNING}警告: AST保存失败{Colors.ENDC}")
+            ibc_data_store.save_ast(ast_path, ast_dict)
+            print(f"    {Colors.OKGREEN}AST已保存: {ast_path}{Colors.ENDC}")
             
             # IBC代码和AST保存成功，返回成功
             return True

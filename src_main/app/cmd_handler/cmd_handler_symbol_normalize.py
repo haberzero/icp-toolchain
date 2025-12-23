@@ -162,11 +162,8 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         self._update_symbol_table(symbol_table, normalized_symbols_dict)
         
         # 保存更新后的符号表
-        if ibc_data_store.save_symbols(symbols_path, symbol_table):
-            print(f"    {Colors.OKGREEN}符号表已更新并保存: {symbols_path}{Colors.ENDC}")
-        else:
-            print(f"    {Colors.WARNING}警告: 符号表保存失败{Colors.ENDC}")
-            return False
+        ibc_data_store.save_symbols(symbols_path, file_name, symbol_table)
+        print(f"    {Colors.OKGREEN}符号表已更新并保存: {symbols_path}{Colors.ENDC}")
         
         return True
     

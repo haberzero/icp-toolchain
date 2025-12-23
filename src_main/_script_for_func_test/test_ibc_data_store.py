@@ -74,11 +74,8 @@ class User():
         验证用户身份
         返回登录结果
 """
-    if ibc_data_store.save_ibc_code(ibc_path, test_code):
-        print(f"   ✓ IBC代码保存成功")
-    else:
-        print(f"   ✗ IBC代码保存失败")
-        return False
+    ibc_data_store.save_ibc_code(ibc_path, test_code)
+    print(f"   ✓ IBC代码保存成功")
     
     # 测试用例3: 加载IBC代码
     print("\n1.3 测试加载IBC代码...")
@@ -161,9 +158,7 @@ def test_ast_management():
     ast_path = ibc_data_store.build_ast_path(test_ibc_root, file_path)
     
     # 保存AST
-    if not ibc_data_store.save_ast(ast_path, ast_dict):
-        print(f"   ✗ AST保存失败")
-        return False
+    ibc_data_store.save_ast(ast_path, ast_dict)
     print(f"   ✓ AST保存成功")
     
     # 加载AST
@@ -261,9 +256,7 @@ class User():
     print("\n3.2 保存并加载AST...")
     ast_path = ibc_data_store.build_ast_path(test_ibc_root, "user/management")
     
-    if not ibc_data_store.save_ast(ast_path, ast_dict):
-        print(f"   ✗ AST保存失败")
-        return False
+    ibc_data_store.save_ast(ast_path, ast_dict)
     
     # 加载AST
     loaded_ast = ibc_data_store.load_ast(ast_path)
@@ -328,9 +321,7 @@ def test_verify_data_management():
         'one_file_req_verify_code': 'xyz789uvw012'
     }
     
-    if not ibc_data_store.save_verify_data(verify_path, verify_data):
-        print(f"   ✗ 校验数据保存失败")
-        return False
+    ibc_data_store.save_verify_data(verify_path, verify_data)
     
     loaded_data = ibc_data_store.load_verify_data(verify_path)
     if loaded_data == verify_data:
@@ -346,9 +337,7 @@ def test_verify_data_management():
     ibc_path = ibc_data_store.build_ibc_path(test_ibc_root, file_path)
     ibc_data_store.save_ibc_code(ibc_path, ibc_code)
     
-    if not ibc_data_store.update_verify_code(test_ibc_root, file_path):
-        print(f"   ✗ 校验码更新失败")
-        return False
+    ibc_data_store.update_verify_code(test_ibc_root, file_path)
     
     # 验证校验码
     verify_path = ibc_data_store.build_verify_path(test_ibc_root, file_path)
@@ -368,12 +357,8 @@ def test_verify_data_management():
         ibc_path = ibc_data_store.build_ibc_path(test_ibc_root, fp)
         ibc_data_store.save_ibc_code(ibc_path, f"module {fp}: 测试")
     
-    result = ibc_data_store.batch_update_verify_codes(test_ibc_root, file_paths)
-    if result['success'] == 3 and result['failed'] == 0:
-        print(f"   ✓ 批量更新成功: {result['success']} 个文件")
-    else:
-        print(f"   ✗ 批量更新失败")
-        return False
+    ibc_data_store.batch_update_verify_codes(test_ibc_root, file_paths)
+    print(f"   ✓ 批量更新成功: {len(file_paths)} 个文件")
     
     # 测试用例4: 加载不存在的校验数据
     print("\n4.4 测试加载不存在的校验数据...")
@@ -430,9 +415,7 @@ def test_symbol_management():
     
     symbols_path = ibc_data_store.build_symbols_path(test_ibc_root, file_path)
     file_name = os.path.basename(file_path)
-    if not ibc_data_store.save_symbols(symbols_path, file_name, symbol_table):
-        print(f"   ✗ 符号表保存失败")
-        return False
+    ibc_data_store.save_symbols(symbols_path, file_name, symbol_table)
     
     loaded_symbols = ibc_data_store.load_symbols(symbols_path, file_name)
     if len(loaded_symbols) != len(symbol_table):
@@ -456,11 +439,9 @@ def test_symbol_management():
     
     # 测试用例2: 更新符号信息
     print("\n5.2 测试更新符号规范化信息...")
-    if not ibc_data_store.update_symbol_info(
+    ibc_data_store.update_symbol_info(
         symbols_path, file_name, "登录", "Login", VisibilityTypes.PROTECTED
-    ):
-        print(f"   ✗ 符号信息更新失败")
-        return False
+    )
     
     updated_symbols = ibc_data_store.load_symbols(symbols_path, file_name)
     updated_func = updated_symbols.get("登录")
