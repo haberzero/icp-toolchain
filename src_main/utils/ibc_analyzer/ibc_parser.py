@@ -277,7 +277,7 @@ class IbcParser:
                     visibility = current_state_obj.get_visibility_type()
                     parent_state_obj.set_current_visibility(visibility)
         
-        # 函数声明时的多行参数定义可能会因为不同开发者的书写习惯带来额外的缩进问题，需要单独处理
+        # 函数声明时的多行参数定义可能会因为不同开发者的书写习惯带来额外的缩进问题
         if isinstance(current_state_obj, FuncDeclState):
             self.func_pending_indent_level = current_state_obj.get_pending_indent_level()
         

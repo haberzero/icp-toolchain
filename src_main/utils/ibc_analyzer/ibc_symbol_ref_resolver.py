@@ -1,6 +1,7 @@
 import sys
 import os
 import re
+import difflib
 
 from typing import Dict, List, Tuple, Optional, Set, Any
 from typedef.ibc_data_types import (
@@ -10,29 +11,33 @@ from typedef.ibc_data_types import (
 from libs.dir_json_funcs import DirJsonFuncs
 
 
+
+# matches = difflib.get_close_matches(target, candidates, n=3, cutoff=0.3)
+
+
 class SymbolRefResolver:
     """
     符号引用解析器
     
+    职责：解析IBC代码中以$符号标记的外部符号引用
+    
     功能:
-    1. 从 ast_dict 中提取所有符号引用
-    2. 基于 module 引用构建可见符号表
-    3. 在可见符号表中检索和验证符号引用
+    1. 从 ast_dict 中提取所有符号引用（$标记的引用）
+    2. 在可见符号树中解析和验证这些符号引用
+    3. 提供符号引用的查找和匹配功能
+    
+    注意：可见符号表的构建由 VisibleSymbolBuilder 负责
     """
     
-    def __init__(self, proj_root_dict: Dict):
+    def __init__(self, visible_symbol_tree: Dict[str, Any]):
         """
         初始化符号引用解析器
         
         Args:
-            proj_root_dict: 项目根目录字典，包含所有文件的结构信息
+            visible_symbol_tree: 可见符号树（由VisibleSymbolBuilder构建）
         """
-        self.proj_root_dict = proj_root_dict
-        
-        # 获取所有有效的文件路径
         print(f"初始化符号引用解析器")
-        self.valid_file_paths = set(DirJsonFuncs.get_all_file_paths(proj_root_dict))
-        print(f"  有效文件路径数: {len(self.valid_file_paths)}")
+        self.visible_symbol_tree = visible_symbol_tree
         
         # 存储从 ast_dict 中提取的各类引用
         self.module_refs: List[str] = []  # module 引用列表
@@ -40,43 +45,17 @@ class SymbolRefResolver:
         self.var_type_refs: List[Tuple[str, str]] = []  # (变量名, 符号引用) 元组列表
         self.behavior_refs: List[str] = []  # 行为描述中的符号引用列表
         self.class_inherit_refs: List[str] = []  # 类继承中的符号引用列表
-        
-        # 完整的可用符号表(基于 proj_root_dict 和所有已有的 ibc 文件构建)
-        # TODO: 暂时未实现，用占位符表示
-        self.full_symbol_table: Dict[str, Any] = {}
-        
-        # 当前文件的可见符号表(基于 module 引用从完整符号表中提取)
-        self.visible_symbol_table: Dict[str, Any] = {}
 
 
-    def build_full_symbol_table(self) -> Dict[str, Any]:
+    def set_visible_symbol_tree(self, visible_symbol_tree: Dict[str, Any]) -> None:
         """
-        构建完整的可用符号表
+        设置/更新可见符号树
         
-        基于 proj_root_dict 以及所有已有的 ibc 文件进行构建。
-        具体逻辑:
-        1. 在完整 proj_root_dict 的基础上，删除各个文件自己的内容描述
-        2. 在各个文件下再增加树状的，类似于 proj_root_dict 文件结构一样的符号树
-        3. 符号树类似于 class -> func 这种构成，结构完全近似于 proj_root_dict
-        
-        Returns:
-            完整的符号表字典
-            
-        注意: 此方法暂时未实现，只做占位和接口定义
+        Args:
+            visible_symbol_tree: 新的可见符号树
         """
-        print(f"开始构建完整可用符号表")
-        
-        # TODO: 实际实现逻辑
-        # 1. 遍历 proj_root_dict 获取所有文件路径
-        # 2. 对每个文件，读取对应的 .ibc 文件和符号表文件
-        # 3. 将符号表信息组织成树状结构，挂载到文件路径下
-        # 4. 删除文件的内容描述字段
-        
-        # 临时返回空字典
-        full_symbol_table = {}
-        
-        print(f"  完整符号表构建完成(暂未实现)")
-        return full_symbol_table
+        self.visible_symbol_tree = visible_symbol_tree
+        print(f"可见符号树已更新")
 
     
     def extract_all_refs_from_ast_dict(self, ast_dict: Dict[int, IbcBaseAstNode]) -> None:
@@ -180,30 +159,36 @@ class SymbolRefResolver:
 
 
 
-    def build_visible_symbol_table(self) -> None:
+    def resolve_module_ref(self, module_ref: str) -> Tuple[bool, Optional[Dict[str, Any]], str]:
         """
-        基于 module 引用构建当前文件的可见符号表
+        解析module引用，在可见符号树中查找对应的模块/文件
         
-        处理流程:
-        1. proj_root 本身必然可见，proj_root 下的所有 key(文件/文件夹)都可见
-        2. 对每个 module 引用，通过 . 符号分割，从 proj_root 开始逐步索引
-        3. 将索引到的所有符号及其子节点加入可见表
-        4. 最终可见表只保留被 module 抽取出的部分，proj_root 下的直接子节点不再保留
-        
-        注意: 此方法依赖于 build_full_symbol_table 的实现
+        Args:
+            module_ref: module引用字符串，如 "src.ball.ball_entity"
+            
+        Returns:
+            Tuple[bool, Optional[Dict], str]: 
+                - 是否找到
+                - 找到的符号节点（如果找到）
+                - 描述信息
         """
-        print(f"开始构建可见符号表")
+        if not module_ref:
+            return False, None, "module引用为空"
         
-        # TODO: 实际实现逻辑
-        # 1. 从 full_symbol_table 中提取 proj_root 节点
-        # 2. 遍历所有 module_refs
-        # 3. 对每个 module_ref，解析路径并从 full_symbol_table 中提取对应的符号树
-        # 4. 将提取的符号树合并到 visible_symbol_table 中
+        # 解析路径
+        path_parts = self.parse_ref_path(module_ref)
+        if not path_parts:
+            return False, None, f"module引用解析失败: {module_ref}"
         
-        # 临时实现：暂时设置为空
-        self.visible_symbol_table = {}
+        # 在可见符号树中逐级查找
+        current_node = self.visible_symbol_tree
+        for part in path_parts:
+            if isinstance(current_node, dict) and part in current_node:
+                current_node = current_node[part]
+            else:
+                return False, None, f"找不到路径: {module_ref} (在 {part} 处断开)"
         
-        print(f"  可见符号表构建完成(暂未实现)")
+        return True, current_node, f"成功找到: {module_ref}"
     
     def parse_ref_path(self, symbol_ref: str) -> List[str]:
         """
@@ -224,42 +209,75 @@ class SymbolRefResolver:
         # 过滤空字符串
         return [part.strip() for part in parts if part.strip()]
     
-    def resolve_symbol_in_visible_table(self, symbol_ref: str) -> Tuple[bool, str]:
+    def resolve_symbol_in_visible_tree(self, symbol_ref: str) -> Tuple[bool, Optional[Dict[str, Any]], str]:
         """
-        在可见符号表中检索符号引用
+        在可见符号树中检索符号引用
         
-        基于 . 符号分割的路径，在可见符号表中进行逐级索引
+        基于 . 符号分割的路径，在可见符号树中进行逐级索引
         
         Args:
-            symbol_ref: 符号引用字符串
+            symbol_ref: 符号引用字符串，如 "ball_entity.BallEntity.get_position"
             
         Returns:
-            (是否找到, 描述信息) 元组
+            Tuple[bool, Optional[Dict], str]:
+                - 是否找到
+                - 找到的符号节点（如果找到）
+                - 描述信息
         """
         if not symbol_ref:
-            return False, "符号引用为空"
+            return False, None, "符号引用为空"
         
         # 解析路径
         path_parts = self.parse_ref_path(symbol_ref)
         
         if not path_parts:
-            return False, f"符号引用解析失败: {symbol_ref}"
+            return False, None, f"符号引用解析失败: {symbol_ref}"
         
-        # TODO: 实际实现逻辑
-        # 1. 从 visible_symbol_table 开始
-        # 2. 逐级索引 path_parts
-        # 3. 如果某一级不存在，返回 False
-        # 4. 如果全部索引成功，返回 True
+        # 在可见符号树中逐级查找
+        current_node = self.visible_symbol_tree
+        path_traveled = []
         
-        # 临时实现：总是返回未找到
-        return False, f"符号引用检索未实现: {symbol_ref}"
+        for part in path_parts:
+            path_traveled.append(part)
+            
+            if isinstance(current_node, dict) and part in current_node:
+                current_node = current_node[part]
+            else:
+                # 尝试模糊匹配
+                if isinstance(current_node, dict):
+                    # 查找相似的键
+                    available_keys = [k for k in current_node.keys() if not k.startswith('_')]
+                    if available_keys:
+                        matches = difflib.get_close_matches(part, available_keys, n=3, cutoff=0.6)
+                        if matches:
+                            suggestion = f"找不到 '{part}'，可能是: {', '.join(matches)}"
+                        else:
+                            suggestion = f"找不到 '{part}'，可用选项: {', '.join(available_keys[:5])}"
+                    else:
+                        suggestion = f"找不到 '{part}'，该节点下无可用符号"
+                else:
+                    suggestion = f"'{'.'.join(path_traveled[:-1])}' 不是容器节点"
+                
+                return False, None, f"符号 {symbol_ref} 查找失败: {suggestion}"
+        
+        # 检查最终节点是否是符号节点
+        if isinstance(current_node, dict) and '_symbol_type' in current_node:
+            symbol_type = current_node.get('_symbol_type', 'unknown')
+            visibility = current_node.get('_visibility', 'unknown')
+            description = current_node.get('_description', '')
+            return True, current_node, f"找到符号: {symbol_ref} ({symbol_type}, {visibility}): {description}"
+        elif isinstance(current_node, dict):
+            # 找到的是容器节点（目录/文件）
+            return True, current_node, f"找到容器节点: {symbol_ref}"
+        else:
+            return False, None, f"符号 {symbol_ref} 指向的不是有效节点"
     
-    def validate_all_refs(self) -> Dict[str, List[Tuple[bool, str]]]:
+    def validate_all_refs(self) -> Dict[str, List[Tuple]]:
         """
         验证所有提取的符号引用
         
         对所有类型的引用进行验证:
-        - module 引用(特殊处理，用于构建可见表)
+        - module 引用（验证module路径是否存在）
         - 函数参数类型引用
         - 变量类型引用
         - 类继承引用
@@ -271,31 +289,37 @@ class SymbolRefResolver:
         print(f"开始验证所有符号引用")
         
         validation_results = {
+            "module_refs": [],
             "param_type_refs": [],
             "var_type_refs": [],
             "class_inherit_refs": [],
             "behavior_refs": []
         }
         
+        # 验证module引用
+        for module_ref in self.module_refs:
+            found, node, msg = self.resolve_module_ref(module_ref)
+            validation_results["module_refs"].append((module_ref, found, msg))
+        
         # 验证函数参数类型引用
         for param_name, type_ref in self.param_type_refs:
-            result = self.resolve_symbol_in_visible_table(type_ref)
-            validation_results["param_type_refs"].append((param_name, type_ref, result[0], result[1]))
+            found, node, msg = self.resolve_symbol_in_visible_tree(type_ref)
+            validation_results["param_type_refs"].append((param_name, type_ref, found, msg))
         
         # 验证变量类型引用
         for var_name, type_ref in self.var_type_refs:
-            result = self.resolve_symbol_in_visible_table(type_ref)
-            validation_results["var_type_refs"].append((var_name, type_ref, result[0], result[1]))
+            found, node, msg = self.resolve_symbol_in_visible_tree(type_ref)
+            validation_results["var_type_refs"].append((var_name, type_ref, found, msg))
         
         # 验证类继承引用
         for inherit_ref in self.class_inherit_refs:
-            result = self.resolve_symbol_in_visible_table(inherit_ref)
-            validation_results["class_inherit_refs"].append((inherit_ref, result[0], result[1]))
+            found, node, msg = self.resolve_symbol_in_visible_tree(inherit_ref)
+            validation_results["class_inherit_refs"].append((inherit_ref, found, msg))
         
         # 验证行为描述引用
         for behavior_ref in self.behavior_refs:
-            result = self.resolve_symbol_in_visible_table(behavior_ref)
-            validation_results["behavior_refs"].append((behavior_ref, result[0], result[1]))
+            found, node, msg = self.resolve_symbol_in_visible_tree(behavior_ref)
+            validation_results["behavior_refs"].append((behavior_ref, found, msg))
         
         print(f"  符号引用验证完成")
         return validation_results

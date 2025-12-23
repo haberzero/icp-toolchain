@@ -27,7 +27,7 @@ class IbcSymbolProcessor:
             Dict[str, SymbolNode]: 文件符号表字典，以符号名为key，SymbolNode为value
 
         注意：
-        - visibility (可见性)直接从AST节点读取，默认为public
+        - visibility (可见性)直接从AST节点读取，由Parser在解析阶段通过可见性声明关键字确定
         - normalized_name (规范化名称)在符号提取时不填充，留空字符串，后续由cmd_handler调用ai_interface推断后填充
         """
         symbol_table: Dict[str, SymbolNode] = {}
@@ -40,7 +40,7 @@ class IbcSymbolProcessor:
                     print(f"警告: 符号名 {symbol.symbol_name} 已存在，将被覆盖")
                 symbol_table[symbol.symbol_name] = symbol
         
-        # 填充parent_uid和children_uids关系
+        # 填充parent_symbol_name和children_symbol_names关系
         self._build_symbol_hierarchy(symbol_table)
 
         return symbol_table
@@ -62,7 +62,7 @@ class IbcSymbolProcessor:
                 parent_symbol_name="",  # 初始为空，后续由_build_symbol_hierarchy填充
                 symbol_name=node.identifier,
                 normalized_name="",  # 留空，后续由AI推断填充
-                visibility=node.visibility,  # 直接从AST节点读取
+                visibility=node.visibility,  # 直接从AST节点读取，由Parser根据可见性关键字确定
                 description=node.external_desc,
                 symbol_type=SymbolType.CLASS
             )
@@ -72,7 +72,7 @@ class IbcSymbolProcessor:
                 parent_symbol_name="",  # 初始为空，后续由_build_symbol_hierarchy填充
                 symbol_name=node.identifier,
                 normalized_name="",  # 留空，后续由AI推断填充
-                visibility=node.visibility,  # 直接从AST节点读取
+                visibility=node.visibility,  # 直接从AST节点读取，由Parser根据可见性关键字确定
                 description=node.external_desc,
                 symbol_type=SymbolType.FUNCTION,
                 parameters=node.params  # 添加函数参数信息
@@ -83,7 +83,7 @@ class IbcSymbolProcessor:
                 parent_symbol_name="",  # 初始为空，后续由_build_symbol_hierarchy填充
                 symbol_name=node.identifier,
                 normalized_name="",  # 留空，后续由AI推断填充
-                visibility=node.visibility,  # 直接从AST节点读取
+                visibility=node.visibility,  # 直接从AST节点读取，由Parser根据可见性关键字确定
                 description=node.external_desc,
                 symbol_type=SymbolType.VARIABLE
             )
@@ -96,8 +96,11 @@ class IbcSymbolProcessor:
         
         Args:
             symbol_table: 符号表字典
+            
+        说明：
+            通过遍历AST中的parent-child关系，构建符号之间的层级结构。
+            每个符号会记录其父符号名称，父符号也会在子符号列表中添加该符号。
         """
-        # 根据AST中的parent-child关系构建符号的层次结构
         # 首先构建 uid -> symbol_name 的映射
         uid_to_symbol_name: Dict[int, str] = {}
         for symbol_name, symbol in symbol_table.items():

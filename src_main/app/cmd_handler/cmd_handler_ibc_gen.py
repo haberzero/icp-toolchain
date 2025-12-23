@@ -20,6 +20,7 @@ from data_store.ibc_data_store import get_instance as get_ibc_data_store
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code
+from utils.ibc_analyzer.ibc_visible_symbol_builder import VisibleSymbolBuilder
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.ibc_funcs import IbcFuncs
 from utils.issue_recorder import IbcIssueRecorder
@@ -144,12 +145,19 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         # 存储实例变量供后续使用
         self.dir_json_dict = final_dir_json_dict
-        self.proj_root_dict_json_str = json.dumps(final_dir_json_dict['proj_root_dict'], indent=2, ensure_ascii=False)
+        self.proj_root_dict = final_dir_json_dict['proj_root_dict']
+        self.proj_root_dict_json_str = json.dumps(self.proj_root_dict, indent=2, ensure_ascii=False)
         self.dependent_relation = dependent_relation
         self.file_creation_order_list = file_creation_order_list
         self.user_requirements_str = user_requirements_str
         self.work_staging_dir_path = work_staging_dir_path
         self.work_ibc_dir_path = work_ibc_dir_path
+        
+        # 初始化可见符号表构建器
+        self.visible_symbol_builder = VisibleSymbolBuilder(
+            proj_root_dict=self.proj_root_dict,
+            dependent_relation=self.dependent_relation
+        )
         
         # 初始化更新状态.需要依赖self.file_creation_order_list等内容
         self.need_update_flag_dict = self._initialize_update_status()
@@ -343,12 +351,23 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             str: 完整的用户提示词，失败时返回空字符串
         """
         
-        # 构建可用符号文本
+        # 使用可见符号表构建器构建当前文件的可见符号树
         try:
-            dependencies = self.dependent_relation.get(icp_json_file_path, [])
-            available_symbols_text = IbcFuncs.build_available_symbols_text(dependencies, work_ibc_dir_path)
+            symbols_tree, symbols_metadata = self.visible_symbol_builder.build_visible_symbol_tree(
+                current_file_path=icp_json_file_path,
+                work_ibc_dir_path=self.work_ibc_dir_path
+            )
+            
+            # TODO: 根据symbols_tree和symbols_metadata构建AI提示词
+            # 这里需要按照提示词格式要求来组织符号信息
+            # 暂时使用占位符
+            if symbols_tree:
+                available_symbols_text = "可用的依赖符号：\n\n[待实现：根据symbols_tree和symbols_metadata构建提示词]"
+            else:
+                available_symbols_text = '暂无可用的依赖符号'
+                
         except Exception as e:
-            print(f"  {Colors.WARNING}警告: 构建可用符号失败: {e}，继续生成{Colors.ENDC}")
+            print(f"  {Colors.WARNING}警告: 构建可见符号失败: {e}，继续生成{Colors.ENDC}")
             available_symbols_text = '暂无可用的依赖符号'
         
         # 读取文件级实现规划
