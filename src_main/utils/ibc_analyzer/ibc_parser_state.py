@@ -1211,6 +1211,9 @@ class VisibilityDeclState(BaseState):
         if self.sub_state == VisibilityDeclSubState.EXPECTING_NEWLINE:
             if token.type == IbcTokenType.NEWLINE:
                 self.pop_flag = True
+            if token.type == IbcTokenType.COLON:
+                # 临时方案，因为训练数据的问题，输出中大概率还是会出现冒号，目前来说这不是大问题，直接消耗掉token
+                self.sub_state = VisibilityDeclSubState.EXPECTING_NEWLINE
             else:
                 raise IbcParserError(
                     message=f"VisibilityDeclState: Expecting newline after colon but got {token.type}",
