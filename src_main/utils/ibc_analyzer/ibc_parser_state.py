@@ -260,13 +260,16 @@ class VarDeclState(BaseState):
         
         for var_name, var_desc in self.variables.items():
             uid = self.uid_generator.gen_uid()
+            # 变量的 content 同时作为对外描述 external_desc 使用
+            cleaned_desc = var_desc.strip()
             var_node = VariableNode(
                 uid=uid,
                 parent_uid=self.parent_uid,
                 node_type=AstNodeType.VARIABLE,
                 line_number=line_num,
                 identifier=var_name,
-                content=var_desc,
+                content=cleaned_desc,
+                external_desc=cleaned_desc,
                 type_ref=self.var_type_refs.get(var_name, [])  # 添加类型引用列表
             )
             self.ast_node_dict[uid] = var_node
@@ -1208,14 +1211,19 @@ class VisibilityDeclState(BaseState):
         self.current_token = token
         
         if self.sub_state == VisibilityDeclSubState.EXPECTING_NEWLINE:
+            # 可见性关键字推荐写成单独一行（无冒号）
+            # 但考虑到小尺寸模型可能的性能受限问题
+            # 如因为训练数据意外出现 C++ 风格写法（public:），这里允许可选的冒号。
             if token.type == IbcTokenType.NEWLINE:
+                # 关键字单独一行，无冒号直接换行
                 self.pop_flag = True
-            if token.type == IbcTokenType.COLON:
-                # 临时方案，因为训练数据的问题，输出中大概率还是会出现冒号，目前来说这不是大问题，直接消耗掉token
+            elif token.type == IbcTokenType.COLON:
+                # 兜底兼容 C++ 风格的可见性写法："public:" 等
+                # 吸收冒号，继续等待后续的 NEWLINE
                 self.sub_state = VisibilityDeclSubState.EXPECTING_NEWLINE
             else:
                 raise IbcParserError(
-                    message=f"VisibilityDeclState: Expecting newline after colon but got {token.type}",
+                    message=f"VisibilityDeclState: Expecting newline after visibility keyword but got {token.type}",
                     line_num=token.line_num
                 )
     

@@ -58,22 +58,27 @@ class IbcParser:
         # 延续行状态：需要吸收的DEDENT数量和是否需要创建新代码块
         self.continuation_dedent_to_absorb = 0  # 需要吸收的DEDENT数量
         self.continuation_needs_new_block = False  # 是否需要在吸收完DEDENT后创建新代码块
+
+    def parse(self) -> Dict[int, IbcBaseAstNode]:
+        """执行解析"""
+        while not self._is_at_end():
+            token = self._consume_token()
+            self.line_num = token.line_num
+
+            # 阶段1：决定当前token应该被如何处理
+            main_state = self._determine_main_state(token)
+            
+            # 阶段2：执行token处理
+            self._execute_token_processing(token, main_state)
+            
+            # 阶段3：token后处理
+            self._post_process_token(token)
+            
+            # 阶段4：处理状态机弹出后的额外动作
+            self._handle_post_pop_actions(token)
+            
+        return self.ast_nodes
         
-    def _peek_token(self) -> Token:
-        """查看当前token"""
-        if self.pos < len(self.tokens):
-            return self.tokens[self.pos]
-        return Token(IbcTokenType.EOF, "", -1)
-    
-    def _consume_token(self) -> Token:
-        """消费当前token"""
-        token = self._peek_token()
-        self.pos += 1
-        return token
-    
-    def _is_at_end(self) -> bool:
-        """检查是否到达文件末尾"""
-        return self._peek_token().type == IbcTokenType.EOF
 
     def _determine_main_state(self, token: Token) -> ParserMainState:
         """根据token和当前状态，决定处理模式"""
@@ -102,7 +107,10 @@ class IbcParser:
     
     def _execute_token_processing(self, token: Token, main_state: ParserMainState) -> None:
         """执行token处理逻辑"""
-        if main_state == ParserMainState.PASS_THROUGH_MODE:
+        # PASS_THROUGH_MODE 与 NORMAL_PROCESSING 都直接处理token，区别在于 main_state 的上下文语境：
+        # - PASS_THROUGH_MODE：当前状态声明需要透传 token，任何token都直接透传（存在缩进等token）
+        # - NORMAL_PROCESSING：顶层已经事先判断过当前不属于缩进/关键字等处理，进入普通处理
+        if main_state in (ParserMainState.PASS_THROUGH_MODE, ParserMainState.NORMAL_PROCESSING):
             self._process_token_in_current_state(token)
         
         elif main_state == ParserMainState.INDENT_PROCESSING:
@@ -116,9 +124,21 @@ class IbcParser:
         
         elif main_state == ParserMainState.BEHAVIOR_START:
             self._handle_behavior_start(token)
-        
-        elif main_state == ParserMainState.NORMAL_PROCESSING:
             self._process_token_in_current_state(token)
+    
+    def _process_token_in_current_state(self, token: Token) -> None:
+        """将token传递给当前状态机处理"""
+        if not self.state_stack:
+            raise IbcParserError(
+                message="No state in stack",
+                line_num=token.line_num
+            )
+            
+        # 获取栈顶的状态机实例
+        current_state_obj, parent_uid = self.state_stack[-1]
+        
+        # 状态机实例处理token
+        current_state_obj.process_token(token)
     
     def _post_process_token(self, token: Token) -> None:
         """处理token后的后处理逻辑"""
@@ -159,50 +179,31 @@ class IbcParser:
         self._apply_visibility_to_node(self.last_ast_node)
     
     def _apply_visibility_to_node(self, node: IbcBaseAstNode) -> None:
-        """为节点附加可见性"""
-        # 处理类节点的可见性
-        if isinstance(node, ClassNode):
-            # 递归查找父节点，确定是顶层类、类内类还是函数内类
-            parent_context = self._find_parent_context(node.parent_uid)
-            
-            if parent_context == 'top':
-                # 顶层类，必须是public
-                node.visibility = VisibilityTypes.PUBLIC
-            elif parent_context == 'class':
-                # 类内类，使用当前类内可见性
-                for state_obj, _ in reversed(self.state_stack):
-                    if isinstance(state_obj, ClassContentState):
-                        node.visibility = state_obj.get_current_visibility()
-                        break
-            elif parent_context == 'func':
-                # 函数内类，必须是private
-                node.visibility = VisibilityTypes.PRIVATE
+        """为节点附加可见性
         
-        # 处理函数节点的可见性
-        elif isinstance(node, FunctionNode):
-            # 递归查找父节点，确定是顶层函数、类内函数还是函数内函数
-            parent_context = self._find_parent_context(node.parent_uid)
-            
-            if parent_context == 'top':
-                # 顶层函数，默认public
-                node.visibility = VisibilityTypes.PUBLIC
-            elif parent_context == 'class':
-                # 类内函数，使用当前类内可见性
-                for state_obj, _ in reversed(self.state_stack):
-                    if isinstance(state_obj, ClassContentState):
-                        node.visibility = state_obj.get_current_visibility()
-                        break
-            elif parent_context == 'func':
-                # 函数内函数，必须是private
-                node.visibility = VisibilityTypes.PRIVATE
+        统一规则（类/函数/变量一致）：
+        - 若父上下文在顶层：默认 public
+        - 若父上下文在类内：使用当前类内可见性（ClassContentState.current_visibility）
+        - 若父上下文在函数内：一律 private，对外不可见
+        """
+        # 只对 Class / Function / Variable 节点应用可见性规则
+        if not isinstance(node, (ClassNode, FunctionNode, VariableNode)):
+            return
         
-        # 处理变量节点的可见性
-        elif isinstance(node, VariableNode):
-            # 变量只能在类内定义，使用当前类内可见性
+        parent_context = self._find_parent_context(node.parent_uid)
+        
+        if parent_context == 'top':
+            # 顶层类/函数/变量，默认 public
+            node.visibility = VisibilityTypes.PUBLIC
+        elif parent_context == 'class':
+            # 类内定义的类/函数/变量，使用当前类内可见性
             for state_obj, _ in reversed(self.state_stack):
                 if isinstance(state_obj, ClassContentState):
                     node.visibility = state_obj.get_current_visibility()
                     break
+        elif parent_context == 'func':
+            # 函数内定义的类/函数/变量，一律 private
+            node.visibility = VisibilityTypes.PRIVATE
     
     def _find_parent_context(self, parent_uid: int) -> str:
         """
@@ -343,27 +344,6 @@ class IbcParser:
         current_state_obj, parent_uid = self.state_stack[-1]
         state_obj = BehaviorStepState(parent_uid, self.uid_generator, self.ast_nodes)
         self.state_stack.append((state_obj, parent_uid))
-        self._process_token_in_current_state(token)
-    
-    def parse(self) -> Dict[int, IbcBaseAstNode]:
-        """执行解析"""
-        while not self._is_at_end():
-            token = self._consume_token()
-            self.line_num = token.line_num
-
-            # 阶段1：决定当前token应该被如何处理
-            main_state = self._determine_main_state(token)
-            
-            # 阶段2：执行token处理
-            self._execute_token_processing(token, main_state)
-            
-            # 阶段3：token后处理
-            self._post_process_token(token)
-            
-            # 阶段4：处理状态机弹出后的额外动作
-            self._handle_post_pop_actions(token)
-            
-        return self.ast_nodes
     
     def _handle_indent(self, token: Token) -> None:
         """处理缩进"""
@@ -467,17 +447,20 @@ class IbcParser:
         if state_obj:
             self.state_stack.append((state_obj, parent_uid))
     
-    def _process_token_in_current_state(self, token: Token) -> None:
-        """将token传递给当前状态机处理"""
-        if not self.state_stack:
-            raise IbcParserError(
-                message="No state in stack",
-                line_num=token.line_num
-            )
-            
-        # 获取栈顶的状态机实例
-        current_state_obj, parent_uid = self.state_stack[-1]
-        
-        # 状态机实例处理token
-        current_state_obj.process_token(token)
+    def _peek_token(self) -> Token:
+        """查看当前token"""
+        if self.pos < len(self.tokens):
+            return self.tokens[self.pos]
+        return Token(IbcTokenType.EOF, "", -1)
+    
+    def _consume_token(self) -> Token:
+        """消费当前token"""
+        token = self._peek_token()
+        self.pos += 1
+        return token
+    
+    def _is_at_end(self) -> bool:
+        """检查是否到达文件末尾"""
+        return self._peek_token().type == IbcTokenType.EOF
+    
 
