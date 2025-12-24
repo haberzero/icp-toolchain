@@ -254,7 +254,8 @@ class IbcParser:
         # 检查是否存在uid的更新
         current_uid = self.uid_generator.get_current_uid()
         if current_uid > self.last_ast_node_uid:
-            self._update_last_ast_node(current_uid)
+            self._process_pending_info(current_uid)
+            self._apply_visibility_to_node(self.last_ast_node)
         
         # 获取顶部状态机实例
         current_state_obj, _ = self.state_stack[-1]
@@ -269,26 +270,22 @@ class IbcParser:
         if current_state_obj.is_need_pop():
             self._handle_state_pop(current_state_obj, token)
     
-    def _update_last_ast_node(self, current_uid: int) -> None:
-        """更新最后AST节点并附加描述信息和可见性"""
+    def _process_pending_info(self, current_uid: int) -> None:
+        """向 classnode 与 functionnode 附加描述对外描述和意图注释"""
         self.last_ast_node_uid = current_uid
         self.last_ast_node = self.ast_nodes[current_uid]
         
-        # 如果是类声明或函数声明节点，附加对外描述和意图注释
         if isinstance(self.last_ast_node, (ClassNode, FunctionNode)):
             self.last_ast_node.external_desc = self.pending_description
             self.last_ast_node.intent_comment = self.pending_intent_comment
-            self.pending_description = ""
-            self.pending_intent_comment = ""
-        else:
-            self.pending_description = ""
-            self.pending_intent_comment = ""
-        
-        # 统一处理可见性
-        self._apply_visibility_to_node(self.last_ast_node)
+        elif isinstance(self.last_ast_node, VariableNode):
+            self.last_ast_node.external_desc = self.last_ast_node.content
+
+        self.pending_description = ""
+        self.pending_intent_comment = ""
     
     def _apply_visibility_to_node(self, node: IbcBaseAstNode) -> None:
-        """为节点附加可见性
+        """为节点附加可见性，只对 Class / Function / Variable 节点应用可见性规则
         
         统一规则（类/函数/变量一致）：
         - 若父上下文在顶层：默认 public
@@ -297,7 +294,6 @@ class IbcParser:
 
         TODO: 目前对于嵌套class里的可见性有疑问。但目前不是关键逻辑问题所以暂时搁置
         """
-        # 只对 Class / Function / Variable 节点应用可见性规则
         if not isinstance(node, (ClassNode, FunctionNode, VariableNode)):
             return
         

@@ -260,7 +260,6 @@ class VarDeclState(BaseState):
         
         for var_name, var_desc in self.variables.items():
             uid = self.uid_generator.gen_uid()
-            # 变量的 content 同时作为对外描述 external_desc 使用
             cleaned_desc = var_desc.strip()
             var_node = VariableNode(
                 uid=uid,
@@ -269,7 +268,6 @@ class VarDeclState(BaseState):
                 line_number=line_num,
                 identifier=var_name,
                 content=cleaned_desc,
-                external_desc=cleaned_desc,
                 type_ref=self.var_type_refs.get(var_name, [])  # 添加类型引用列表
             )
             self.ast_node_dict[uid] = var_node
