@@ -120,15 +120,117 @@ class IbcDataStore:
             return IbcBaseAstNode.from_dict(node_dict)
     
     # ==================== 校验数据管理 ====================
+    # 新版：统一verify文件管理（保存在 icp_proj_data/update_flag_verify.json）
+    
+    def load_file_verify_data(self, data_dir_path: str, file_path: str) -> Dict[str, str]:
+        """从统一的verify文件中加载指定文件的校验数据
+        
+        Args:
+            data_dir_path: 数据目录路径（通常为 icp_proj_data）
+            file_path: 文件路径（如 "src/ball_physics/ball"）
+            
+        Returns:
+            Dict[str, str]: 该文件的校验数据，不存在时返回空字典
+        """
+        verify_file_path = os.path.join(data_dir_path, 'update_flag_verify.json')
+        
+        if not os.path.exists(verify_file_path):
+            return {}
+        
+        try:
+            with open(verify_file_path, 'r', encoding='utf-8') as f:
+                all_verify_data = json.load(f)
+            return all_verify_data.get(file_path, {})
+        except Exception as e:
+            # 不抛出异常，返回空字典，避免阻塞流程
+            return {}
+    
+    def save_file_verify_data(self, data_dir_path: str, file_path: str, verify_data: Dict[str, str]) -> None:
+        """将指定文件的校验数据保存到统一的verify文件中
+        
+        Args:
+            data_dir_path: 数据目录路径（通常为 icp_proj_data）
+            file_path: 文件路径（如 "src/ball_physics/ball"）
+            verify_data: 该文件的校验数据
+        """
+        verify_file_path = os.path.join(data_dir_path, 'update_flag_verify.json')
+        
+        # 加载所有verify数据
+        all_verify_data = {}
+        if os.path.exists(verify_file_path):
+            try:
+                with open(verify_file_path, 'r', encoding='utf-8') as f:
+                    all_verify_data = json.load(f)
+            except Exception as e:
+                # 读取失败时使用空字典
+                all_verify_data = {}
+        
+        # 更新当前文件的数据
+        all_verify_data[file_path] = verify_data
+        
+        # 保存回文件
+        try:
+            os.makedirs(data_dir_path, exist_ok=True)
+            with open(verify_file_path, 'w', encoding='utf-8') as f:
+                json.dump(all_verify_data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            raise IOError(f"保存verify文件失败 [{verify_file_path}]: {e}") from e
+    
+    def batch_update_ibc_verify_codes(
+        self,
+        data_dir_path: str,
+        ibc_root: str,
+        file_paths: List[str]
+    ) -> None:
+        """批量更新所有ibc文件的MD5校验码到统一的verify文件
+        
+        Args:
+            data_dir_path: 数据目录路径（通常为 icp_proj_data）
+            ibc_root: IBC根目录路径
+            file_paths: 要更新的文件路径列表
+        """
+        from libs.ibc_funcs import IbcFuncs
+        
+        for file_path in file_paths:
+            ibc_path = self.build_ibc_path(ibc_root, file_path)
+            
+            if not os.path.exists(ibc_path):
+                continue
+            
+            try:
+                ibc_content = self.load_ibc_code(ibc_path)
+                if not ibc_content:
+                    continue
+                
+                # 计算MD5
+                current_md5 = IbcFuncs.calculate_text_md5(ibc_content)
+                
+                # 加载当前文件的verify数据
+                verify_data = self.load_file_verify_data(data_dir_path, file_path)
+                verify_data['ibc_verify_code'] = current_md5
+                
+                # 保存回去
+                self.save_file_verify_data(data_dir_path, file_path, verify_data)
+            except Exception as e:
+                # 单个文件失败不影响其他文件
+                continue
+    
+    # ==================== 旧版校验数据管理（已废弃，保留以保持向后兼容） ====================
     
     def build_verify_path(self, ibc_root: str, file_path: str) -> str:
-        """构建校验文件路径: ibc_root/file_path_verify.json"""
+        """构建verify文件路径: ibc_root/file_path_verify.json
+        
+        @deprecated: 请使用 load_file_verify_data 和 save_file_verify_data
+        """
         # 解决Windows和Linux路径分隔符问题
         normalized_file_path = file_path.replace('/', os.sep)
         return os.path.join(ibc_root, f"{normalized_file_path}_verify.json")
     
     def save_verify_data(self, verify_path: str, verify_data: Dict[str, str]) -> None:
-        """保存校验数据到文件"""
+        """保存校验数据到文件
+        
+        @deprecated: 请使用 save_file_verify_data
+        """
         try:
             directory = os.path.dirname(verify_path)
             if directory and not os.path.exists(directory):
@@ -140,7 +242,10 @@ class IbcDataStore:
             raise IOError(f"保存校验数据失败 [{verify_path}]: {e}") from e
     
     def load_verify_data(self, verify_path: str) -> Dict[str, str]:
-        """加载校验数据，文件不存在时返回空字典"""
+        """加载校验数据，文件不存在时返回空字典
+        
+        @deprecated: 请使用 load_file_verify_data
+        """
         if not os.path.exists(verify_path):
             return {}
         
@@ -151,7 +256,10 @@ class IbcDataStore:
             raise IOError(f"读取校验数据失败 [{verify_path}]: {e}") from e
     
     def update_verify_code(self, ibc_root: str, file_path: str, code_type: str = 'ibc') -> None:
-        """更新单个文件的校验码"""
+        """更新单个文件的校验码
+        
+        @deprecated: 请使用 batch_update_ibc_verify_codes
+        """
         from libs.ibc_funcs import IbcFuncs
         
         ibc_path = self.build_ibc_path(ibc_root, file_path)
@@ -174,7 +282,10 @@ class IbcDataStore:
         self.save_verify_data(verify_path, verify_data)
     
     def batch_update_verify_codes(self, ibc_root: str, file_paths: List[str]) -> None:
-        """批量更新校验码"""
+        """批量更新校验码
+        
+        @deprecated: 请使用 batch_update_ibc_verify_codes
+        """
         for file_path in file_paths:
             self.update_verify_code(ibc_root, file_path)
     
@@ -282,13 +393,13 @@ class IbcDataStore:
         说明：
             - 不进行任何print，仅通过返回值告知调用方是否可以继续后续动作
             - 检查规则：
-              * 如果不存在依赖，则认为没有可用符号，返回 False
+              * 如果不存在依赖，则认为无需依赖其它文件的符号，返回 True
               * 如果任一依赖文件的符号表文件不存在或无内容，则返回 False
               * 仅当所有依赖的符号表文件都存在且有内容时返回 True
         """
         dependencies = dependent_relation.get(current_file_path, [])
         if not dependencies:
-            return False
+            return True
 
         for dep_file_path in dependencies:
             symbols_path = self.build_symbols_path(ibc_root, dep_file_path)
@@ -303,6 +414,7 @@ class IbcDataStore:
                 return False
 
         return True
+    
     def update_symbol_info(
         self,
         symbols_path: str,

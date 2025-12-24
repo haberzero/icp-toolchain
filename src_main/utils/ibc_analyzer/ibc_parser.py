@@ -392,6 +392,10 @@ class IbcParser:
         # 处理从延续行模式弹出的BehaviorStepState
         if isinstance(current_state_obj, BehaviorStepState):
             self._handle_behavior_continuation_pop(current_state_obj)
+        
+        # 处理从延续行模式弹出的VarDeclState
+        if isinstance(current_state_obj, VarDeclState):
+            self._handle_var_continuation_pop(current_state_obj)
     
     def _handle_behavior_continuation_pop(self, behavior_state: BehaviorStepState) -> None:
         """处理行为步骤延续行弹出逻辑"""
@@ -418,6 +422,15 @@ class IbcParser:
             # 不需要创建新代码块，吸收所有局部缩进的DEDENT
             if local_indent > 0:
                 self.continuation_dedent_to_absorb = local_indent
+    
+    def _handle_var_continuation_pop(self, var_state: VarDeclState) -> None:
+        """处理变量声明延续行弹出逻辑"""
+        # 获取局部缩进等级
+        local_indent = var_state.get_local_indent_level()
+        
+        # VarDeclState 不会创建新代码块，只需要吸收所有局部缩进的DEDENT
+        if local_indent > 0:
+            self.continuation_dedent_to_absorb = local_indent
     
     def _handle_post_pop_actions(self, token: Token) -> None:
         """处理状态机弹出后的额外动作"""

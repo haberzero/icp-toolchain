@@ -81,10 +81,14 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 print(f"{Colors.FAIL}文件 {file_path} 处理失败，退出运行{Colors.ENDC}")
                 return
         
-        # 所有文件处理完毕，统一更新ibc文件的MD5值
+        # 所有文件处理完毕，统一更新ibc文件的MD5值到统一的verify文件
         print(f"  {Colors.OKBLUE}开始更新ibc文件校验码...{Colors.ENDC}")
         ibc_data_store = get_ibc_data_store()
-        ibc_data_store.batch_update_verify_codes(self.work_ibc_dir_path, self.file_creation_order_list)
+        ibc_data_store.batch_update_ibc_verify_codes(
+            self.work_data_dir_path,
+            self.work_ibc_dir_path,
+            self.file_creation_order_list
+        )
         print(f"  {Colors.OKGREEN}ibc文件校验码更新完毕{Colors.ENDC}")
         
         print(f"{Colors.OKGREEN}半自然语言行为描述代码生成完毕!{Colors.ENDC}")
@@ -181,10 +185,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         for file_path in file_list:
             need_update = False
             
-            ibc_data_store = get_ibc_data_store()
             req_file = os.path.join(self.work_staging_dir_path, f"{file_path}_one_file_req.txt")
+            ibc_data_store = get_ibc_data_store()
             ibc_path = ibc_data_store.build_ibc_path(self.work_ibc_dir_path, file_path)
-            verify_path = ibc_data_store.build_verify_path(self.work_ibc_dir_path, file_path)
             
             # 读取one_file_req的当前MD5
             try:
@@ -197,9 +200,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 need_update_flag_dict[file_path] = need_update
                 continue
             
-            # 读取或创建verify.json文件
+            # 从统一的verify文件中加载该文件的校验数据
             ibc_data_store = get_ibc_data_store()
-            verify_data = ibc_data_store.load_verify_data(verify_path)
+            verify_data = ibc_data_store.load_file_verify_data(self.work_data_dir_path, file_path)
             
             # 检查one_file_req的MD5是否变化
             saved_req_md5 = verify_data.get('one_file_req_verify_code', None)
@@ -217,9 +220,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             need_update_flag_dict[file_path] = need_update
             
-            # 更新one_file_req的MD5到verify文件
+            # 更新one_file_req的MD5到统一的verify文件
             verify_data['one_file_req_verify_code'] = current_req_md5
-            ibc_data_store.save_verify_data(verify_path, verify_data)
+            ibc_data_store.save_file_verify_data(self.work_data_dir_path, file_path, verify_data)
         
         # 第二阶段：依赖链传播更新
         # 按依赖顺序遍历（file_list已经是拓扑排序后的顺序）
@@ -231,7 +234,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 # 检查ibc文件的MD5是否变化（用户可能手动修改了）
                 ibc_data_store = get_ibc_data_store()
                 ibc_path = ibc_data_store.build_ibc_path(self.work_ibc_dir_path, file_path)
-                verify_path = ibc_data_store.build_verify_path(self.work_ibc_dir_path, file_path)
                 
                 if os.path.exists(ibc_path):
                     try:
@@ -239,7 +241,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                         if ibc_content:
                             current_ibc_md5 = IbcFuncs.calculate_text_md5(ibc_content)
                             
-                            verify_data = ibc_data_store.load_verify_data(verify_path)
+                            verify_data = ibc_data_store.load_file_verify_data(self.work_data_dir_path, file_path)
                             saved_ibc_md5 = verify_data.get('ibc_verify_code', None)
                         if saved_ibc_md5 is not None and saved_ibc_md5 != current_ibc_md5:
                             print(f"    {Colors.OKBLUE}ibc文件被手动修改: {file_path}，依赖它的文件需要更新{Colors.ENDC}")
@@ -269,7 +271,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                     # 递归传播
                     self._propagate_update_to_dependents(potential_dependent, need_update_flag_dict)
     
-    def _create_single_ibc_file(self, icp_json_file_path: str):
+    def _create_single_ibc_file(self, icp_json_file_path: str) -> bool:
         """为单个文件生成IBC代码（包含重试机制）
         
         Args:
@@ -280,10 +282,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 检查是否需要更新
         if not self.need_update_flag_dict.get(icp_json_file_path, False):
             print(f"    {Colors.WARNING}文件及其依赖均未变化，跳过生成: {icp_json_file_path}{Colors.ENDC}")
-            return
+            return True
 
-        # 带重试的生成逻辑
-        max_attempts = 3
+        # 带重试的生成逻辑（IBC 代码的生成过程不确定性更多，提供较多的重试次数）
+        max_attempts = 5
         for attempt in range(max_attempts):
             print(f"    {Colors.OKBLUE}正在重试... (尝试 {attempt + 1}/{max_attempts}){Colors.ENDC}")
 
@@ -291,7 +293,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             user_prompt = self._build_user_prompt_for_ibc_generator(icp_json_file_path)
             if not user_prompt:
                 print(f"{Colors.FAIL}错误: 用户提示词构建失败，终止执行{Colors.ENDC}")
-                return
+                return False
             
             # 将用户提示词保存到stage文件夹以便查看生成过程
             self._save_user_prompt_to_stage(icp_json_file_path, user_prompt, attempt + 1)
@@ -325,17 +327,23 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             ibc_data_store.save_ibc_code(ibc_path, ibc_code)
             print(f"    {Colors.OKGREEN}IBC代码已保存: {ibc_path}{Colors.ENDC}")
             
-            # 保存AST
-            ast_path = ibc_data_store.build_ast_path(self.work_ibc_dir_path, icp_json_file_path)
-            ibc_data_store.save_ast(ast_path, ast_dict)
-            print(f"    {Colors.OKGREEN}AST已保存: {ast_path}{Colors.ENDC}")
+            # # 保存AST（暂时不需要保存到文件）
+            # ast_path = ibc_data_store.build_ast_path(self.work_ibc_dir_path, icp_json_file_path)
+            # ibc_data_store.save_ast(ast_path, ast_dict)
+            # print(f"    {Colors.OKGREEN}AST已保存: {ast_path}{Colors.ENDC}")
             
-            # IBC代码和AST保存成功，返回成功
-            return
+            # 保存符号表
+            file_name = os.path.basename(icp_json_file_path)
+            symbols_path = ibc_data_store.build_symbols_path(self.work_ibc_dir_path, icp_json_file_path)
+            ibc_data_store.save_symbols(symbols_path, file_name, symbol_table)
+            print(f"    {Colors.OKGREEN}符号表已保存: {symbols_path}{Colors.ENDC}")
+            
+            # IBC代码和符号表保存成功，返回成功
+            return True
         
         # 达到最大重试次数
         print(f"  {Colors.FAIL}已达到最大重试次数({max_attempts})，跳过该文件{Colors.ENDC}")
-        return
+        return False
 
     def _build_user_prompt_for_ibc_generator(self, icp_json_file_path: str) -> str:
         """
@@ -360,6 +368,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             current_file_path=icp_json_file_path,
         ):
             # 依赖符号不可用时，认为用户提示词构建失败
+            print(f"  {Colors.FAIL}警告: 依赖符号表构建失败，用户提示词构建失败: {icp_json_file_path}{Colors.ENDC}")
             return ""
 
         dependency_symbol_tables = ibc_data_store.load_dependency_symbol_tables(

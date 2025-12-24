@@ -1772,6 +1772,269 @@ def test_visibility_nested_class():
         return False
 
 
+def test_var_bracket_continuation():
+    """测试变量声明中的方括号延续行"""
+    print("\n测试 var_bracket_continuation 函数...")
+    
+    code = """func test():
+    var 颜色列表 = ["#f8b862", "#f6ad49",
+                       "#f39800", "#f08300"]
+    var 球半径 = 15
+    var 中心点坐标 = (0, 0)
+"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        assert isinstance(func_node, FunctionNode), "预期为FunctionNode"
+        
+        # 收集变量节点
+        var_dict = {}
+        for child_uid in func_node.children_uids:
+            child_node = ast_nodes[child_uid]
+            if isinstance(child_node, VariableNode):
+                var_dict[child_node.identifier] = child_node.content
+        
+        # 验证三个变量都被正确解析
+        assert "颜色列表" in var_dict, "缺少颜色列表变量"
+        assert "球半径" in var_dict, "缺少球半径变量"
+        assert "中心点坐标" in var_dict, "缺少中心点坐标变量"
+        
+        # 验证方括号内容被正确收集
+        assert "#f8b862" in var_dict["颜色列表"], f"颜色列表内容不完整: {var_dict['颜色列表']}"
+        assert "#f39800" in var_dict["颜色列表"], f"颜色列表内容不完整: {var_dict['颜色列表']}"
+        
+        print("  ✓ 成功解析变量声明中的方括号延续行")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_var_paren_continuation():
+    """测试变量声明中的小括号延续行"""
+    print("\n测试 var_paren_continuation 函数...")
+    
+    code = """func test():
+    var 距离 = sqrt(
+        (球1.x - 球2.x) ** 2 +
+        (球1.y - 球2.y) ** 2
+    )
+    var 半径总和 = 球1.半径 + 球2.半径
+"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 收集变量节点
+        var_dict = {}
+        for child_uid in func_node.children_uids:
+            child_node = ast_nodes[child_uid]
+            if isinstance(child_node, VariableNode):
+                var_dict[child_node.identifier] = child_node.content
+        
+        # 验证两个变量都被正确解析
+        assert "距离" in var_dict, "缺少距离变量"
+        assert "半径总和" in var_dict, "缺少半径总和变量"
+        
+        # 验证小括号内容被正确收集
+        assert "球1.x" in var_dict["距离"], f"距离内容不完整: {var_dict['距离']}"
+        assert "球2.y" in var_dict["距离"], f"距离内容不完整: {var_dict['距离']}"
+        
+        print("  ✓ 成功解析变量声明中的小括号延续行")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_var_brace_continuation():
+    """测试变量声明中的花括号延续行"""
+    print("\n测试 var_brace_continuation 函数...")
+    
+    code = """func test():
+    var 配置字典 = {
+        "host": "localhost",
+        "port": 8080,
+        "debug": True
+    }
+    var 结果 = "完成"
+"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 收集变量节点
+        var_dict = {}
+        for child_uid in func_node.children_uids:
+            child_node = ast_nodes[child_uid]
+            if isinstance(child_node, VariableNode):
+                var_dict[child_node.identifier] = child_node.content
+        
+        # 验证两个变量都被正确解析
+        assert "配置字典" in var_dict, "缺少配置字典变量"
+        assert "结果" in var_dict, "缺少结果变量"
+        
+        # 验证花括号内容被正确收集
+        assert "host" in var_dict["配置字典"], f"配置字典内容不完整: {var_dict['配置字典']}"
+        assert "8080" in var_dict["配置字典"], f"配置字典内容不完整: {var_dict['配置字典']}"
+        
+        print("  ✓ 成功解析变量声明中的花括号延续行")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_var_multiline_complex():
+    """测试变量声明中的复杂多行场景（真实案例）"""
+    print("\n测试 var_multiline_complex 函数...")
+    
+    code = """description: 物理引擎核心类
+@ 负责协调所有球体的重力、摩擦和碰撞逻辑
+class PhysicsEngine():
+    private
+    var ball_list: 球对象列表
+    var gravity: 重力加速度常量
+
+    public
+    func __init__():
+        self.ball_list = []
+        self.gravity = 9.81
+
+        var 颜色列表 = ["#f8b862", "#f6ad49", "#f39800",
+                       "#f08300", "#ec6d51", "#ee7948"]
+        
+        var 球半径 = 15
+        var 中心坐标 = (0, 0)
+"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        class_node = ast_nodes[root_node.children_uids[0]]
+        
+        assert isinstance(class_node, ClassNode), "预期为ClassNode"
+        assert class_node.external_desc == "物理引擎核心类", "类描述不匹配"
+        assert class_node.intent_comment == "负责协调所有球体的重力、摩擦和碰撞逻辑", "意图注释不匹配"
+        
+        # 查找 __init__ 函数
+        init_func = None
+        for child_uid in class_node.children_uids:
+            child_node = ast_nodes[child_uid]
+            if isinstance(child_node, FunctionNode) and child_node.identifier == "__init__":
+                init_func = child_node
+                break
+        
+        assert init_func is not None, "找不到__init__函数"
+        
+        # 收集函数内的变量
+        var_dict = {}
+        for child_uid in init_func.children_uids:
+            child_node = ast_nodes[child_uid]
+            if isinstance(child_node, VariableNode):
+                var_dict[child_node.identifier] = child_node.content
+        
+        # 验证三个变量都被正确解析
+        assert "颜色列表" in var_dict, "缺少颜色列表变量"
+        assert "球半径" in var_dict, "缺少球半径变量"
+        assert "中心坐标" in var_dict, "缺少中心坐标变量"
+        
+        # 验证颜色列表包含多个颜色值
+        assert "#f8b862" in var_dict["颜色列表"], "颜色列表内容不完整"
+        assert "#ee7948" in var_dict["颜色列表"], "颜色列表内容不完整"
+        
+        print("  ✓ 成功解析复杂多行变量声明（真实案例）")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_var_nested_brackets():
+    """测试变量声明中的嵌套括号"""
+    print("\n测试 var_nested_brackets 函数...")
+    
+    code = """func test():
+    var 矩阵 = [
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9]
+    ]
+    var 配置 = {
+        "database": {
+            "host": "localhost",
+            "port": 3306
+        }
+    }
+"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 收集变量节点
+        var_dict = {}
+        for child_uid in func_node.children_uids:
+            child_node = ast_nodes[child_uid]
+            if isinstance(child_node, VariableNode):
+                var_dict[child_node.identifier] = child_node.content
+        
+        # 验证两个变量都被正确解析
+        assert "矩阵" in var_dict, "缺少矩阵变量"
+        assert "配置" in var_dict, "缺少配置变量"
+        
+        # 验证嵌套内容被正确收集
+        assert "[1, 2, 3]" in var_dict["矩阵"] or "1, 2, 3" in var_dict["矩阵"], f"矩阵内容不完整: {var_dict['矩阵']}"
+        assert "localhost" in var_dict["配置"], f"配置内容不完整: {var_dict['配置']}"
+        assert "3306" in var_dict["配置"], f"配置内容不完整: {var_dict['配置']}"
+        
+        print("  ✓ 成功解析变量声明中的嵌套括号")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def test_visibility_func_nested():
     """测试函数内嵌套定义的类和函数的可见性"""
     print("\n测试 visibility_func_nested 函数...")
@@ -1890,6 +2153,13 @@ if __name__ == "__main__":
         test_results.append(("变量类型引用", test_var_type_ref()))
         test_results.append(("变量多引用错误", test_var_type_ref_error()))
         test_results.append(("变量 = 等号语法", test_var_with_equal_sign()))
+        
+        # 变量括号延续行测试（新增）
+        test_results.append(("变量方括号延续行", test_var_bracket_continuation()))
+        test_results.append(("变量小括号延续行", test_var_paren_continuation()))
+        test_results.append(("变量花括号延续行", test_var_brace_continuation()))
+        test_results.append(("变量嵌套括号", test_var_nested_brackets()))
+        test_results.append(("变量复杂多行场景", test_var_multiline_complex()))
         
         # 可见性测试
         test_results.append(("基本可见性", test_visibility_basic()))

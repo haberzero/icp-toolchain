@@ -161,6 +161,12 @@ class VarDeclState(BaseState):
         self.sub_state = VarDeclSubState.EXPECTING_VAR_NAME
         self.pop_flag = False
         self.is_multi_var_line = False
+        
+        # 括号延续行支持
+        self.local_indent_level = 0  # 局部缩进等级，从延续行起始开始计算
+        self.paren_count = 0  # ()
+        self.brace_count = 0  # {}
+        self.bracket_count = 0  # []
 
     def process_token(self, token: Token) -> None:
         self.current_token = token
@@ -234,22 +240,80 @@ class VarDeclState(BaseState):
                 self.current_var_type_refs.append(token.value.strip())
                 # 将引用内容也加入描述中
                 self.current_var_desc += token.value
-            elif token.type == IbcTokenType.NEWLINE:
-                # 结束当前变量，创建节点并弹出
-                if self.current_var_name not in self.variables:
-                    self.variables[self.current_var_name] = self.current_var_desc.strip()
-                    if self.current_var_type_refs:
-                        self.var_type_refs[self.current_var_name] = self.current_var_type_refs.copy()
-                else:
+            elif token.type == IbcTokenType.INDENT:
+                # 延续行中的缩进，只跟踪不收集
+                self.local_indent_level += 1
+            elif token.type == IbcTokenType.DEDENT:
+                # 延续行中的退缩进，只跟踪不收集
+                self.local_indent_level -= 1
+                if self.local_indent_level < 0:
                     raise IbcParserError(
-                        message=f"VarDeclState: Got an duplicate var definitions",
+                        message=f"VarDeclState: Unexpected dedent structure",
                         line_num=token.line_num
                     )
-                self.current_var_name = ""
-                self.current_var_desc = ""
-                self.current_var_type_refs = []
-                self._create_variable_nodes()
-                self.pop_flag = True
+            elif token.type == IbcTokenType.LPAREN:
+                # 进入小括号延续行
+                self.paren_count += 1
+                self.current_var_desc += token.value
+                # 启用token透传，以便接收小括号内的INDENT/DEDENT
+                if self.paren_count == 1 and self.bracket_count == 0 and self.brace_count == 0:
+                    self.pass_in_token_flag = True
+            elif token.type == IbcTokenType.RPAREN:
+                # 小括号闭合
+                self.paren_count -= 1
+                self.current_var_desc += token.value
+                # 如果所有括号都已封闭，关闭token透传
+                if self.paren_count == 0 and self.brace_count == 0 and self.bracket_count == 0:
+                    self.pass_in_token_flag = False
+            elif token.type == IbcTokenType.LBRACE:
+                # 进入花括号延续行
+                self.brace_count += 1
+                self.current_var_desc += token.value
+                # 启用token透传，以便接收花括号内的INDENT/DEDENT
+                if self.brace_count == 1 and self.paren_count == 0 and self.bracket_count == 0:
+                    self.pass_in_token_flag = True
+            elif token.type == IbcTokenType.RBRACE:
+                # 花括号闭合
+                self.brace_count -= 1
+                self.current_var_desc += token.value
+                # 如果所有括号都已封闭，关闭token透传
+                if self.paren_count == 0 and self.brace_count == 0 and self.bracket_count == 0:
+                    self.pass_in_token_flag = False
+            elif token.type == IbcTokenType.LBRACKET:
+                # 进入方括号延续行
+                self.bracket_count += 1
+                self.current_var_desc += token.value
+                # 启用token透传，以便接收方括号内的INDENT/DEDENT
+                if self.bracket_count == 1 and self.paren_count == 0 and self.brace_count == 0:
+                    self.pass_in_token_flag = True
+            elif token.type == IbcTokenType.RBRACKET:
+                # 方括号闭合
+                self.bracket_count -= 1
+                self.current_var_desc += token.value
+                # 如果所有括号都已封闭，关闭token透传
+                if self.paren_count == 0 and self.brace_count == 0 and self.bracket_count == 0:
+                    self.pass_in_token_flag = False
+            elif token.type == IbcTokenType.NEWLINE:
+                # 检查是否所有括号都已封闭
+                if self.paren_count == 0 and self.brace_count == 0 and self.bracket_count == 0:
+                    # 所有括号已封闭，结束当前变量，创建节点并弹出
+                    if self.current_var_name not in self.variables:
+                        self.variables[self.current_var_name] = self.current_var_desc.strip()
+                        if self.current_var_type_refs:
+                            self.var_type_refs[self.current_var_name] = self.current_var_type_refs.copy()
+                    else:
+                        raise IbcParserError(
+                            message=f"VarDeclState: Got an duplicate var definitions",
+                            line_num=token.line_num
+                        )
+                    self.current_var_name = ""
+                    self.current_var_desc = ""
+                    self.current_var_type_refs = []
+                    self._create_variable_nodes()
+                    self.pop_flag = True
+                else:
+                    # 括号未封闭，添加空格继续
+                    self.current_var_desc += " "
             else:
                 # 收集其他描述内容
                 self.current_var_desc += token.value
@@ -276,6 +340,10 @@ class VarDeclState(BaseState):
 
     def is_need_pop(self) -> bool:
         return self.pop_flag
+    
+    def get_local_indent_level(self) -> int:
+        """返回局部缩进等级"""
+        return self.local_indent_level
 
 
 
