@@ -294,6 +294,8 @@ class IbcParser:
         - 若父上下文在顶层：默认 public
         - 若父上下文在类内：使用当前类内可见性（ClassContentState.current_visibility）
         - 若父上下文在函数内：一律 private，对外不可见
+
+        TODO: 目前对于嵌套class里的可见性有疑问。但目前不是关键逻辑问题所以暂时搁置
         """
         # 只对 Class / Function / Variable 节点应用可见性规则
         if not isinstance(node, (ClassNode, FunctionNode, VariableNode)):
