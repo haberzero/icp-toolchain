@@ -140,6 +140,115 @@ class IbcParser:
         # 状态机实例处理token
         current_state_obj.process_token(token)
     
+    def _handle_indent(self, token: Token) -> None:
+        """处理缩进"""
+        # 根据最新的AST节点判断应该压入的状态
+        if isinstance(self.last_ast_node, ClassNode):
+            state_obj = ClassContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
+            self.state_stack.append((state_obj, self.last_ast_node.uid))
+
+        elif isinstance(self.last_ast_node, FunctionNode):
+            state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
+            self.state_stack.append((state_obj, self.last_ast_node.uid))
+
+        elif isinstance(self.last_ast_node, BehaviorStepNode):
+            # 行为步骤后的缩进：允许在函数内或顶层
+            current_state_obj = self.state_stack[-1][0]
+            # 允许在FuncContentState、TopLevelState或BehaviorStepState中
+            if not isinstance(current_state_obj, (FuncContentState, TopLevelState, BehaviorStepState)):
+                raise IbcParserError(
+                    message="Behavior step can only be inside a function or at top level",
+                    line_num=token.line_num
+                )
+
+            if self.last_ast_node.new_block_flag:
+                # 根据当前状态决定压入的父节点
+                if isinstance(current_state_obj, TopLevelState):
+                    # 顶层行为步骤后的代码块，父节点是当前behavior节点
+                    state_obj = TopLevelState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
+                else:
+                    # 函数内的行为步骤后的代码块
+                    state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
+                self.state_stack.append((state_obj, self.last_ast_node.uid))
+            else:
+                raise IbcParserError(
+                    message="Invalid indent, missing colon after behavior step to start a new block",
+                    line_num=token.line_num
+                )
+
+    def _handle_dedent(self, token: Token) -> None:
+        """处理退格"""
+        if self.func_pending_indent_level > 1:
+            # 此变量大于1意味着状态机刚弹出一个func decl, 在行为行开始前需要额外退缩进
+            self.func_pending_indent_level -= 1
+            return
+        
+        # 如果需要吸收DEDENT（延续行弹出后的局部缩进处理）
+        if self.continuation_dedent_to_absorb > 0:
+            self.continuation_dedent_to_absorb -= 1
+            return
+
+        if len(self.state_stack) > 1:  # 不能弹出顶层状态
+            self.state_stack.pop()
+        else:
+            raise IbcParserError(
+                message="pop state toplevel, should not happen, contact dev please",
+                line_num=token.line_num
+            )
+    
+    def _handle_keyword(self, token: Token) -> None:
+        """处理关键字"""
+        current_state_obj, parent_uid = self.state_stack[-1]
+        current_state_type = current_state_obj.state_type
+        
+        # 检查关键字在当前位置是否合法
+        if token.value == "module" and current_state_type != ParserState.TOP_LEVEL:
+            raise IbcParserError(
+                message="'module' keyword only allowed at top level",
+                line_num=token.line_num
+            )
+        
+        # 可见性关键字只允许在类内容中使用
+        if token.value in ("public", "protected", "private"):
+            if current_state_type != ParserState.CLASS_CONTENT:
+                raise IbcParserError(
+                    message=f"Visibility keyword '{token.value}' only allowed inside class definition",
+                    line_num=token.line_num
+                )
+        
+        # 根据关键字类型压入相应的状态
+        state_obj = None
+        if token.type == IbcTokenType.KEYWORDS and token.value == "module":
+            state_obj = ModuleDeclState(parent_uid, self.uid_generator, self.ast_nodes)
+        elif token.type == IbcTokenType.KEYWORDS and token.value == "var":
+            state_obj = VarDeclState(parent_uid, self.uid_generator, self.ast_nodes)
+        elif token.type == IbcTokenType.KEYWORDS and token.value == "description":
+            state_obj = DescriptionState(parent_uid, self.uid_generator, self.ast_nodes)
+        elif token.type == IbcTokenType.KEYWORDS and token.value == "class":
+            state_obj = ClassDeclState(parent_uid, self.uid_generator, self.ast_nodes)
+        elif token.type == IbcTokenType.KEYWORDS and token.value == "func":
+            state_obj = FuncDeclState(parent_uid, self.uid_generator, self.ast_nodes)
+        elif token.type == IbcTokenType.KEYWORDS and token.value == "@":
+            state_obj = IntentCommentState(parent_uid, self.uid_generator, self.ast_nodes)
+        elif token.type == IbcTokenType.KEYWORDS and token.value in ("public", "protected", "private"):
+            state_obj = VisibilityDeclState(parent_uid, self.uid_generator, self.ast_nodes)
+            state_obj.set_visibility_keyword(token.value)
+        else:
+            raise IbcParserError(
+                message=f"Invalid keyword token'{token.value}', should not happen, contact dev please",
+                line_num=token.line_num
+            )
+            
+        if state_obj:
+            self.state_stack.append((state_obj, parent_uid))
+        
+    def _handle_behavior_start(self, token: Token) -> None:
+        """处理行为步骤开始"""
+        self.is_new_line_start = False
+        current_state_obj, parent_uid = self.state_stack[-1]
+        state_obj = BehaviorStepState(parent_uid, self.uid_generator, self.ast_nodes)
+        self.state_stack.append((state_obj, parent_uid))
+
     def _post_process_token(self, token: Token) -> None:
         """处理token后的后处理逻辑"""
         # 检查是否存在uid的更新
@@ -242,7 +351,7 @@ class IbcParser:
                 return 'class'
         
         return 'top'
-    
+
     def _update_pass_token_flag(self, current_state_obj: BaseState) -> None:
         """更新token透传标志"""
         self.is_pass_token_to_state = current_state_obj.is_need_pass_in_token()
@@ -337,116 +446,7 @@ class IbcParser:
                     message="Parser TOP --- continuation_needs_new_block should only be set for BehaviorStepNode",
                     line_num=token.line_num
                 )
-    
-    def _handle_behavior_start(self, token: Token) -> None:
-        """处理行为步骤开始"""
-        self.is_new_line_start = False
-        current_state_obj, parent_uid = self.state_stack[-1]
-        state_obj = BehaviorStepState(parent_uid, self.uid_generator, self.ast_nodes)
-        self.state_stack.append((state_obj, parent_uid))
-    
-    def _handle_indent(self, token: Token) -> None:
-        """处理缩进"""
-        # 根据最新的AST节点判断应该压入的状态
-        if isinstance(self.last_ast_node, ClassNode):
-            state_obj = ClassContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
-            self.state_stack.append((state_obj, self.last_ast_node.uid))
 
-        elif isinstance(self.last_ast_node, FunctionNode):
-            state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
-            self.state_stack.append((state_obj, self.last_ast_node.uid))
-
-        elif isinstance(self.last_ast_node, BehaviorStepNode):
-            # 行为步骤后的缩进：允许在函数内或顶层
-            current_state_obj = self.state_stack[-1][0]
-            # 允许在FuncContentState、TopLevelState或BehaviorStepState中
-            if not isinstance(current_state_obj, (FuncContentState, TopLevelState, BehaviorStepState)):
-                raise IbcParserError(
-                    message="Behavior step can only be inside a function or at top level",
-                    line_num=token.line_num
-                )
-
-            if self.last_ast_node.new_block_flag:
-                # 根据当前状态决定压入的父节点
-                if isinstance(current_state_obj, TopLevelState):
-                    # 顶层行为步骤后的代码块，父节点是当前behavior节点
-                    state_obj = TopLevelState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
-                else:
-                    # 函数内的行为步骤后的代码块
-                    state_obj = FuncContentState(self.last_ast_node.uid, self.uid_generator, self.ast_nodes)
-                self.state_stack.append((state_obj, self.last_ast_node.uid))
-            else:
-                raise IbcParserError(
-                    message="Invalid indent, missing colon after behavior step to start a new block",
-                    line_num=token.line_num
-                )
-
-    def _handle_dedent(self, token: Token) -> None:
-        """处理退格"""
-        if self.func_pending_indent_level > 1:
-            # 此变量大于1意味着状态机刚弹出一个func decl, 在行为行开始前需要额外退缩进
-            self.func_pending_indent_level -= 1
-            return
-        
-        # 如果需要吸收DEDENT（延续行弹出后的局部缩进处理）
-        if self.continuation_dedent_to_absorb > 0:
-            self.continuation_dedent_to_absorb -= 1
-            return
-
-        if len(self.state_stack) > 1:  # 不能弹出顶层状态
-            self.state_stack.pop()
-        else:
-            raise IbcParserError(
-                message="pop state toplevel, should not happen, contact dev please",
-                line_num=token.line_num
-            )
-
-    def _handle_keyword(self, token: Token) -> None:
-        """处理关键字"""
-        current_state_obj, parent_uid = self.state_stack[-1]
-        current_state_type = current_state_obj.state_type
-        
-        # 检查关键字在当前位置是否合法
-        if token.value == "module" and current_state_type != ParserState.TOP_LEVEL:
-            raise IbcParserError(
-                message="'module' keyword only allowed at top level",
-                line_num=token.line_num
-            )
-        
-        # 可见性关键字只允许在类内容中使用
-        if token.value in ("public", "protected", "private"):
-            if current_state_type != ParserState.CLASS_CONTENT:
-                raise IbcParserError(
-                    message=f"Visibility keyword '{token.value}' only allowed inside class definition",
-                    line_num=token.line_num
-                )
-        
-        # 根据关键字类型压入相应的状态
-        state_obj = None
-        if token.type == IbcTokenType.KEYWORDS and token.value == "module":
-            state_obj = ModuleDeclState(parent_uid, self.uid_generator, self.ast_nodes)
-        elif token.type == IbcTokenType.KEYWORDS and token.value == "var":
-            state_obj = VarDeclState(parent_uid, self.uid_generator, self.ast_nodes)
-        elif token.type == IbcTokenType.KEYWORDS and token.value == "description":
-            state_obj = DescriptionState(parent_uid, self.uid_generator, self.ast_nodes)
-        elif token.type == IbcTokenType.KEYWORDS and token.value == "class":
-            state_obj = ClassDeclState(parent_uid, self.uid_generator, self.ast_nodes)
-        elif token.type == IbcTokenType.KEYWORDS and token.value == "func":
-            state_obj = FuncDeclState(parent_uid, self.uid_generator, self.ast_nodes)
-        elif token.type == IbcTokenType.KEYWORDS and token.value == "@":
-            state_obj = IntentCommentState(parent_uid, self.uid_generator, self.ast_nodes)
-        elif token.type == IbcTokenType.KEYWORDS and token.value in ("public", "protected", "private"):
-            state_obj = VisibilityDeclState(parent_uid, self.uid_generator, self.ast_nodes)
-            state_obj.set_visibility_keyword(token.value)
-        else:
-            raise IbcParserError(
-                message=f"Invalid keyword token'{token.value}', should not happen, contact dev please",
-                line_num=token.line_num
-            )
-            
-        if state_obj:
-            self.state_stack.append((state_obj, parent_uid))
-    
     def _peek_token(self) -> Token:
         """查看当前token"""
         if self.pos < len(self.tokens):
