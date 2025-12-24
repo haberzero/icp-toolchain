@@ -36,7 +36,7 @@
       "symbol_name": "_position",
       "normalized_name": "",
       "visibility": "public",
-      "description": "",
+      "description": "球体当前位置, 类型为 numpy.ndarray",
       "symbol_type": "var",
       "parameters": {}
     },
@@ -47,7 +47,7 @@
       "symbol_name": "_velocity",
       "normalized_name": "",
       "visibility": "public",
-      "description": "",
+      "description": "球体当前速度向量, 类型为 numpy.ndarray",
       "symbol_type": "var",
       "parameters": {}
     },
@@ -58,7 +58,7 @@
       "symbol_name": "_rotation",
       "normalized_name": "",
       "visibility": "public",
-      "description": "",
+      "description": "球体当前旋转角度",
       "symbol_type": "var",
       "parameters": {}
     },
@@ -69,7 +69,7 @@
       "symbol_name": "_angular_velocity",
       "normalized_name": "",
       "visibility": "public",
-      "description": "",
+      "description": "球体自旋角速度",
       "symbol_type": "var",
       "parameters": {}
     },
@@ -80,7 +80,7 @@
       "symbol_name": "_color",
       "normalized_name": "",
       "visibility": "public",
-      "description": "",
+      "description": "球体填充颜色值",
       "symbol_type": "var",
       "parameters": {}
     },
@@ -91,7 +91,7 @@
       "symbol_name": "_number",
       "normalized_name": "",
       "visibility": "public",
-      "description": "",
+      "description": "球体编号, 用于标识不同球体",
       "symbol_type": "var",
       "parameters": {}
     },
@@ -102,7 +102,7 @@
       "symbol_name": "_radius",
       "normalized_name": "",
       "visibility": "public",
-      "description": "",
+      "description": "球体半径, 用于碰撞检测和绘制",
       "symbol_type": "var",
       "parameters": {}
     },

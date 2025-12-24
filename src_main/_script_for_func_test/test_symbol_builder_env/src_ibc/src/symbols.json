@@ -22,7 +22,7 @@
       "symbol_name": "ball",
       "normalized_name": "",
       "visibility": "public",
-      "description": "",
+      "description": "球体实例, 类型为 ball_entity.BallEntity",
       "symbol_type": "var",
       "parameters": {}
     },
@@ -33,7 +33,7 @@
       "symbol_name": "shape",
       "normalized_name": "",
       "visibility": "public",
-      "description": "",
+      "description": "七边形实例, 类型为 heptagon_shape.HeptagonShape",
       "symbol_type": "var",
       "parameters": {}
     },

@@ -30,7 +30,7 @@
       "symbol_name": "center",
       "normalized_name": "",
       "visibility": "public",
-      "description": "",
+      "description": "七边形中心坐标, 类型为 numpy.ndarray",
       "symbol_type": "var",
       "parameters": {}
     },
@@ -41,7 +41,7 @@
       "symbol_name": "radius",
       "normalized_name": "",
       "visibility": "public",
-      "description": "",
+      "description": "外接圆半径",
       "symbol_type": "var",
       "parameters": {}
     },
@@ -52,7 +52,7 @@
       "symbol_name": "angle",
       "normalized_name": "",
       "visibility": "public",
-      "description": "",
+      "description": "当前旋转角度",
       "symbol_type": "var",
       "parameters": {}
     },
@@ -63,7 +63,7 @@
       "symbol_name": "rotation_speed",
       "normalized_name": "",
       "visibility": "public",
-      "description": "",
+      "description": "每秒旋转角度, 固定为 72 度每秒(360度/5秒)",
       "symbol_type": "var",
       "parameters": {}
     },
@@ -74,7 +74,7 @@
       "symbol_name": "num_sides",
       "normalized_name": "",
       "visibility": "public",
-      "description": "",
+      "description": "边数, 固定为7",
       "symbol_type": "var",
       "parameters": {}
     },
