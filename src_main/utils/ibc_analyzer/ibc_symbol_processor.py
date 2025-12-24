@@ -59,20 +59,20 @@ class IbcSymbolProcessor:
         if isinstance(node, ClassNode):
             return SymbolNode(
                 uid=uid,
-                parent_symbol_name="",  # 初始为空，后续由_build_symbol_hierarchy填充
+                parent_symbol_name="",  # 初始为空，由_build_symbol_hierarchy填充
                 symbol_name=node.identifier,
                 normalized_name="",  # 留空，后续由AI推断填充
-                visibility=node.visibility,  # 直接从AST节点读取，由Parser根据可见性关键字确定
+                visibility=node.visibility,
                 description=node.external_desc,
                 symbol_type=SymbolType.CLASS
             )
         elif isinstance(node, FunctionNode):
             return SymbolNode(
                 uid=uid,
-                parent_symbol_name="",  # 初始为空，后续由_build_symbol_hierarchy填充
+                parent_symbol_name="",  # 初始为空，由_build_symbol_hierarchy填充
                 symbol_name=node.identifier,
                 normalized_name="",  # 留空，后续由AI推断填充
-                visibility=node.visibility,  # 直接从AST节点读取，由Parser根据可见性关键字确定
+                visibility=node.visibility,
                 description=node.external_desc,
                 symbol_type=SymbolType.FUNCTION,
                 parameters=node.params  # 添加函数参数信息
@@ -80,10 +80,10 @@ class IbcSymbolProcessor:
         elif isinstance(node, VariableNode):
             return SymbolNode(
                 uid=uid,
-                parent_symbol_name="",  # 初始为空，后续由_build_symbol_hierarchy填充
+                parent_symbol_name="",  # 初始为空，由_build_symbol_hierarchy填充
                 symbol_name=node.identifier,
                 normalized_name="",  # 留空，后续由AI推断填充
-                visibility=node.visibility,  # 直接从AST节点读取，由Parser根据可见性关键字确定
+                visibility=node.visibility,
                 description=node.external_desc,
                 symbol_type=SymbolType.VARIABLE
             )

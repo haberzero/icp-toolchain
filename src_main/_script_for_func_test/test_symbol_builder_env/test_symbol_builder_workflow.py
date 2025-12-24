@@ -13,63 +13,63 @@
 
 VisibleSymbolBuilder.build_visible_symbol_tree() 返回两个字典：
 
-1. symbols_tree (纯树状结构，所有节点都是空字典{})
-   示例：
-   {
-       "src": {
-           "ball": {
-               "ball_entity": {
-                   "BallEntity": {
-                       "get_position": {},
-                       "set_velocity": {},
-                       "get_velocity": {}
-                   }
-               }
-           },
-           "heptagon": {
-               "heptagon_shape": {
-                   "HeptagonShape": {
-                       "get_vertices": {},
-                       "is_point_inside": {}
-                   }
-               }
-           }
-       }
-   }
+1. symbols_tree (纯树状结构，所有节点都是字典{})
+示例：
+{
+    "src": {
+        "ball": {
+            "ball_entity": {
+                "BallEntity": {
+                    "get_position": {},
+                    "set_velocity": {},
+                    "get_velocity": {}
+                }
+            }
+        },
+        "heptagon": {
+            "heptagon_shape": {
+                "HeptagonShape": {
+                    "get_vertices": {},
+                    "is_point_inside": {}
+                }
+            }
+        }
+    }
+}
 
 2. symbols_metadata (符号元数据，使用点分隔的路径作为键)
-   示例：
-   {
-       "src": {
-           "type": "folder"
-       },
-       "src.ball": {
-           "type": "folder"
-       },
-       "src.ball.ball_entity": {
-           "type": "file",
-           "description": "表示球体状态及其颜色编号管理"
-       },
-       "src.ball.ball_entity.BallEntity": {
-           "type": "class",
-           "description": "球体实体类, 管理单个球体的状态信息",
-           "visibility": "public"
-       },
-       "src.ball.ball_entity.BallEntity.get_position": {
-           "type": "func",
-           "description": "获取球体位置",
-           "visibility": "public",
-           "parameters": {}
-       },
-       "src.ball.ball_entity.BallEntity.set_velocity": {
-           "type": "func",
-           "description": "设置球体速度",
-           "visibility": "public",
-           "parameters": {
-               "速度向量": "新的速度向量"
-           }
-       }
-   }
+示例：
+{
+    "src": {
+        "type": "folder"
+    },
+    "src.ball": {
+        "type": "folder"
+    },
+    "src.ball.ball_entity": {
+        "type": "file",
+        "description": "表示球体状态及其颜色编号管理"
+    },
+    "src.ball.ball_entity.BallEntity": {
+        "type": "class",
+        "description": "球体实体类, 管理单个球体的状态信息",
+        "visibility": "public"
+    },
+    "src.ball.ball_entity.BallEntity.get_position": {
+        "type": "func",
+        "description": "获取球体位置",
+        "visibility": "public",
+        "parameters": {}
+    },
+    "src.ball.ball_entity.BallEntity.set_velocity": {
+        "type": "func",
+        "description": "设置球体速度",
+        "visibility": "public",
+        "parameters": {
+            "速度向量": "新的速度向量"
+        }
+    }
+}
 
 【元数据节点类型说明】
 
@@ -116,8 +116,8 @@ class SymbolBuilderWorkflowTest:
     
     @staticmethod
     def format_tree_as_text(
-        tree: Dict[str, Any], 
-        metadata: Dict[str, Dict[str, Any]], 
+        tree: dict[str, any], 
+        metadata: dict[str, dict[str, any]], 
         indent_level: int = 0,
         path_prefix: str = ""
     ) -> str:
