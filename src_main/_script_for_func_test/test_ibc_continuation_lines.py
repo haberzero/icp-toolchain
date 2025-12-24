@@ -1,6 +1,6 @@
 """
-测试延续行模式的冒号结尾功能
-验证逗号延续行可以以冒号结尾，并且设置new_block_flag
+延续行逻辑完整测试脚本
+包含反斜杠延续行和逗号延续行的各种测试场景
 """
 
 import sys
@@ -35,6 +35,209 @@ def print_ast_tree(ast_nodes, uid=0, indent=0):
     for child_uid in node.children_uids:
         print_ast_tree(ast_nodes, child_uid, indent + 1)
 
+
+# ============================================================
+# 反斜杠延续行测试
+# ============================================================
+
+def test_backslash_with_symbol_refs():
+    """测试反斜杠延续行中包含符号引用"""
+    print("\n测试反斜杠延续行中包含符号引用...")
+    
+    code = """\
+func 处理用户数据():
+    结果 = 调用 $userService.getUserInfo 传递参数 \\
+    用户ID, 详细信息标志, 权限级别
+    
+    返回 结果"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 验证第一个行为步骤
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        assert isinstance(behavior1, BehaviorStepNode), "预期为BehaviorStepNode"
+        
+        # 验证内容合并正确
+        assert "getUserInfo" in behavior1.content
+        assert "用户ID" in behavior1.content
+        assert "详细信息标志" in behavior1.content
+        assert "权限级别" in behavior1.content
+        
+        # 验证符号引用
+        assert "userService.getUserInfo" in behavior1.symbol_refs
+        
+        print("  ✓ 成功解析反斜杠延续行中的符号引用")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_backslash_multiple_lines():
+    """测试多行反斜杠延续"""
+    print("\n测试多行反斜杠延续...")
+    
+    code = """\
+func 构建长字符串():
+    消息 = 这是第一部分内容 \\
+    这是第二部分内容 \\
+    这是第三部分内容 \\
+    这是第四部分内容
+    
+    输出 消息"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        
+        # 验证所有部分都被合并
+        assert "第一部分" in behavior1.content
+        assert "第二部分" in behavior1.content
+        assert "第三部分" in behavior1.content
+        assert "第四部分" in behavior1.content
+        
+        print("  ✓ 成功解析多行反斜杠延续")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_backslash_in_nested_block():
+    """测试嵌套代码块中的反斜杠延续行"""
+    print("\n测试嵌套代码块中的反斜杠延续行...")
+    
+    code = """\
+func 处理条件():
+    如果 条件A 且 条件B:
+        执行 操作1 使用参数 \\
+        参数1, 参数2, 参数3
+        
+        执行 操作2"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 第一个行为是if语句
+        if_behavior = ast_nodes[func_node.children_uids[0]]
+        assert if_behavior.new_block_flag, "预期if语句有新代码块标志"
+        
+        # if代码块内的第一个行为应该包含合并的内容
+        nested_behavior1 = ast_nodes[if_behavior.children_uids[0]]
+        assert "操作1" in nested_behavior1.content
+        assert "参数1" in nested_behavior1.content
+        assert "参数2" in nested_behavior1.content
+        assert "参数3" in nested_behavior1.content
+        
+        print("  ✓ 成功解析嵌套代码块中的反斜杠延续行")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_backslash_with_special_chars():
+    """测试反斜杠延续行中包含特殊字符"""
+    print("\n测试反斜杠延续行中包含特殊字符...")
+    
+    code = """\
+func 构建表达式():
+    表达式 = (变量A + 变量B) × \\
+    (变量C - 变量D)
+    
+    返回 表达式"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        
+        # 验证括号和运算符都被保留
+        assert "(" in behavior1.content
+        assert ")" in behavior1.content
+        assert "×" in behavior1.content or "x" in behavior1.content
+        assert "变量A" in behavior1.content
+        assert "变量D" in behavior1.content
+        
+        print("  ✓ 成功解析包含特殊字符的反斜杠延续行")
+        print("\nAST树结构:")
+        print_ast_tree(ast_nodes)
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_backslash_error_with_colon():
+    """测试反斜杠延续行行末包含冒号的错误情况"""
+    print("\n测试反斜杠延续行行末包含冒号的错误情况...")
+    
+    code = """\
+func 错误示例():
+    这是一个错误的延续行 \\
+    因为下一行以冒号结束:"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        print("  ❌ 应该抛出错误但没有")
+        return False
+    except Exception as e:
+        error_msg = str(e)
+        if "Backslash continuation line cannot end with colon" in error_msg:
+            print(f"  ✓ 成功检测到反斜杠延续行行末冒号错误: {error_msg}")
+            return True
+        else:
+            print(f"  ❌ 错误类型不匹配: {error_msg}")
+            return False
+
+
+# ============================================================
+# 逗号延续行测试
+# ============================================================
 
 def test_comma_continuation_with_colon():
     """测试逗号延续行以冒号结尾"""
@@ -223,13 +426,25 @@ func 嵌套处理():
         return False
 
 
+# ============================================================
+# 主程序
+# ============================================================
+
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("延续行冒号结尾功能测试")
+    print("延续行逻辑完整测试")
     print("=" * 60)
     
     test_results = []
     
+    print("\n【反斜杠延续行测试】")
+    test_results.append(("反斜杠+符号引用", test_backslash_with_symbol_refs()))
+    test_results.append(("多行反斜杠延续", test_backslash_multiple_lines()))
+    test_results.append(("嵌套块中反斜杠", test_backslash_in_nested_block()))
+    test_results.append(("反斜杠+特殊字符", test_backslash_with_special_chars()))
+    test_results.append(("反斜杠错误-冒号", test_backslash_error_with_colon()))
+    
+    print("\n【逗号延续行测试】")
     test_results.append(("逗号延续冒号", test_comma_continuation_with_colon()))
     test_results.append(("逗号缩进冒号", test_comma_continuation_with_indent_and_colon()))
     test_results.append(("逗号普通结尾", test_comma_continuation_without_colon()))
