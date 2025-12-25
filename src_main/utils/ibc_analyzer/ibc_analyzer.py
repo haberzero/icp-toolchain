@@ -13,17 +13,18 @@ from typedef.exception_types import IbcAnalyzerError
 def analyze_ibc_code(
     text: str, 
     ibc_issue_recorder: Optional[IbcIssueRecorder] = None
-) -> Tuple[Dict, Dict]:
-    """分析IBC代码，返回AST字典以及原始符号表
+) -> Tuple[Dict, Dict, Dict]:
+    """分析IBC代码，返回AST字典以及符号树/符号元数据
     
     Args:
         text: 待分析的IBC代码文本
         ibc_issue_recorder: 可选的问题记录器，用于记录分析过程中的错误信息
         
     Returns:
-        Tuple[Dict, Dict]: 
+        Tuple[Dict, Dict, Dict]: 
             - Dict: AST字典
-            - Dict: 符号表
+            - Dict: 符号树（单文件内部的层次结构）
+            - Dict: 符号元数据（以点分隔路径为键）
             
     Raises:
         IbcAnalyzerError: 当IBC代码存在语法错误时，会记录到issue_recorder并不再抛出
@@ -41,11 +42,11 @@ def analyze_ibc_code(
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
 
-        # 符号提取
-        symbol_gen = IbcSymbolProcessor(ast_dict)
-        symbol_table = symbol_gen.process_symbols()
+        # 基于AST构建符号树和元数据
+        symbol_processor = IbcSymbolProcessor(ast_dict)
+        symbols_tree, symbols_metadata = symbol_processor.build_symbol_tree()
         
-        return ast_dict, symbol_table
+        return ast_dict, symbols_tree, symbols_metadata
 
     except IbcAnalyzerError as e:
         # 根据行号，从text原始文本中提取行内容
@@ -73,8 +74,8 @@ def analyze_ibc_code(
             if e.line_num > 0:
                 print(f"  行号: {e.line_num}")
         
-        # IbcAnalyzerError不再向上抛出，返回空字典
-        return {}, {}
+        # IbcAnalyzerError不再向上抛出，返回空结构
+        return {}, {}, {}
     
 def preprocess_cn_text(text: str) -> str:
     """将中文文本中的关键标点符号替换为英文形式"""

@@ -9,7 +9,7 @@ from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
 from typedef.ibc_data_types import (
     IbcBaseAstNode, AstNodeType, ClassNode, FunctionNode, VariableNode, 
-    VisibilityTypes, SymbolType
+    VisibilityTypes
 )
 
 from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
@@ -314,11 +314,11 @@ class CmdHandlerIbcGen(BaseCmdHandler):
 
             # 解析IBC代码生成AST
             print(f"    {Colors.OKBLUE}正在分析IBC代码生成AST...{Colors.ENDC}")
-            ast_dict, symbol_table = analyze_ibc_code(ibc_code, self.ibc_issue_recorder)
+            ast_dict, symbols_tree, symbols_metadata = analyze_ibc_code(ibc_code, self.ibc_issue_recorder)
             
-            # 检查是否得到有效的AST和符号表
-            if not ast_dict or not symbol_table:
-                print(f"    {Colors.WARNING}警告: IBC代码分析失败，未能生成有效的AST或符号表{Colors.ENDC}")
+            # 检查是否得到有效的AST和符号数据
+            if not ast_dict:
+                print(f"    {Colors.WARNING}警告: IBC代码分析失败，未能生成有效的AST{Colors.ENDC}")
                 continue
 
             # 保存IBC代码
@@ -332,10 +332,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             # ibc_data_store.save_ast(ast_path, ast_dict)
             # print(f"    {Colors.OKGREEN}AST已保存: {ast_path}{Colors.ENDC}")
             
-            # 保存符号表
+            # 保存符号数据（符号树+元数据）
             file_name = os.path.basename(icp_json_file_path)
             symbols_path = ibc_data_store.build_symbols_path(self.work_ibc_dir_path, icp_json_file_path)
-            ibc_data_store.save_symbols(symbols_path, file_name, symbol_table)
+            ibc_data_store.save_symbols(symbols_path, file_name, symbols_tree, symbols_metadata)
             print(f"    {Colors.OKGREEN}符号表已保存: {symbols_path}{Colors.ENDC}")
             
             # IBC代码和符号表保存成功，返回成功

@@ -4,10 +4,6 @@ import re
 import hashlib
 from typing import List, Dict, Optional, Union, Set, Any
 
-from typedef.ibc_data_types import (
-    IbcBaseAstNode, ClassNode, FunctionNode, VariableNode, 
-    BehaviorStepNode, SymbolType, VisibilityTypes, SymbolNode
-)
 from typedef.exception_types import SymbolNotFoundError
 
 class IbcFuncs:

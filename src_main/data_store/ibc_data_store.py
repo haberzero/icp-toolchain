@@ -1,11 +1,11 @@
 """IBC数据管理器 - 统一管理IBC相关数据的持久化存储"""
 import json
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 from typedef.ibc_data_types import (
     IbcBaseAstNode, AstNodeType, ModuleNode, ClassNode, 
     FunctionNode, VariableNode, BehaviorStepNode,
-    SymbolNode, VisibilityTypes
+    VisibilityTypes
 )
 from typedef.cmd_data_types import Colors
 
@@ -291,7 +291,7 @@ class IbcDataStore:
     
     # ==================== 符号表数据管理 ====================
     # 注意：符号表采用目录级存储，一个symbols.json包含该目录下所有文件的符号
-    
+        
     def build_symbols_path(self, ibc_root: str, file_path: str) -> str:
         """构建符号表路径（目录级）: ibc_root/dir/symbols.json"""
         file_dir = os.path.dirname(file_path)
@@ -300,23 +300,35 @@ class IbcDataStore:
         else:
             symbols_dir = ibc_root
         return os.path.join(symbols_dir, 'symbols.json')
-    
+        
     def save_symbols(
         self,
         symbols_path: str,
         file_name: str,
-        symbol_table: Dict[str, SymbolNode]
+        symbols_tree: Dict[str, Any],
+        symbols_metadata: Dict[str, Dict[str, Any]],
     ) -> None:
-        """保存符号表（目录级存储，自动合并）"""
-        # 加载目录级符号表
+        """保存符号信息（目录级存储，自动合并）
+            
+        存储结构（symbols.json）示例：
+        {
+            "ball_entity": {
+                "symbols_tree": {...},
+                "symbols_metadata": {...}
+            },
+            "heptagon_shape": {
+                ...
+            }
+        }
+        """
+        # 加载目录级符号数据
         dir_symbols = self._load_dir_symbols(symbols_path)
-        
-        # 更新当前文件的符号
-        symbols_dict = {}
-        for symbol_name, symbol in symbol_table.items():
-            symbols_dict[symbol_name] = symbol.to_dict()
-        dir_symbols[file_name] = symbols_dict
-        
+            
+        dir_symbols[file_name] = {
+            "symbols_tree": symbols_tree,
+            "symbols_metadata": symbols_metadata,
+        }
+            
         # 保存回文件
         try:
             os.makedirs(os.path.dirname(symbols_path), exist_ok=True)
@@ -324,72 +336,63 @@ class IbcDataStore:
                 json.dump(dir_symbols, f, ensure_ascii=False, indent=2)
         except Exception as e:
             raise IOError(f"保存符号表失败 [{symbols_path}]: {e}") from e
-    
-    def load_symbols(self, symbols_path: str, file_name: str) -> Dict[str, SymbolNode]:
-        """加载符号表，文件不存在或无数据时返回空字典"""
+        
+    def load_symbols(self, symbols_path: str, file_name: str) -> Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]:
+        """加载单个文件的符号树和元数据，文件不存在或无数据时返回空结构"""
         dir_symbols = self._load_dir_symbols(symbols_path)
-        
         file_symbol_data = dir_symbols.get(file_name, {})
-        
+            
         if not file_symbol_data:
-            return {}
+            return {}, {}
+            
+        symbols_tree = file_symbol_data.get("symbols_tree", {})
+        symbols_metadata = file_symbol_data.get("symbols_metadata", {})
+            
+        if not isinstance(symbols_tree, dict) or not isinstance(symbols_metadata, dict):
+            # 兼容旧数据格式时的保护（理论上迁移后不应再出现）
+            return {}, {}
+            
+        return symbols_tree, symbols_metadata
         
-        # 反序列化符号表
-        symbol_table: Dict[str, SymbolNode] = {}
-        for symbol_name, symbol_dict in file_symbol_data.items():
-            symbol_node = SymbolNode.from_dict(symbol_dict)
-            symbol_table[symbol_name] = symbol_node
-        return symbol_table
-    
     def load_dependency_symbol_tables(
         self,
         ibc_root: str,
         dependent_relation: Dict[str, List[str]],
         current_file_path: str
-    ) -> Dict[str, Dict[str, SymbolNode]]:
-        """根据依赖关系为单个文件批量加载依赖符号表
-        
-        说明：
-            - 仅负责从 IBC 目录中加载符号表数据，不做可见性等业务过滤
-            - 返回值为 {依赖文件路径: 符号表dict} 的映射
-        
-        Args:
-            ibc_root: IBC 根目录路径
-            dependent_relation: 依赖关系字典 {文件路径: [依赖文件列表]}
-            current_file_path: 当前正在处理的文件路径
-        
-        Returns:
-            Dict[str, Dict[str, SymbolNode]]: 依赖文件到符号表的映射
+    ) -> Dict[str, Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]]:
+        """根据依赖关系为单个文件批量加载依赖符号数据
+            
+        返回值为 {依赖文件路径: (symbols_tree, symbols_metadata)} 的映射。
         """
         dependencies = dependent_relation.get(current_file_path, [])
         if not dependencies:
             return {}
-
-        result: Dict[str, Dict[str, SymbolNode]] = {}
-
+    
+        result: Dict[str, Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]] = {}
+    
         for dep_file_path in dependencies:
             symbols_path = self.build_symbols_path(ibc_root, dep_file_path)
             if not os.path.exists(symbols_path):
                 continue
-
+    
             file_name = os.path.basename(dep_file_path)
-            symbol_table = self.load_symbols(symbols_path, file_name)
-
-            if not symbol_table:
+            symbols_tree, symbols_metadata = self.load_symbols(symbols_path, file_name)
+    
+            if not symbols_tree and not symbols_metadata:
                 continue
-
-            result[dep_file_path] = symbol_table
-
+    
+            result[dep_file_path] = (symbols_tree, symbols_metadata)
+    
         return result
-
+        
     def is_dependency_symbol_tables_valid(
         self,
         ibc_root: str,
         dependent_relation: Dict[str, List[str]],
         current_file_path: str
     ) -> bool:
-        """检查当前文件的依赖符号表是否都存在且有内容
-        
+        """检查当前文件的依赖符号数据是否都存在且有内容
+            
         说明：
             - 不进行任何print，仅通过返回值告知调用方是否可以继续后续动作
             - 检查规则：
@@ -400,41 +403,47 @@ class IbcDataStore:
         dependencies = dependent_relation.get(current_file_path, [])
         if not dependencies:
             return True
-
+    
         for dep_file_path in dependencies:
             symbols_path = self.build_symbols_path(ibc_root, dep_file_path)
             if not os.path.exists(symbols_path):
                 return False
-
-            # 只检查原始JSON数据是否存在对应文件项，不反序列化为 SymbolNode
+    
             file_name = os.path.basename(dep_file_path)
             dir_symbols = self._load_dir_symbols(symbols_path)
             file_symbol_data = dir_symbols.get(file_name, {})
             if not file_symbol_data:
                 return False
-
-        return True
     
+        return True
+        
     def update_symbol_info(
         self,
         symbols_path: str,
         file_name: str,
-        symbol_name: str,
+        symbol_path: str,
         normalized_name: str
     ) -> None:
-        """更新符号的规范化信息"""
-        # 加载符号表
-        symbol_table = self.load_symbols(symbols_path, file_name)
-        
-        # 查找并更新符号
-        symbol = symbol_table.get(symbol_name)
-        if not symbol:
-            raise ValueError(f"符号不存在: {symbol_name}，文件: {file_name}")
-        
-        symbol.normalized_name = normalized_name
-        
-        # 保存更新后的符号表
-        self.save_symbols(symbols_path, file_name, symbol_table)
+        """更新符号的规范化信息
+            
+        Args:
+            symbols_path: 目录级符号文件路径
+            file_name: 文件名（不含扩展名）
+            symbol_path: 符号在文件内部的点分隔路径（例如 "ClassName.methodName"）
+            normalized_name: 规范化后的名称
+        """
+        # 加载符号数据
+        symbols_tree, symbols_metadata = self.load_symbols(symbols_path, file_name)
+        if not symbols_metadata:
+            raise ValueError(f"符号数据不存在，文件: {file_name}")
+            
+        if symbol_path not in symbols_metadata:
+            raise ValueError(f"符号不存在: {symbol_path}，文件: {file_name}")
+            
+        symbols_metadata[symbol_path]["normalized_name"] = normalized_name
+            
+        # 保存更新后的符号数据
+        self.save_symbols(symbols_path, file_name, symbols_tree, symbols_metadata)
     
     def _load_dir_symbols(self, symbols_path: str) -> Dict[str, Any]:
         """内部方法：加载目录级符号表，文件不存在时返回空字典"""

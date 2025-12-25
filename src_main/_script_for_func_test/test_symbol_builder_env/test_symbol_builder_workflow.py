@@ -226,21 +226,20 @@ class SymbolBuilderWorkflowTest:
             ibc_code = self.ibc_data_store.load_ibc_code(ibc_path)
             print(f"    [OK] 加载IBC代码: {len(ibc_code)} 字符")
             
-            # 1.2 使用IbcAnalyzer分析生成AST和符号表
-            ast_dict, symbol_table = analyze_ibc_code(ibc_code)
+            # 1.2 使用IbcAnalyzer分析生成AST和符号树
+            ast_dict, symbols_tree, symbols_metadata = analyze_ibc_code(ibc_code)
             
-            if not ast_dict or not symbol_table:
+            if not ast_dict:
                 print(f"    {Colors.WARNING}警告: 分析失败{Colors.ENDC}")
                 continue
             
             print(f"    [OK] AST节点数: {len(ast_dict)}")
-            print(f"    [OK] 符号数量: {len(symbol_table)}")
-            print(f"    [OK] 符号列表: {list(symbol_table.keys())[:5]}{'...' if len(symbol_table) > 5 else ''}")
+            print(f"    [OK] 符号数量: {len(symbols_metadata)}")
             
-            # 1.3 使用IbcDataStore保存符号表
+            # 1.3 使用IbcDataStore保存符号数据
             file_name = os.path.basename(file_path)
             symbols_path = self.ibc_data_store.build_symbols_path(self.work_ibc_dir_path, file_path)
-            self.ibc_data_store.save_symbols(symbols_path, file_name, symbol_table)
+            self.ibc_data_store.save_symbols(symbols_path, file_name, symbols_tree, symbols_metadata)
             print(f"    [OK] 符号表已保存: {symbols_path}")
         
         print(f"\n{Colors.OKGREEN}步骤1完成: 符号表生成成功{Colors.ENDC}\n")
@@ -354,15 +353,15 @@ class TestPhysics():
         self.ibc_data_store.save_ibc_code(ibc_path, test_ibc_code)
         print(f"  [OK] 测试IBC文件已创建: {ibc_path}")
         
-        # 4.2 分析并生成符号表
-        ast_dict, symbol_table = analyze_ibc_code(test_ibc_code)
+        # 4.2 分析并生成符号树
+        ast_dict, symbols_tree, symbols_metadata = analyze_ibc_code(test_ibc_code)
         print(f"  [OK] AST节点数: {len(ast_dict)}")
-        print(f"  [OK] 符号数量: {len(symbol_table)}")
+        print(f"  [OK] 符号数量: {len(symbols_metadata)}")
         
-        # 保存符号表
+        # 保存符号数据
         file_name = os.path.basename(test_file_path)
         symbols_path = self.ibc_data_store.build_symbols_path(self.work_ibc_dir_path, test_file_path)
-        self.ibc_data_store.save_symbols(symbols_path, file_name, symbol_table)
+        self.ibc_data_store.save_symbols(symbols_path, file_name, symbols_tree, symbols_metadata)
         print(f"  [OK] 符号表已保存")
         
         # 4.3 更新依赖关系

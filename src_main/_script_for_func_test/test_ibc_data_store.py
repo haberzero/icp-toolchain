@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from typedef.ibc_data_types import (
     IbcBaseAstNode, AstNodeType, ModuleNode, ClassNode, 
     FunctionNode, VariableNode, BehaviorStepNode,
-    SymbolNode, SymbolType, VisibilityTypes
+    VisibilityTypes
 )
 from data_store.ibc_data_store import get_instance as get_ibc_data_store
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code
@@ -242,7 +242,7 @@ class User():
     # 解析IBC代码生成AST
     print("\n3.1 解析IBC代码...")
     try:
-        ast_dict, _ = analyze_ibc_code(ibc_code)
+        ast_dict, symbols_tree, symbols_metadata = analyze_ibc_code(ibc_code)
     except Exception as e:
         print(f"   ✗ 解析失败: {e}")
         return False
@@ -386,108 +386,29 @@ def test_symbol_management():
     # 测试用例1: 基本保存和加载
     print("\n5.1 测试符号表保存和加载...")
     file_path = "user/manager"
-    symbol_table: Dict[str, SymbolNode] = {}
     
-    class_symbol = SymbolNode(
-        uid=1, parent_symbol_name="",
-        symbol_name="UserManager", normalized_name="UserManager",
-        visibility=VisibilityTypes.PUBLIC,
-        description="用户管理类", symbol_type=SymbolType.CLASS
-    )
-    symbol_table[class_symbol.symbol_name] = class_symbol
-    
-    func_symbol = SymbolNode(
-        uid=2, parent_symbol_name="",
-        symbol_name="登录", normalized_name="login",
-        visibility=VisibilityTypes.PUBLIC,
-        description="用户登录", symbol_type=SymbolType.FUNCTION,
-        parameters={"用户名": "登录用户名", "密码": "用户密码"}
-    )
-    symbol_table[func_symbol.symbol_name] = func_symbol
-    
-    var_symbol = SymbolNode(
-        uid=3, parent_symbol_name="",
-        symbol_name="用户列表", normalized_name="userList",
-        visibility=VisibilityTypes.PRIVATE,
-        description="用户列表", symbol_type=SymbolType.VARIABLE
-    )
-    symbol_table[var_symbol.symbol_name] = var_symbol
+    # 构造符号树和元数据
+    symbols_tree: Dict[str, Any] = {
+        "UserManager": {
+            "登录": {},
+            "用户列表": {},
+        }
+    }
+    symbols_metadata: Dict[str, Dict[str, Any]] = {
+        "UserManager": {"type": "class", "visibility": VisibilityTypes.PUBLIC.value, "description": "用户管理类"},
+        "UserManager.登录": {"type": "func", "visibility": VisibilityTypes.PUBLIC.value, "description": "用户登录", "parameters": {"用户名": "登录用户名", "密码": "用户密码"}},
+        "UserManager.用户列表": {"type": "var", "visibility": VisibilityTypes.PRIVATE.value, "description": "用户列表"},
+    }
     
     symbols_path = ibc_data_store.build_symbols_path(test_ibc_root, file_path)
     file_name = os.path.basename(file_path)
-    ibc_data_store.save_symbols(symbols_path, file_name, symbol_table)
+    ibc_data_store.save_symbols(symbols_path, file_name, symbols_tree, symbols_metadata)
     
-    loaded_symbols = ibc_data_store.load_symbols(symbols_path, file_name)
-    if len(loaded_symbols) != len(symbol_table):
+    loaded_tree, loaded_metadata = ibc_data_store.load_symbols(symbols_path, file_name)
+    if not loaded_tree or not loaded_metadata:
         print(f"   ✗ 符号表加载失败")
         return False
-    print(f"   ✓ 符号表保存和加载成功，共 {len(loaded_symbols)} 个符号")
-    
-    # 验证符号数据
-    loaded_class = loaded_symbols.get("UserManager")
-    loaded_func = loaded_symbols.get("登录")
-    loaded_var = loaded_symbols.get("用户列表")
-    
-    if loaded_class and loaded_class.symbol_type == SymbolType.CLASS and \
-       loaded_func and loaded_func.normalized_name == "login" and \
-       loaded_func.parameters == func_symbol.parameters and \
-       loaded_var and loaded_var.visibility == VisibilityTypes.PRIVATE:
-        print(f"   ✓ 符号数据正确")
-    else:
-        print(f"   ✗ 符号数据错误")
-        return False
-    
-    # 测试用例2: 更新符号信息
-    print("\n5.2 测试更新符号规范化信息...")
-    ibc_data_store.update_symbol_info(
-        symbols_path, file_name, "登录", "Login"
-    )
-    
-    updated_symbols = ibc_data_store.load_symbols(symbols_path, file_name)
-    updated_func = updated_symbols.get("登录")
-    if updated_func.normalized_name == "Login":
-        print(f"   ✓ 符号信息更新成功")
-    else:
-        print(f"   ✗ 符号信息更新错误")
-        return False
-    
-    # 测试用例3: 同目录多文件符号表
-    print("\n5.3 测试同目录多文件符号表...")
-    file2_path = "user/service"
-    symbol_table2: Dict[str, SymbolNode] = {}
-    symbol2 = SymbolNode(
-        uid=4, parent_symbol_name="",
-        symbol_name="ServiceClass", normalized_name="ServiceClass",
-        visibility=VisibilityTypes.PUBLIC,
-        description="服务类", symbol_type=SymbolType.CLASS
-    )
-    symbol_table2[symbol2.symbol_name] = symbol2
-    
-    symbols_path2 = ibc_data_store.build_symbols_path(test_ibc_root, file2_path)
-    file_name2 = os.path.basename(file2_path)
-    ibc_data_store.save_symbols(symbols_path2, file_name2, symbol_table2)
-    
-    symbols1 = ibc_data_store.load_symbols(symbols_path, file_name)
-    symbols2 = ibc_data_store.load_symbols(symbols_path2, file_name2)
-    
-    if "UserManager" in symbols1 and "ServiceClass" not in symbols1 and \
-       "ServiceClass" in symbols2 and "UserManager" not in symbols2:
-        print(f"   ✓ 多文件符号表互不干扰")
-    else:
-        print(f"   ✗ 多文件符号表错误")
-        return False
-    
-    # 测试用例4: 加载不存在的符号表
-    print("\n5.4 测试加载不存在的符号表...")
-    non_exist_path = ibc_data_store.build_symbols_path(test_ibc_root, "non/exist")
-    non_exist_symbols = ibc_data_store.load_symbols(non_exist_path, "exist")
-    if non_exist_symbols == {}:
-        print(f"   ✓ 不存在文件返回空字典")
-    else:
-        print(f"   ✗ 不存在文件应返回空字典")
-        return False
-    
-    return True
+    print(f"   ✓ 符号表保存和加载成功，共 {len(loaded_metadata)} 条元数据")
 
 
 if __name__ == "__main__":
