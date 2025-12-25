@@ -1,52 +1,34 @@
 {
   "test_physics": {
-    "TestPhysics": {
-      "uid": 3,
-      "parent_symbol_name": "",
-      "children_symbol_names": [
-        "ball",
-        "shape",
-        "check_collision"
-      ],
-      "symbol_name": "TestPhysics",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "简化的物理引擎, 用于测试符号引用",
-      "symbol_type": "class",
-      "parameters": {}
+    "symbols_tree": {
+      "TestPhysics": {
+        "ball": {},
+        "shape": {},
+        "check_collision": {}
+      }
     },
-    "ball": {
-      "uid": 4,
-      "parent_symbol_name": "TestPhysics",
-      "children_symbol_names": [],
-      "symbol_name": "ball",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "球体实例, 类型为 ball_entity.BallEntity",
-      "symbol_type": "var",
-      "parameters": {}
-    },
-    "shape": {
-      "uid": 5,
-      "parent_symbol_name": "TestPhysics",
-      "children_symbol_names": [],
-      "symbol_name": "shape",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "七边形实例, 类型为 heptagon_shape.HeptagonShape",
-      "symbol_type": "var",
-      "parameters": {}
-    },
-    "check_collision": {
-      "uid": 6,
-      "parent_symbol_name": "TestPhysics",
-      "children_symbol_names": [],
-      "symbol_name": "check_collision",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "",
-      "symbol_type": "func",
-      "parameters": {}
+    "symbols_metadata": {
+      "TestPhysics": {
+        "type": "class",
+        "visibility": "public",
+        "description": "简化的物理引擎, 用于测试符号引用"
+      },
+      "TestPhysics.ball": {
+        "type": "var",
+        "visibility": "public",
+        "description": "球体实例, 类型为 ball_entity.BallEntity",
+        "scope": "field"
+      },
+      "TestPhysics.shape": {
+        "type": "var",
+        "visibility": "public",
+        "description": "七边形实例, 类型为 heptagon_shape.HeptagonShape",
+        "scope": "field"
+      },
+      "TestPhysics.check_collision": {
+        "type": "func",
+        "visibility": "public"
+      }
     }
   }
 }

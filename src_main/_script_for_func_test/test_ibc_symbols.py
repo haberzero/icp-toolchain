@@ -176,6 +176,9 @@ class ConfigManager():
         assert config_path_meta is not None
         assert load_meta is not None
         assert load_meta.get("description") == "加载配置"
+        # 字段变量应标记为 field 作用域
+        assert config_data_meta.get("scope") == "field"
+        assert config_path_meta.get("scope") == "field"
         
         print("\n[通过] 类成员符号提取测试通过\n")
         return True
@@ -460,10 +463,37 @@ def test_visibility_from_ast():
         symbol_gen = IbcSymbolProcessor(ast_dict)
         symbols_tree, symbols_metadata = symbol_gen.build_symbol_tree()
         
-        # 验证可见性已经从 AST 填充（这里只检查类本身是否在元数据中）
+        # 验证可见性已经从 AST 填充
         print("\n验证符号可见性:")
+        # 1. 类本身存在
         assert any(path.split(".")[-1] == "DataProcessor" for path in symbols_metadata.keys())
         print("  ✓ DataProcessor 存在于符号元数据中")
+        
+        # 2. 验证字段和方法的可见性
+        buffer_meta = None
+        internal_func_meta = None
+        public_func_meta = None
+        for path, meta in symbols_metadata.items():
+            name = path.split(".")[-1]
+            if name == "_buffer" and meta.get("type") == "var":
+                buffer_meta = meta
+            elif name == "_process" and meta.get("type") == "func":
+                internal_func_meta = meta
+            elif name == "process" and meta.get("type") == "func":
+                public_func_meta = meta
+        
+        assert buffer_meta is not None
+        assert internal_func_meta is not None
+        assert public_func_meta is not None
+        
+        # 字段变量应为 private 且 scope=field
+        assert buffer_meta.get("visibility") == VisibilityTypes.PRIVATE.value
+        assert buffer_meta.get("scope") == "field"
+        # 受保护方法
+        assert internal_func_meta.get("visibility") == VisibilityTypes.PROTECTED.value
+        # 公共方法
+        assert public_func_meta.get("visibility") == VisibilityTypes.PUBLIC.value
+        print("  ✓ 字段和方法的可见性从 AST 正确填充")
         
         print("\n[通过] 可见性从 AST 正确填充\n")
         return True
@@ -473,6 +503,56 @@ def test_visibility_from_ast():
         traceback.print_exc()
         return False
 
+
+def test_local_variable_scope_and_name_collision():
+    """测试不同函数中同名局部变量的作用域和路径"""
+    print("=" * 60)
+    print("测试同名局部变量作用域和路径")
+    print("=" * 60)
+    
+    code = """class BoundaryDetector():
+    func 检测碰撞():
+        var 法向量: 检测用局部法向量
+    
+    func 计算法向量():
+        var 法向量: 计算用局部法向量"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_dict = parser.parse()
+        
+        symbol_gen = IbcSymbolProcessor(ast_dict)
+        symbols_tree, symbols_metadata = symbol_gen.build_symbol_tree()
+        
+        # 查找所有名为“法向量”、类型为变量的条目
+        local_vars = []
+        for path, meta in symbols_metadata.items():
+            name = path.split(".")[-1]
+            if name == "法向量" and meta.get("type") == "var":
+                local_vars.append((path, meta))
+        
+        # 应该找到两个局部变量，且路径不同
+        assert len(local_vars) == 2
+        paths = {p for p, _ in local_vars}
+        assert len(paths) == 2
+        
+        # 所有“法向量”都应标记为 scope=local
+        for path, meta in local_vars:
+            assert meta.get("scope") == "local"
+        
+        # 不应存在平铺键 "法向量"（避免全局名冲突）
+        assert "法向量" not in symbols_metadata
+        
+        print("\n[通过] 同名局部变量作用域与路径测试通过\n")
+        return True
+    except Exception as e:
+        print(f"\n[失败] 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    
 
 # ==================== 主测试运行器 ====================
 
@@ -486,6 +566,7 @@ if __name__ == "__main__":
             ("基本符号提取", test_basic_symbol_extraction),
             ("函数参数提取", test_function_parameters_extraction),
             ("类成员符号提取", test_class_with_members_extraction),
+            ("同名局部变量作用域", test_local_variable_scope_and_name_collision),
         ]),
         ("序列化与集成测试", [
             ("符号表序列化", test_symbol_table_serialization),

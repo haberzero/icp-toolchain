@@ -1,232 +1,141 @@
 {
   "ball_entity": {
-    "BallEntity": {
-      "uid": 4,
-      "parent_symbol_name": "",
-      "children_symbol_names": [
-        "_position",
-        "_velocity",
-        "_rotation",
-        "_angular_velocity",
-        "_color",
-        "_number",
-        "_radius",
-        "__init__",
-        "update_position",
-        "update_rotation",
-        "get_color",
-        "get_number",
-        "get_radius",
-        "get_center",
-        "apply_force",
-        "set_velocity",
-        "get_velocity"
-      ],
-      "symbol_name": "BallEntity",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "球体实体类, 管理单个球体的状态信息",
-      "symbol_type": "class",
-      "parameters": {}
-    },
-    "_position": {
-      "uid": 5,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "_position",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "球体当前位置, 类型为 numpy.ndarray",
-      "symbol_type": "var",
-      "parameters": {}
-    },
-    "_velocity": {
-      "uid": 6,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "_velocity",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "球体当前速度向量, 类型为 numpy.ndarray",
-      "symbol_type": "var",
-      "parameters": {}
-    },
-    "_rotation": {
-      "uid": 7,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "_rotation",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "球体当前旋转角度",
-      "symbol_type": "var",
-      "parameters": {}
-    },
-    "_angular_velocity": {
-      "uid": 8,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "_angular_velocity",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "球体自旋角速度",
-      "symbol_type": "var",
-      "parameters": {}
-    },
-    "_color": {
-      "uid": 9,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "_color",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "球体填充颜色值",
-      "symbol_type": "var",
-      "parameters": {}
-    },
-    "_number": {
-      "uid": 10,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "_number",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "球体编号, 用于标识不同球体",
-      "symbol_type": "var",
-      "parameters": {}
-    },
-    "_radius": {
-      "uid": 11,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "_radius",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "球体半径, 用于碰撞检测和绘制",
-      "symbol_type": "var",
-      "parameters": {}
-    },
-    "__init__": {
-      "uid": 12,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "__init__",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "初始化球体实例",
-      "symbol_type": "func",
-      "parameters": {
-        "初始位置": "球体初始坐标位置",
-        "颜色值": "球体颜色值",
-        "编号": "球体编号"
+    "symbols_tree": {
+      "BallEntity": {
+        "_position": {},
+        "_velocity": {},
+        "_rotation": {},
+        "_angular_velocity": {},
+        "_color": {},
+        "_number": {},
+        "_radius": {},
+        "__init__": {},
+        "update_position": {},
+        "update_rotation": {},
+        "get_color": {},
+        "get_number": {},
+        "get_radius": {},
+        "get_center": {},
+        "apply_force": {},
+        "set_velocity": {},
+        "get_velocity": {}
       }
     },
-    "update_position": {
-      "uid": 20,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "update_position",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "根据当前速度更新球体的位置坐标",
-      "symbol_type": "func",
-      "parameters": {
-        "时间步长": "时间间隔"
+    "symbols_metadata": {
+      "BallEntity": {
+        "type": "class",
+        "visibility": "public",
+        "description": "球体实体类, 管理单个球体的状态信息"
+      },
+      "BallEntity._position": {
+        "type": "var",
+        "visibility": "public",
+        "description": "球体当前位置, 类型为 numpy.ndarray",
+        "scope": "field"
+      },
+      "BallEntity._velocity": {
+        "type": "var",
+        "visibility": "public",
+        "description": "球体当前速度向量, 类型为 numpy.ndarray",
+        "scope": "field"
+      },
+      "BallEntity._rotation": {
+        "type": "var",
+        "visibility": "public",
+        "description": "球体当前旋转角度",
+        "scope": "field"
+      },
+      "BallEntity._angular_velocity": {
+        "type": "var",
+        "visibility": "public",
+        "description": "球体自旋角速度",
+        "scope": "field"
+      },
+      "BallEntity._color": {
+        "type": "var",
+        "visibility": "public",
+        "description": "球体填充颜色值",
+        "scope": "field"
+      },
+      "BallEntity._number": {
+        "type": "var",
+        "visibility": "public",
+        "description": "球体编号, 用于标识不同球体",
+        "scope": "field"
+      },
+      "BallEntity._radius": {
+        "type": "var",
+        "visibility": "public",
+        "description": "球体半径, 用于碰撞检测和绘制",
+        "scope": "field"
+      },
+      "BallEntity.__init__": {
+        "type": "func",
+        "visibility": "public",
+        "description": "初始化球体实例",
+        "parameters": {
+          "初始位置": "球体初始坐标位置",
+          "颜色值": "球体颜色值",
+          "编号": "球体编号"
+        }
+      },
+      "BallEntity.update_position": {
+        "type": "func",
+        "visibility": "public",
+        "description": "根据当前速度更新球体的位置坐标",
+        "parameters": {
+          "时间步长": "时间间隔"
+        }
+      },
+      "BallEntity.update_rotation": {
+        "type": "func",
+        "visibility": "public",
+        "description": "更新球体的旋转角度, 反映自旋状态",
+        "parameters": {
+          "时间步长": "时间间隔"
+        }
+      },
+      "BallEntity.get_color": {
+        "type": "func",
+        "visibility": "public",
+        "description": "返回球体的颜色值用于渲染"
+      },
+      "BallEntity.get_number": {
+        "type": "func",
+        "visibility": "public",
+        "description": "返回球体上的编号用于显示"
+      },
+      "BallEntity.get_radius": {
+        "type": "func",
+        "visibility": "public",
+        "description": "返回球体的半径用于碰撞检测"
+      },
+      "BallEntity.get_center": {
+        "type": "func",
+        "visibility": "public",
+        "description": "获取球体中心点坐标用于碰撞判断"
+      },
+      "BallEntity.apply_force": {
+        "type": "func",
+        "visibility": "public",
+        "description": "应用力到球体上, 影响其速度变化",
+        "parameters": {
+          "力向量": "力的方向和大小"
+        }
+      },
+      "BallEntity.set_velocity": {
+        "type": "func",
+        "visibility": "public",
+        "description": "设置球体的速度向量",
+        "parameters": {
+          "速度向量": "新的速度向量"
+        }
+      },
+      "BallEntity.get_velocity": {
+        "type": "func",
+        "visibility": "public",
+        "description": "获取球体当前速度向量"
       }
-    },
-    "update_rotation": {
-      "uid": 22,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "update_rotation",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "更新球体的旋转角度, 反映自旋状态",
-      "symbol_type": "func",
-      "parameters": {
-        "时间步长": "时间间隔"
-      }
-    },
-    "get_color": {
-      "uid": 24,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "get_color",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "返回球体的颜色值用于渲染",
-      "symbol_type": "func",
-      "parameters": {}
-    },
-    "get_number": {
-      "uid": 26,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "get_number",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "返回球体上的编号用于显示",
-      "symbol_type": "func",
-      "parameters": {}
-    },
-    "get_radius": {
-      "uid": 28,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "get_radius",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "返回球体的半径用于碰撞检测",
-      "symbol_type": "func",
-      "parameters": {}
-    },
-    "get_center": {
-      "uid": 30,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "get_center",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "获取球体中心点坐标用于碰撞判断",
-      "symbol_type": "func",
-      "parameters": {}
-    },
-    "apply_force": {
-      "uid": 32,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "apply_force",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "应用力到球体上, 影响其速度变化",
-      "symbol_type": "func",
-      "parameters": {
-        "力向量": "力的方向和大小"
-      }
-    },
-    "set_velocity": {
-      "uid": 34,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "set_velocity",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "设置球体的速度向量",
-      "symbol_type": "func",
-      "parameters": {
-        "速度向量": "新的速度向量"
-      }
-    },
-    "get_velocity": {
-      "uid": 36,
-      "parent_symbol_name": "BallEntity",
-      "children_symbol_names": [],
-      "symbol_name": "get_velocity",
-      "normalized_name": "",
-      "visibility": "public",
-      "description": "获取球体当前速度向量",
-      "symbol_type": "func",
-      "parameters": {}
     }
   }
 }

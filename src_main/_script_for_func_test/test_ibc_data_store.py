@@ -10,7 +10,7 @@ IBC数据管理器测试
 """
 import sys
 import os
-from typing import Dict
+from typing import Dict, Any
 
 # 添加src_main到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -408,9 +408,18 @@ def test_symbol_management():
     if not loaded_tree or not loaded_metadata:
         print(f"   ✗ 符号表加载失败")
         return False
+
+    # 验证树结构和元数据内容
+    if loaded_tree != symbols_tree:
+        print(f"   ✗ 加载后的符号树与原始数据不一致")
+        return False
+    if loaded_metadata != symbols_metadata:
+        print(f"   ✗ 加载后的符号元数据与原始数据不一致")
+        return False
+
     print(f"   ✓ 符号表保存和加载成功，共 {len(loaded_metadata)} 条元数据")
 
-
+    return True
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("IBC数据管理器测试套件")
