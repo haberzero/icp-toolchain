@@ -19,10 +19,15 @@ from libs.ibc_funcs import IbcFuncs
 class CmdHandlerSymbolNormalize(BaseCmdHandler):
     """符号规范化命令处理器
     
-    负责对已生成的IBC文件中的符号进行规范化处理:
-    1. 读取IBC文件及其符号表
-    2. 调用AI进行符号规范化（规范化名称）
-    3. 更新符号表并保存
+    设计结构：
+    1. 变量预准备：_build_pre_execution_variables() - 集中加载所需数据
+    2. 文件遍历：按依赖顺序遍历文件列表
+    3. 单文件处理：_normalize_single_file_symbols() - 包含重试逻辑的主流程
+    4. 符号提取：_extract_symbols_from_metadata() - 从符号元数据中提取待规范化符号
+    5. 符号规范化：_create_normalized_symbols() - 调用AI进行规范化（带重试）
+    6. 提示词构建：_build_user_prompt_for_symbol_normalizer() - 构建提示词
+    7. 结果验证：_validate_normalized_result() - 验证AI返回的规范化结果
+    8. 结果回写：_update_symbol_metadata() - 将规范化结果写回元数据
     """
 
     def __init__(self):
@@ -45,6 +50,12 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         self.role_symbol_normalizer = "8_symbol_normalizer"
         self.sys_prompt_symbol_normalizer = ""  # 系统提示词,在_init_ai_handlers中加载
         self.chat_handler = ICPChatHandler()
+        
+        # 实例变量初始化（在_build_pre_execution_variables中赋值）
+        self.dependent_relation = None
+        self.file_creation_order_list = None
+        self.work_ibc_dir_path = None
+        
         self._init_ai_handlers()
     
     def execute(self):
@@ -116,7 +127,7 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         self.work_ibc_dir_path = work_ibc_dir_path
     
     def _normalize_single_file_symbols(self, icp_json_file_path: str) -> bool:
-        """为单个文件的符号进行规范化处理
+        """为单个文件的符号进行规范化处理（包含重试机制）
         
         Args:
             icp_json_file_path: 文件路径
@@ -148,40 +159,71 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             print(f"    {Colors.WARNING}警告: 符号表为空，跳过{Colors.ENDC}")
             return True
         
+        # 提取待规范化符号
+        symbols_to_normalize = self._extract_symbols_from_metadata(symbols_metadata)
+        if not symbols_to_normalize:
+            print(f"    {Colors.WARNING}警告: 没有需要规范化的符号，跳过{Colors.ENDC}")
+            return True
+        
         # 创建规范化符号（带重试）
         success, normalized_symbols_dict = self._create_normalized_symbols(
-            icp_json_file_path, symbols_metadata, ibc_code
+            icp_json_file_path, symbols_to_normalize, ibc_code
         )
         
         if not success or not normalized_symbols_dict:
-            print(f"    {Colors.WARNING}警告: 符号规范化失败{Colors.ENDC}")
+            print(f"    {Colors.FAIL}错误: 符号规范化失败{Colors.ENDC}")
             return False
         
         # 更新符号元数据中的规范化名称
-        self._update_symbol_metadata(symbols_metadata, normalized_symbols_dict)
+        updated_count = self._update_symbol_metadata(symbols_metadata, normalized_symbols_dict)
         
         # 保存更新后的符号数据
         ibc_data_store.save_symbols(symbols_path, file_name, symbols_tree, symbols_metadata)
         print(f"    {Colors.OKGREEN}符号表已更新并保存: {symbols_path}{Colors.ENDC}")
+        print(f"    {Colors.OKGREEN}成功规范化 {updated_count} 个符号{Colors.ENDC}")
         
         return True
+    
+    def _extract_symbols_from_metadata(self, symbols_metadata: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """从符号元数据中提取待规范化的符号
+        
+        Args:
+            symbols_metadata: 符号元数据字典
+            
+        Returns:
+            待规范化符号字典 {symbol_path: metadata}
+        """
+        symbols_to_normalize = {}
+        for symbol_path, meta in symbols_metadata.items():
+            meta_type = meta.get("type", "unknown")
+            # 过滤掉文件夹/文件节点
+            if meta_type in ("folder", "file"):
+                continue
+            # 过滤已经规范化的符号
+            if "normalized_name" in meta and meta["normalized_name"]:
+                continue
+            symbols_to_normalize[symbol_path] = meta
+        return symbols_to_normalize
     
     def _create_normalized_symbols(
         self, 
         icp_json_file_path: str,
-        symbols_metadata: Dict[str, Dict[str, Any]],
+        symbols_to_normalize: Dict[str, Dict[str, Any]],
         ibc_code: str
     ):
         """创建规范化符号（带重试机制）
         
         Args:
             icp_json_file_path: 文件路径
-            symbols_metadata: 符号元数据字典
+            symbols_to_normalize: 待规范化符号字典
             ibc_code: IBC代码
-        """
-        print(f"    正在进行符号规范化...")
         
-        if not symbols_metadata:
+        Returns:
+            (success: bool, normalized_symbols: Dict[str, str])
+        """
+        print(f"    {Colors.OKBLUE}正在进行符号规范化... (共 {len(symbols_to_normalize)} 个符号){Colors.ENDC}")
+        
+        if not symbols_to_normalize:
             print(f"    {Colors.WARNING}警告: 未从符号表中提取到符号{Colors.ENDC}")
             return False, {}
         
@@ -194,10 +236,12 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         max_attempts = 3
         for attempt in range(max_attempts):
             if attempt > 0:
-                print(f"    正在重试符号规范化... (尝试 {attempt + 1}/{max_attempts})")
+                print(f"    {Colors.OKBLUE}正在重试符号规范化... (尝试 {attempt + 1}/{max_attempts}){Colors.ENDC}")
             
             # 构建提示词
-            user_prompt = self._build_user_prompt_for_symbol_normalizer(icp_json_file_path, symbols_metadata, ibc_code)
+            user_prompt = self._build_user_prompt_for_symbol_normalizer(
+                icp_json_file_path, symbols_to_normalize, ibc_code
+            )
             
             # 调用AI进行规范化
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
@@ -206,44 +250,92 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
                 user_prompt=user_prompt
             ))
             
-            if not success:
-                print(f"    {Colors.WARNING}警告: AI响应失败{Colors.ENDC}")
+            if not success or not response_content:
+                print(f"    {Colors.WARNING}警告: AI响应失败或为空{Colors.ENDC}")
                 continue
             
             # 解析响应
             cleaned_response = ICPChatHandler.clean_code_block_markers(response_content)
-
-            # result = json.loads(cleaned_response)
             
-            # # 验证结果格式
-            # validated_result = {}
-            # for symbol_name, normalized_name in result.items():
-            #     # 验证normalized_name符合标识符规范
-            #     if isinstance(normalized_name, str) and IbcFuncs.validate_identifier(normalized_name):
-            #         validated_result[symbol_name] = normalized_name
-            #     else:
-            #         print(f"    警告: 符号 {symbol_name} 的规范化名称无效: {normalized_name}")
+            # 验证规范化结果
+            validated_result = self._validate_normalized_result(cleaned_response, symbols_to_normalize)
             
-
-            if normalized_symbols:
-                return True, normalized_symbols
+            if validated_result:
+                print(f"    {Colors.OKGREEN}成功规范化 {len(validated_result)} 个符号{Colors.ENDC}")
+                return True, validated_result
             else:
-                print(f"    {Colors.WARNING}警告: AI返回的符号规范化结果为空{Colors.ENDC}")
+                print(f"    {Colors.WARNING}警告: AI返回的符号规范化结果为空或全部无效{Colors.ENDC}")
                 continue
         
         # 达到最大重试次数
         print(f"    {Colors.FAIL}符号规范化失败：AI未能返回有效结果（已重试{max_attempts}次）{Colors.ENDC}")
         return False, {}
+    
+    def _validate_normalized_result(
+        self, 
+        response_content: str, 
+        symbols_to_normalize: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, str]:
+        """验证AI返回的规范化结果
+        
+        Args:
+            response_content: AI返回的内容
+            symbols_to_normalize: 待规范化符号字典
+            
+        Returns:
+            验证通过的规范化结果 {symbol_path: normalized_name}
+        """
+        # 解析JSON
+        try:
+            result = json.loads(response_content)
+        except json.JSONDecodeError as e:
+            print(f"    {Colors.WARNING}警告: AI返回的JSON格式无效: {e}{Colors.ENDC}")
+            return {}
+        
+        if not isinstance(result, dict):
+            print(f"    {Colors.WARNING}警告: AI返回的结果不是字典格式{Colors.ENDC}")
+            return {}
+        
+        # 验证结果格式
+        validated_result = {}
+        invalid_count = 0
+        missing_count = 0
+        
+        # 检查所有待规范化的符号是否都有对应的规范化名称
+        for symbol_path in symbols_to_normalize.keys():
+            if symbol_path not in result:
+                missing_count += 1
+                continue
+            
+            normalized_name = result[symbol_path]
+            
+            # 验证 normalized_name 符合标识符规范
+            if isinstance(normalized_name, str) and normalized_name and IbcFuncs.validate_identifier(normalized_name):
+                validated_result[symbol_path] = normalized_name
+            else:
+                print(f"    警告: 符号 '{symbol_path}' 的规范化名称无效: '{normalized_name}'")
+                invalid_count += 1
+        
+        # 输出验证统计
+        if missing_count > 0:
+            print(f"    警告: {missing_count} 个符号未包含在AI返回结果中")
+        if invalid_count > 0:
+            print(f"    警告: {invalid_count} 个符号的规范化名称验证失败")
+        
+        return validated_result
 
-    def _build_user_prompt_for_symbol_normalizer(self, icp_json_file_path: str, symbols_metadata: Dict[str, Dict[str, Any]], ibc_code: str) -> str:
+    def _build_user_prompt_for_symbol_normalizer(
+        self, 
+        icp_json_file_path: str, 
+        symbols_to_normalize: Dict[str, Dict[str, Any]], 
+        ibc_code: str
+    ) -> str:
         """
         构建符号规范化的用户提示词（role_symbol_normalizer）
         
-        从配置文件中直接读取所需信息，无需外部参数传递。
-        
         Args:
             icp_json_file_path: 当前文件路径
-            symbols: 当前符号字典
+            symbols_to_normalize: 待规范化符号字典
             ibc_code: 当前IBC代码
         
         Returns:
@@ -262,7 +354,7 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         target_language = self._get_target_language()
         
         # 格式化符号列表
-        symbols_text = self._format_symbols_for_prompt(symbols_metadata)
+        symbols_text = self._format_symbols_for_prompt(symbols_to_normalize)
         
         # 填充占位符
         user_prompt_str = user_prompt_template_str.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
@@ -283,35 +375,69 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             print(f"{Colors.WARNING}警告: 读取配置文件失败: {e}，使用默认语言python{Colors.ENDC}")
             return 'python'
     
-    def _format_symbols_for_prompt(self, symbols_metadata: Dict[str, Dict[str, Any]]) -> str:
-        """格式化符号列表用于提示词"""
+    def _format_symbols_for_prompt(self, symbols_to_normalize: Dict[str, Dict[str, Any]]) -> str:
+        """格式化符号列表用于提示词
+        
+        Args:
+            symbols_to_normalize: 待规范化符号字典
+            
+        Returns:
+            格式化后的符号列表字符串
+        """
         lines = []
-        for symbol_path, meta in symbols_metadata.items():
+        for symbol_path, meta in symbols_to_normalize.items():
             meta_type = meta.get("type", "unknown")
-            # 跳过文件夹/文件节点
-            if meta_type in ("folder", "file"):
-                continue
             description = meta.get("description") or "无描述"
             lines.append(f"- {symbol_path} ({meta_type}, 描述: {description})")
         return '\n'.join(lines)
     
-    def _update_symbol_metadata(self, symbols_metadata: Dict[str, Dict[str, Any]], normalized_symbols: Dict[str, str]):
+    def _update_symbol_metadata(
+        self, 
+        symbols_metadata: Dict[str, Dict[str, Any]], 
+        normalized_symbols: Dict[str, str]
+    ) -> int:
         """根据规范化结果更新符号元数据
         
         Args:
             symbols_metadata: 符号元数据字典
-            normalized_symbols: 规范化符号字典 {符号路径或名称: 规范化符号}
+            normalized_symbols: 规范化符号字典 {符号路径: 规范化名称}
+            
+        Returns:
+            成功更新的符号数量
         """
+        updated_count = 0
+        unmatched_keys = []
+        
         for symbol_key, normalized_name in normalized_symbols.items():
-            # 优先按照完整路径更新；如果找不到，则尝试仅按末尾名称匹配
+            # 优先按照完整路径更新
             if symbol_key in symbols_metadata:
                 symbols_metadata[symbol_key]["normalized_name"] = normalized_name
+                symbols_metadata[symbol_key]["normalization_status"] = "completed"
+                updated_count += 1
                 continue
             
             # 末尾名称匹配（例如 key="ClassName"，metadata 存的是 "file.ClassName"）
+            matched = False
             for path, meta in symbols_metadata.items():
                 if path.endswith(f".{symbol_key}"):
                     meta["normalized_name"] = normalized_name
+                    meta["normalization_status"] = "completed"
+                    updated_count += 1
+                    matched = True
+                    break
+            
+            if not matched:
+                unmatched_keys.append(symbol_key)
+        
+        # 输出统计信息
+        if unmatched_keys:
+            print(f"    警告: 以下 {len(unmatched_keys)} 个符号路径在元数据中未找到:")
+            for key in unmatched_keys[:5]:  # 只显示前5个
+                print(f"      - {key}")
+            if len(unmatched_keys) > 5:
+                print(f"      ... 还有 {len(unmatched_keys) - 5} 个")
+        
+        return updated_count
 
         
     def is_cmd_valid(self):
