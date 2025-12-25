@@ -396,7 +396,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 print(f"  {Colors.WARNING}警告: 依赖符号缺少对外功能描述: {symbol_path}{Colors.ENDC}")
                 desc = "没有对外功能描述"
 
-            available_symbol_lines.append(f"{symbol_path} ：{desc}")
+            available_symbol_lines.append(f"${symbol_path} ：{desc}")
 
         if available_symbol_lines:
             available_symbols_text = "可用的依赖符号（path.to.symbol ：对外功能描述）：\n\n" + "\n".join(available_symbol_lines)
