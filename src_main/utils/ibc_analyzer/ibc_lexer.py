@@ -24,7 +24,15 @@ class IbcLexer:
         if self.line_num >= len(self.lines):
             return False
         
-        self.current_line: str = self.lines[self.line_num].rstrip()
+        line: str = self.lines[self.line_num].rstrip()
+        # 处理行尾注释：移除 // 及其后面的所有内容
+        comment_pos = line.find('//')
+        if comment_pos != -1:
+            # 找到 //，截取之前的内容并去除右侧空白
+            self.current_line = line[:comment_pos].rstrip()
+        else:
+            self.current_line = line
+        
         self.line_num += 1
         return True
     
@@ -180,9 +188,9 @@ class IbcLexer:
         
         # 处理每一行
         while self._get_next_line():
-            # 跳过空行和注释行
+            # 跳过空行（注释行已在 _get_next_line 中处理）
             striped_line = self.current_line.strip()
-            if not striped_line or striped_line.startswith('//'):
+            if not striped_line:
                 self.tokens.append(Token(IbcTokenType.NEWLINE, '', self.line_num))
                 continue
 
