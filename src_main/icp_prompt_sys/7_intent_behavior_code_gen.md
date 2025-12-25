@@ -74,8 +74,10 @@ func 计算订单总价(
 
 ```Intent Behavior Code
 class UserManager($BaseManager: 使用公共基类管理生命周期):
+    private
     var users: 用户数据字典
     
+    public
     func 添加用户(用户名, 密码: 经过哈希处理的密码字符串):
         尝试验证 用户名 和 密码 的格式是否正确
         将用户保存到数据库
@@ -104,6 +106,10 @@ description:
     从多个数据源读取配置信息，合并冲突设置，
     并提供热重载功能
 class 配置管理器():
+    private
+    <内部私有成员定义>
+
+    public
     <具体的class内容定义及描述>
 ```
 
@@ -125,6 +131,7 @@ class 配置管理器():
 description: 用户认证服务
 @ 线程安全设计，所有公共方法都必须使用锁机制
 class AuthService():
+    public
     @ 使用bcrypt进行密码哈希
     func 哈希密码(明文密码):
         返回 哈希结果
@@ -140,6 +147,8 @@ class AuthService():
 - 后续内容**不需要**额外缩进
 - 后续所有符号（函数、变量）被打上对应可见性
 - 所有常规的符号定义默认为 public
+- 建议在类中显式划分 `private`/`protected`/`public` 区域，而不是完全依赖默认可见性
+- 以 `_` 开头的内部实现方法、缓存变量等应放在 `private` 区域，对外使用的方法放在 `public` 区域
 
 **示例**：
 
@@ -334,10 +343,12 @@ description:
     错误处理和请求日志记录功能
 @ 具备异步处理功能
 class ApiClient():
+    private
     var baseUrl: API服务基础地址
     var timeout: 请求超时时间
     var session: HTTP会话对象，类型为 $requests.Session
     
+    public
     description: 发送GET请求到指定接口
     @ 异步函数
     func 获取数据(
@@ -400,6 +411,7 @@ module processor: 数据处理模块
 - 统一使用4空格缩进
 - 冒号后换行必须缩进
 - 参数列表可换行对齐
+- 类内部推荐显式使用 `private`/`protected`/`public` 可见性块来组织成员，而不是全部省略
 
 **长度限制**：
 
@@ -413,7 +425,6 @@ module processor: 数据处理模块
 - 引用未定义的 `$` 符号
 - 同一目标多个 `@`
 - 冒号后换行不缩进
-- `var x = 0` 或 `var x, y`
 
 ## Initialization
 
@@ -426,3 +437,5 @@ module processor: 数据处理模块
 2. **符合层级架构**：根据实现规划中的层级关系（基础层/业务层/应用层），确保当前文件的功能定位准确，依赖关系合理（上层依赖下层，不允许反向依赖）。
 
 3. **保持调用一致性**：实现规划中描述的文件调用顺序和数据流转路径应在生成的IBC代码中得到体现，确保各文件之间的协作逻辑清晰。
+
+4. **显式使用可见性声明**：当存在类定义时，应根据成员职责合理划分 `private`/`protected`/`public` 区域，避免所有成员都依赖默认可见性不加区分。
