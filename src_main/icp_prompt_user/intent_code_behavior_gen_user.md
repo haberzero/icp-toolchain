@@ -26,29 +26,25 @@ CURRENT_FILE_PATH_PLACEHOLDER
 
 **当前文件的详细需求描述：**
 
-- import（导入依赖）:
-    当前文件在实现过程中可能会有需要参考的已有模块，其具体需求内容如下
-    IMPORT_CONTENT_PLACEHOLDER
-
 - class（类定义）:
-    当前文件在实现过程中可能会有需要定义的类，其具体需求内容如下
-    CLASS_CONTENT_PLACEHOLDER
+当前文件在实现过程中可能会有需要定义的类，其具体需求内容如下
+CLASS_CONTENT_PLACEHOLDER
 
 - func（函数/方法定义）:
-    当前文件在实现过程中可能会有需要定义的函数或方法，其具体需求内容如下
-    FUNC_CONTENT_PLACEHOLDER
+当前文件在实现过程中可能会有需要定义的函数或方法，其具体需求内容如下
+FUNC_CONTENT_PLACEHOLDER
 
 - var（变量定义）:
-    当前文件在实现过程中可能会有需要定义的变量，或者需要你进行额外关系的关键参数，其具体需求内容如下
-    VAR_CONTENT_PLACEHOLDER
+当前文件在实现过程中可能会有需要定义的变量，或者需要你进行额外关系的关键参数，其具体需求内容如下
+VAR_CONTENT_PLACEHOLDER
 
 - behavior（行为描述）:
-    当前文件的粗略行为逻辑描述如下
-    BEHAVIOR_CONTENT_PLACEHOLDER
+当前文件的粗略行为逻辑描述如下
+BEHAVIOR_CONTENT_PLACEHOLDER
 
 - others（其他考虑）:
-    编程时，可能存在一些额外考虑，他们可能会影响到编程的实现思路，具体如下所示
-    OTHERS_CONTENT_PLACEHOLDER
+编程时，可能存在一些额外考虑，他们可能会影响到编程的实现思路，具体如下所示
+OTHERS_CONTENT_PLACEHOLDER
 
 **可用的依赖符号：**
 

@@ -428,7 +428,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         var_content = self._extract_section_content(file_req_str, 'var')
         others_content = self._extract_section_content(file_req_str, 'others')
         behavior_content = self._extract_section_content(file_req_str, 'behavior')
-        import_content = self._extract_section_content(file_req_str, 'import')
+        # import_content = self._extract_section_content(file_req_str, 'import')
         
         # 读取用户提示词模板
         app_data_store = get_app_data_store()
@@ -451,7 +451,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt_str = user_prompt_str.replace('VAR_CONTENT_PLACEHOLDER', var_content if var_content else '无')
         user_prompt_str = user_prompt_str.replace('OTHERS_CONTENT_PLACEHOLDER', others_content if others_content else '无')
         user_prompt_str = user_prompt_str.replace('BEHAVIOR_CONTENT_PLACEHOLDER', behavior_content if behavior_content else '无')
-        user_prompt_str = user_prompt_str.replace('IMPORT_CONTENT_PLACEHOLDER', import_content if import_content else '无')
+        # user_prompt_str = user_prompt_str.replace('IMPORT_CONTENT_PLACEHOLDER', import_content if import_content else '无')
         user_prompt_str = user_prompt_str.replace('AVAILABLE_SYMBOLS_PLACEHOLDER', available_symbols_text)
         
         return user_prompt_str
