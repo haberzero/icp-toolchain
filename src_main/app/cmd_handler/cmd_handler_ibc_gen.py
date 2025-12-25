@@ -382,24 +382,29 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             dependency_symbol_tables=dependency_symbol_tables,
         )
         
-        # 根据symbols_metadata构建可用依赖符号文本
-        # symbols_metadata的键为点号分隔的路径（如 src.ball.ball_entity.BallEntity.get_position）
-        # 这里只关心具体符号节点，忽略type为folder/file的元数据
-        available_symbol_lines = []
-        for symbol_path, meta in symbols_metadata.items():
-            meta_type = meta.get("type")
-            if meta_type in ("folder", "file"):
-                continue
-
-            desc = meta.get("description")
-            if not desc:
-                print(f"  {Colors.WARNING}警告: 依赖符号缺少对外功能描述: {symbol_path}{Colors.ENDC}")
-                desc = "没有对外功能描述"
-
-            available_symbol_lines.append(f"${symbol_path} ：{desc}")
+        # 构建模块依赖路径列表（点分隔格式）
+        module_dependency_paths = []
+        if icp_json_file_path in self.dependent_relation:
+            dependencies = self.dependent_relation[icp_json_file_path]
+            for dep_path in dependencies:
+                # 将路径从 "src/ball/ball_entity" 转换为 "ball.ball_entity"
+                module_path = dep_path.replace('/', '.')
+                module_dependency_paths.append(module_path)
+        
+        # 构建模块依赖文本
+        if module_dependency_paths:
+            module_dependencies_text = "当前文件的模块依赖（需在IBC代码顶部引用的模块）：\n\n" + "\n".join(f"module {path}" for path in module_dependency_paths)
+        else:
+            module_dependencies_text = "当前文件无模块依赖"
+        
+        # 使用 IbcFuncs 构建可用依赖符号列表
+        available_symbol_lines = IbcFuncs.build_available_symbol_list(
+            symbols_metadata=symbols_metadata,
+            proj_root_dict=self.proj_root_dict
+        )
 
         if available_symbol_lines:
-            available_symbols_text = "可用的依赖符号（path.to.symbol ：对外功能描述）：\n\n" + "\n".join(available_symbol_lines)
+            available_symbols_text = "可用的依赖符号（filename.symbol ：对外功能描述）：\n\n" + "\n".join(available_symbol_lines)
         else:
             available_symbols_text = '暂无可用的依赖符号'
         
@@ -452,6 +457,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt_str = user_prompt_str.replace('OTHERS_CONTENT_PLACEHOLDER', others_content if others_content else '无')
         user_prompt_str = user_prompt_str.replace('BEHAVIOR_CONTENT_PLACEHOLDER', behavior_content if behavior_content else '无')
         # user_prompt_str = user_prompt_str.replace('IMPORT_CONTENT_PLACEHOLDER', import_content if import_content else '无')
+        user_prompt_str = user_prompt_str.replace('MODULE_DEPENDENCIES_PLACEHOLDER', module_dependencies_text)
         user_prompt_str = user_prompt_str.replace('AVAILABLE_SYMBOLS_PLACEHOLDER', available_symbols_text)
         
         return user_prompt_str

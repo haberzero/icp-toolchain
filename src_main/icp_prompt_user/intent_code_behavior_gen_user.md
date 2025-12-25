@@ -46,18 +46,44 @@ BEHAVIOR_CONTENT_PLACEHOLDER
 编程时，可能存在一些额外考虑，他们可能会影响到编程的实现思路，具体如下所示
 OTHERS_CONTENT_PLACEHOLDER
 
+**当前文件的模块依赖：**
+
+以下是当前文件需要引用的外部模块，你应该在生成的IBC代码文件的顶部使用 `module` 关键字引用这些依赖模块。
+
+MODULE_DEPENDENCIES_PLACEHOLDER
+
+引用示例：
+```Intent Behavior Code
+module utils.validator
+module utils.logger
+
+description: 验证用户输入数据的合法性
+func 验证用户数据(用户数据):
+    验证器 = $validator.DataValidator()
+    日志器 = $logger.Logger()
+    
+    如果 验证器.check_format(用户数据):
+        日志器.记录信息("数据格式验证通过")
+        返回 验证成功
+    否则:
+        日志器.记录错误("数据格式无效")
+        返回 验证失败
+```
+
 **可用的依赖符号：**
 
 以下是你可以在当前文件中调用的依赖文件中的符号（类、函数、变量）及其功能描述。
 
-- 每一行使用 `path.to.symbol` 的点号路径形式，对应一个可用符号
-- 行的基本格式为：`path.to.symbol: <符号的对外功能描述>`
+- 每一行使用 `filename.symbol` 的点号路径形式，对应一个可用符号
+- 行的基本格式为：`$filename.symbol: <符号的对外功能描述>`
+- 符号引用时使用 `$` 前缀，例如 `$ball_entity.BallEntity` 表示引用 ball_entity 文件中的 BallEntity 类
 
 AVAILABLE_SYMBOLS_PLACEHOLDER
 
 **重要提示：**
 
-符号引用语法：使用 `$符号名称` 来引用依赖的外部符号。
+1. **模块引用**：在文件顶部使用 `module` 关键字声明需要引用的外部模块（见上方"当前文件的模块依赖"）
+2. **符号引用语法**：使用 `$filename.symbol_name` 来引用依赖的外部符号，其中 filename 是模块路径的最后一部分（文件名）
 
 **总体任务目标：**
 
