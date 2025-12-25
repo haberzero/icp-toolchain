@@ -46,10 +46,9 @@ def test_symbol_node_basics():
         assert not symbol.is_normalized(), "新创建的符号应该未规范化"
         
         # 规范化
-        symbol.update_normalized_info("CalculateTotal", VisibilityTypes.PUBLIC)
+        symbol.normalized_name = "CalculateTotal"
         assert symbol.is_normalized(), "更新后应该已规范化"
         assert symbol.normalized_name == "CalculateTotal"
-        assert symbol.visibility == VisibilityTypes.PUBLIC
         
         # 序列化/反序列化
         symbol_dict = symbol.to_dict()
@@ -459,18 +458,17 @@ class UserService(BaseService: 基础服务类):
         # 步骤3: 模拟AI规范化
         print("\n步骤3: 模拟AI规范化符号...")
         normalization_map = {
-            "UserService": ("UserService", "public"),
-            "sessionStore": ("sessionStore", "private"),
-            "登录": ("Login", "public"),
-            "登出": ("Logout", "public")
+            "UserService": "UserService",
+            "sessionStore": "sessionStore",
+            "登录": "Login",
+            "登出": "Logout"
         }
         
-        for symbol_name, (normalized_name, visibility_str) in normalization_map.items():
+        for symbol_name, normalized_name in normalization_map.items():
             symbol = symbol_table.get(symbol_name)
             if symbol:
-                visibility = VisibilityTypes.PUBLIC if visibility_str == "public" else VisibilityTypes.PRIVATE
-                symbol.update_normalized_info(normalized_name, visibility)
-                print(f"  - {symbol_name} -> {normalized_name} ({visibility_str})")
+                symbol.normalized_name = normalized_name
+                print(f"  - {symbol_name} -> {normalized_name}")
         
         # 步骤4: 验证规范化结果
         print("\n步骤4: 验证规范化结果...")
@@ -501,7 +499,6 @@ class UserService(BaseService: 基础服务类):
                 assert restored.is_normalized() or original.is_normalized() == False
                 if original.is_normalized():
                     assert original.normalized_name == restored.normalized_name
-                    assert original.visibility == restored.visibility
         
         print("  数据一致性验证通过")
         

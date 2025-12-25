@@ -420,8 +420,7 @@ class IbcDataStore:
         symbols_path: str,
         file_name: str,
         symbol_name: str,
-        normalized_name: str,
-        visibility: VisibilityTypes
+        normalized_name: str
     ) -> None:
         """更新符号的规范化信息"""
         # 加载符号表
@@ -432,7 +431,7 @@ class IbcDataStore:
         if not symbol:
             raise ValueError(f"符号不存在: {symbol_name}，文件: {file_name}")
         
-        symbol.update_normalized_info(normalized_name, visibility)
+        symbol.normalized_name = normalized_name
         
         # 保存更新后的符号表
         self.save_symbols(symbols_path, file_name, symbol_table)

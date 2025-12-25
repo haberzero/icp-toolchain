@@ -440,12 +440,12 @@ def test_symbol_management():
     # 测试用例2: 更新符号信息
     print("\n5.2 测试更新符号规范化信息...")
     ibc_data_store.update_symbol_info(
-        symbols_path, file_name, "登录", "Login", VisibilityTypes.PROTECTED
+        symbols_path, file_name, "登录", "Login"
     )
     
     updated_symbols = ibc_data_store.load_symbols(symbols_path, file_name)
     updated_func = updated_symbols.get("登录")
-    if updated_func.normalized_name == "Login" and updated_func.visibility == VisibilityTypes.PROTECTED:
+    if updated_func.normalized_name == "Login":
         print(f"   ✓ 符号信息更新成功")
     else:
         print(f"   ✗ 符号信息更新错误")

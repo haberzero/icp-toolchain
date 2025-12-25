@@ -5,7 +5,7 @@ from typing import Dict
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
-from typedef.ibc_data_types import SymbolNode, VisibilityTypes
+from typedef.ibc_data_types import SymbolNode
 
 from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
 from data_store.app_data_store import get_instance as get_app_data_store
@@ -22,7 +22,7 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
     
     负责对已生成的IBC文件中的符号进行规范化处理:
     1. 读取IBC文件及其符号表
-    2. 调用AI进行符号规范化(规范化名称和可见性)
+    2. 调用AI进行符号规范化（规范化名称）
     3. 更新符号表并保存
     """
 
@@ -32,7 +32,7 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             name="symbol_normalize",
             aliases=["SN"],
             description="对IBC文件中的符号进行规范化处理",
-            help_text="调用AI对符号进行规范化命名和可见性标注",
+            help_text="调用AI对符号进行规范化命名",
         )
         
         # 路径配置
@@ -217,7 +217,19 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             
             # 解析响应
             cleaned_response = ICPChatHandler.clean_code_block_markers(response_content)
-            normalized_symbols = IbcFuncs.parse_symbol_normalizer_response(cleaned_response)
+
+            # result = json.loads(cleaned_response)
+            
+            # # 验证结果格式
+            # validated_result = {}
+            # for symbol_name, normalized_name in result.items():
+            #     # 验证normalized_name符合标识符规范
+            #     if isinstance(normalized_name, str) and IbcFuncs.validate_identifier(normalized_name):
+            #         validated_result[symbol_name] = normalized_name
+            #     else:
+            #         print(f"    警告: 符号 {symbol_name} 的规范化名称无效: {normalized_name}")
+            
+
             if normalized_symbols:
                 return True, normalized_symbols
             else:
@@ -285,32 +297,21 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             lines.append(f"- {symbol.symbol_name} ({symbol_type}, 描述: {description})")
         return '\n'.join(lines)
     
-    def _update_symbol_table(self, symbol_table: Dict[str, SymbolNode], normalized_symbols: Dict[str, Dict[str, str]]):
+    def _update_symbol_table(self, symbol_table: Dict[str, SymbolNode], normalized_symbols: Dict[str, str]):
         """根据规范化结果更新符号表
         
         Args:
             symbol_table: 符号表字典
-            normalized_symbols: 规范化符号字典
+            normalized_symbols: 规范化符号字典 {"原始符号": "规范化符号"}
         """
-        for symbol_name, norm_data in normalized_symbols.items():
+        for symbol_name, normalized_name in normalized_symbols.items():
             if symbol_name in symbol_table:
-                normalized_name = norm_data.get('normalized_name', '')
-                visibility_str = norm_data.get('visibility', 'module_local')
+                symbol = symbol_table.get(symbol_name)
+                if symbol is None:
+                    raise SymbolNotFoundError(symbol_name, "更新规范化信息")
                 
-                # 转换可见性字符串为枚举
-                try:
-                    visibility = VisibilityTypes(visibility_str)
-                except ValueError:
-                    print(f"    {Colors.WARNING}警告: 无效的可见性值 {visibility_str}，使用默认值{Colors.ENDC}")
-                    visibility = VisibilityTypes.MODULE_LOCAL
-                
-                # 更新符号信息
-                IbcFuncs.update_symbol_normalized_info(
-                    symbol_table, 
-                    symbol_name, 
-                    normalized_name, 
-                    visibility
-                )
+                symbol.normalized_name = normalized_name
+
         
     def is_cmd_valid(self):
         return self._check_cmd_requirement() and self._check_ai_handler()

@@ -252,11 +252,6 @@ class SymbolNode:
         """检查符号是否已经规范化（包含规范化名称）"""
         return bool(self.normalized_name)
     
-    def update_normalized_info(self, normalized_name: str, visibility: VisibilityTypes) -> None:
-        """更新规范化信息"""
-        self.normalized_name = normalized_name
-        self.visibility = visibility
-    
     def add_child(self, child_symbol_name: str) -> None:
         """添加子符号"""
         if child_symbol_name not in self.children_symbol_names:
