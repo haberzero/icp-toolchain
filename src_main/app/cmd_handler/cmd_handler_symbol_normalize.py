@@ -43,7 +43,7 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
         self.work_icp_config_file_path = os.path.join(self.work_config_dir_path, 'icp_config.json')
 
-        self.role_symbol_normalizer = "7_symbol_normalizer"
+        self.role_symbol_normalizer = "8_symbol_normalizer"
         self.sys_prompt_symbol_normalizer = ""  # 系统提示词,在_init_ai_handlers中加载
         self.chat_handler = ICPChatHandler()
         self._init_ai_handlers()
