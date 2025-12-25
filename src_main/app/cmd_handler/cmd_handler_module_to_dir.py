@@ -179,6 +179,9 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         
         # 格式化问题列表
         issues_list = "\n".join([f"- {issue.issue_content}" for issue in self.issue_recorder.get_issues()])
+
+        # 在控制台打印问题列表，提示其将用于下一次重试生成
+        self.issue_recorder.print_issues_for_retry()
         
         # 替换占位符
         retry_prompt = retry_template.replace('PREVIOUS_CONTENT_PLACEHOLDER', formatted_content)

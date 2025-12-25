@@ -1,5 +1,6 @@
 from typing import List, Optional
 from typedef.issue_recorder_types import TextIssue
+from typedef.cmd_data_types import Colors
 
 
 class TextIssueRecorder:
@@ -49,3 +50,12 @@ class TextIssueRecorder:
     def get_all_contents(self) -> List[str]:
         """获取所有问题内容的字符串列表"""
         return [issue.issue_content for issue in self._issues]
+
+    def print_issues_for_retry(self) -> None:
+        """打印已记录的问题信息，并说明会用于下一次重试生成"""
+        if not self._issues:
+            return
+
+        print(f"{Colors.WARNING}以下问题信息已记录，将在下一次向大模型发起重试生成时作为问题列表进行反馈：{Colors.ENDC}")
+        for idx, issue in enumerate(self._issues, start=1):
+            print(f"  {idx}. {issue.issue_content}")
