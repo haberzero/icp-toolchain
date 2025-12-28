@@ -224,9 +224,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             need_update_flag_dict[file_path] = need_update
             
-            # 更新one_file_req的MD5到统一的verify文件
-            verify_data['one_file_req_verify_code'] = current_req_md5
-            ibc_data_store.save_file_verify_data(self.work_data_dir_path, file_path, verify_data)
+            # 更新one_file_req的MD5到统一的verify文件（使用update方法）
+            ibc_data_store.update_file_verify_data(self.work_data_dir_path, file_path, {
+                'one_file_req_verify_code': current_req_md5
+            })
         
         # 第二阶段：依赖链传播更新
         # 按依赖顺序遍历（file_list已经是拓扑排序后的顺序）
@@ -300,12 +301,6 @@ class CmdHandlerIbcGen(BaseCmdHandler):
 
         # 带重试的生成逻辑（IBC 代码的生成过程不确定性更多，提供较多的重试次数）
         max_attempts = 5
-        is_valid = False
-        ast_dict = None
-        symbols_tree = None
-        symbols_metadata = None
-        ibc_code = None
-        
         for attempt in range(max_attempts):
             print(f"    {Colors.OKBLUE}正在进行第 {attempt + 1}/{max_attempts} 次尝试...{Colors.ENDC}")
 
@@ -334,22 +329,19 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 continue
             
             # 清理代码块标记
-            ibc_code = ICPChatHandler.clean_code_block_markers(response_content)
-
-            # 每次分析前清空issue recorder
-            self.ibc_issue_recorder.clear()
-            
+            ibc_content = ICPChatHandler.clean_code_block_markers(response_content)
+                    
             # 解析IBC代码生成AST
             print(f"    {Colors.OKBLUE}正在分析IBC代码生成AST...{Colors.ENDC}")
-            ast_dict, symbols_tree, symbols_metadata = analyze_ibc_code(ibc_code, self.ibc_issue_recorder)
+            ast_dict, symbols_tree, symbols_metadata = analyze_ibc_code(ibc_content, self.ibc_issue_recorder)
             
             # 验证是否得到有效的AST和符号数据
-            is_valid = self._validate_ibc_response(ast_dict, symbols_tree, symbols_metadata)
+            is_valid = self._validate_ibc_response(ast_dict)
             if is_valid:
                 break
             
             # 如果验证失败，保存当前生成的内容并构建重试提示词
-            self.last_generated_ibc_content = ibc_code
+            self.last_generated_ibc_content = ibc_content
             self.user_prompt_retry_part = self._build_user_prompt_retry_part()
         
         # 循环已跳出，检查运行结果并进行相应操作
@@ -369,8 +361,36 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         ibc_data_store.save_symbols(symbols_path, file_name, symbols_tree, symbols_metadata)
         print(f"    {Colors.OKGREEN}符号表已保存: {symbols_path}{Colors.ENDC}")
         
+        # 保存符号元数据到验证文件（符号数量和MD5）
+        self._save_symbols_verify_data(icp_json_file_path, symbols_metadata)
+        
         # IBC代码和符号表保存成功，返回成功
         return True
+    
+    def _save_symbols_verify_data(self, icp_json_file_path: str, symbols_metadata: Dict[str, Dict[str, Any]]) -> None:
+        """保存符号元数据的验证信息(符号数量和MD5)到验证文件
+        
+        Args:
+            icp_json_file_path: 文件路径
+            symbols_metadata: 符号元数据字典
+        """
+        try:
+            # 计算符号数量
+            symbols_count = IbcFuncs.count_symbols_in_metadata(symbols_metadata)
+            
+            # 计算符号元数据MD5
+            symbols_metadata_md5 = IbcFuncs.calculate_symbols_metadata_md5(symbols_metadata)
+            
+            # 使用 update 方法直接更新符号相关的验证数据
+            ibc_data_store = get_ibc_data_store()
+            ibc_data_store.update_file_verify_data(self.work_data_dir_path, icp_json_file_path, {
+                'symbols_count': str(symbols_count),
+                'symbols_metadata_md5': symbols_metadata_md5
+            })
+            
+            print(f"    {Colors.OKGREEN}符号元数据已保存: 符号数量={symbols_count}, MD5={symbols_metadata_md5[:8]}...{Colors.ENDC}")
+        except Exception as e:
+            print(f"    {Colors.WARNING}警告: 保存符号元数据失败: {e}{Colors.ENDC}")
 
     def _build_user_prompt_for_ibc_generator(self, icp_json_file_path: str) -> str:
         """
@@ -563,7 +583,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         return '\n'.join(section_lines)
 
-    def _validate_ibc_response(self, ast_dict: Dict) -> bool:
+    def _validate_ibc_response(self, ast_dict: Dict[str, Any]) -> bool:
         """验证IBC代码分析结果是否有效
         
         Args:
@@ -574,6 +594,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         Returns:
             bool: 是否有效
         """
+        # 每次分析前清空issue recorder
+        self.ibc_issue_recorder.clear()
+
         # 检查AST是否有效
         if not ast_dict:
             error_msg = "IBC代码分析失败，未能生成有效的AST"
