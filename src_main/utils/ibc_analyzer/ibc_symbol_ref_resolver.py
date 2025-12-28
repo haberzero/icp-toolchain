@@ -128,7 +128,7 @@ class SymbolRefResolver:
         """验证单个符号引用
         
         Args:
-            ref: 符号引用字符串（如"ball_entity.BallEntity"或"self.ball.get_position"）
+            ref: 符号引用字符串（如"ball_entity.BallEntity"或"self.ball.get_position"或本地符号"Ball.position_x"）
             line_num: 行号
         """
         if not ref:
@@ -145,16 +145,23 @@ class SymbolRefResolver:
             )
             return
         
-        # 第一部分是起点（模块名或self）
+        # 第一部分是起点（模块名、self或本地符号名）
         start_point = parts[0]
         
         # 如果是self引用，跳过验证（属于内部引用）
         if start_point == "self":
             return
         
+        # 首先检查是否为本地符号引用（直接引用当前文件的符号）
+        if start_point in self.symbols_tree:
+            # 本地符号引用，验证符号路径
+            symbol_path = '.'.join(parts)  # 完整路径，包括起点
+            self._validate_local_symbol(symbol_path, line_num, ref)
+            return
+        
         # 验证起点是否在导入的模块中
         if start_point not in self.module_imports:
-            # 起点不在导入模块中，尝试模糊匹配
+            # 起点不在导入模块中，也不是本地符号，尝试模糊匹配
             self._record_module_not_found(start_point, line_num, ref)
             return
         
@@ -208,6 +215,31 @@ class SymbolRefResolver:
         
         # 符号不存在，尝试模糊匹配
         self._record_symbol_not_found(full_symbol_path, module_path, line_num, original_ref)
+    
+    def _validate_local_symbol(
+        self,
+        symbol_path: str,
+        line_num: int,
+        original_ref: str
+    ) -> None:
+        """验证本地符号引用是否存在
+        
+        Args:
+            symbol_path: 符号完整路径（如"Ball.position_x"）
+            line_num: 行号
+            original_ref: 原始引用字符串
+        """
+        # 检查符号是否在元数据中
+        if symbol_path in self.symbols_metadata:
+            # 符号存在，验证通过
+            return
+        
+        # 符号不存在，记录问题
+        self.ibc_issue_recorder.record_issue(
+            message=f"本地符号引用错误：符号'{symbol_path}'不存在 原始引用: {original_ref}",
+            line_num=line_num,
+            line_content=""
+        )
     
     def _record_module_not_found(self, module_name: str, line_num: int, original_ref: str) -> None:
         """记录模块未找到的问题，并尝试模糊匹配

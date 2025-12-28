@@ -15,6 +15,7 @@ from utils.icp_ai_handler import ICPChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.ibc_funcs import IbcFuncs
 from utils.issue_recorder import TextIssueRecorder
+from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code
 
 
 class CmdHandlerCodeGen(BaseCmdHandler):
@@ -419,14 +420,53 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         """
         ibc_data_store = get_ibc_data_store()
         
-        # 读取规范化的IBC代码
+        # 读取IBC代码
         ibc_path = ibc_data_store.build_ibc_path(self.work_ibc_dir_path, icp_json_file_path)
         try:
             with open(ibc_path, 'r', encoding='utf-8') as f:
-                ibc_code = f.read()
+                ibc_content = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取IBC代码失败: {e}{Colors.ENDC}")
             return ""
+        
+        # 加载符号表和AST，用于符号替换
+        file_name = os.path.basename(icp_json_file_path)
+        symbols_path = ibc_data_store.build_symbols_path(self.work_ibc_dir_path, icp_json_file_path)
+        
+        # 检查符号表是否存在
+        if not os.path.exists(symbols_path):
+            print(f"  {Colors.WARNING}警告: 符号表文件不存在: {symbols_path}{Colors.ENDC}")
+            print(f"  {Colors.WARNING}将使用未替换的IBC代码{Colors.ENDC}")
+            normalized_ibc_content = ibc_content
+        else:
+            try:
+                # 加载符号表
+                symbols_tree, symbols_metadata = ibc_data_store.load_symbols(symbols_path, file_name)
+                
+                # 重新解析IBC代码生成AST（用于符号替换）
+                print(f"    {Colors.OKBLUE}正在解析IBC代码以生成AST...{Colors.ENDC}")
+                ast_dict, _, _ = analyze_ibc_code(ibc_content)
+                
+                if not ast_dict:
+                    print(f"  {Colors.WARNING}警告: AST生成失败，将使用未替换的IBC代码{Colors.ENDC}")
+                    normalized_ibc_content = ibc_content
+                else:
+                    # 执行符号替换
+                    print(f"    {Colors.OKBLUE}正在将IBC代码中的符号替换为规范化名称...{Colors.ENDC}")
+                    normalized_ibc_content = IbcFuncs.replace_symbols_with_normalized_names(
+                        ibc_content=ibc_content,
+                        ast_dict=ast_dict,
+                        symbols_metadata=symbols_metadata,
+                        current_file_name=file_name
+                    )
+                    print(f"    {Colors.OKGREEN}符号替换完成{Colors.ENDC}")
+                    
+            except Exception as e:
+                print(f"  {Colors.WARNING}警告: 符号替换失败: {e}{Colors.ENDC}")
+                print(f"  {Colors.WARNING}将使用未替换的IBC代码{Colors.ENDC}")
+                import traceback
+                traceback.print_exc()
+                normalized_ibc_content = ibc_content
         
         # 读取提示词模板
         app_data_store = get_app_data_store()
@@ -445,7 +485,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         user_prompt_str = user_prompt_str.replace('LIBRARY_PLACEHOLDER', self.allowed_libs_text)
         user_prompt_str = user_prompt_str.replace('PROJROOT_DIRCONTENT_PLACEHOLDER', self.proj_root_dict_json_str)
         user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', self.implementation_plan_str if self.implementation_plan_str else '无')
-        user_prompt_str = user_prompt_str.replace('IBC_CODE_PLACEHOLDER', ibc_code)
+        user_prompt_str = user_prompt_str.replace('IBC_CONTENT_PLACEHOLDER', normalized_ibc_content)
         
         return user_prompt_str
 

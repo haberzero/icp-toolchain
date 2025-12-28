@@ -331,7 +331,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             # 验证是否得到有效的AST和符号数据（包括符号引用验证）
             is_valid = self._validate_ibc_response(
                 ast_dict=ast_dict,
-                current_file_path=icp_json_file_path
+                current_file_path=icp_json_file_path,
+                symbols_tree=symbols_tree,
+                symbols_metadata=symbols_metadata
             )
             if is_valid:
                 break
@@ -563,13 +565,17 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     def _validate_ibc_response(
         self, 
         ast_dict: Dict[str, Any],
-        current_file_path: str
+        current_file_path: str,
+        symbols_tree: Dict[str, Any] = None,
+        symbols_metadata: Dict[str, Dict[str, Any]] = None
     ) -> bool:
         """验证IBC代码分析结果是否有效
         
         Args:
             ast_dict: AST字典
             current_file_path: 当前文件路径
+            symbols_tree: 当前文件的符号树（用于符号引用验证）
+            symbols_metadata: 当前文件的符号元数据（用于符号引用验证）
             
         Returns:
             bool: 是否有效
@@ -588,7 +594,12 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         # 执行符号引用验证
         print(f"    {Colors.OKBLUE}正在验证符号引用...{Colors.ENDC}")
-        self._validate_symbol_references(ast_dict, current_file_path)
+        self._validate_symbol_references(
+            ast_dict=ast_dict,
+            current_file_path=current_file_path,
+            local_symbols_tree=symbols_tree,
+            local_symbols_metadata=symbols_metadata
+        )
         
         # 如果没有问题，认为验证通过
         if not self.ibc_issue_recorder.has_issues():
@@ -603,13 +614,17 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     def _validate_symbol_references(
         self,
         ast_dict: Dict[int, IbcBaseAstNode],
-        current_file_path: str
+        current_file_path: str,
+        local_symbols_tree: Dict[str, Any] = None,
+        local_symbols_metadata: Dict[str, Dict[str, Any]] = None
     ) -> None:
         """验证AST中的所有符号引用
         
         Args:
             ast_dict: AST字典
             current_file_path: 当前文件路径
+            local_symbols_tree: 当前文件的符号树（用于验证对本地符号的引用）
+            local_symbols_metadata: 当前文件的符号元数据
         """
         # 获取当前文件的可见符号树（用于符号引用验证）
         ibc_data_store = get_ibc_data_store()
@@ -631,10 +646,13 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             current_file_path=current_file_path,
         )
         
-        # 构建可见符号树
+        # 构建可见符号树（包含依赖符号 + 本地符号）
         visible_symbols_tree, visible_symbols_metadata = self.visible_symbol_builder.build_visible_symbol_tree(
             current_file_path=current_file_path,
             dependency_symbol_tables=dependency_symbol_tables,
+            include_local_symbols=True,
+            local_symbols_tree=local_symbols_tree,
+            local_symbols_metadata=local_symbols_metadata
         )
         
         # 创建符号引用解析器并执行验证

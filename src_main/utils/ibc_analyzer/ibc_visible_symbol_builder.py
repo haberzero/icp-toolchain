@@ -34,7 +34,10 @@ class VisibleSymbolBuilder:
     def build_visible_symbol_tree(
         self, 
         current_file_path: str,
-        dependency_symbol_tables: Dict[str, Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]]
+        dependency_symbol_tables: Dict[str, Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]],
+        include_local_symbols: bool = False,
+        local_symbols_tree: Optional[Dict[str, Any]] = None,
+        local_symbols_metadata: Optional[Dict[str, Dict[str, Any]]] = None
     ) -> Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]:
         """构建当前文件的可见符号树
         
@@ -43,33 +46,47 @@ class VisibleSymbolBuilder:
             dependency_symbol_tables: 依赖文件路径到 (symbols_tree, symbols_metadata) 的映射
                 - symbols_tree: 单文件内部的符号树
                 - symbols_metadata: 单文件内部的符号元数据
+            include_local_symbols: 是否包含当前文件自己的符号（用于符号引用验证）
+            local_symbols_tree: 当前文件自己的符号树
+            local_symbols_metadata: 当前文件自己的符号元数据
         """
         print(f"开始构建可见符号树: {current_file_path}")
-        
-        if not dependency_symbol_tables:
-            print(f"  当前文件无可用依赖符号，返回空符号树")
-            return {}, {}
-        
-        print(f"  依赖文件数: {len(dependency_symbol_tables)}")
         
         # 合并后的可见符号树和元数据
         symbols_tree: Dict[str, Any] = {}
         symbols_metadata: Dict[str, Dict[str, Any]] = {}
         
-        for dep_file_path, (file_symbols_tree, file_symbols_metadata) in dependency_symbol_tables.items():
-            print(f"  处理依赖: {dep_file_path}")
-            
-            if not file_symbols_tree and not file_symbols_metadata:
-                print(f"    警告: 依赖符号数据为空")
-                continue
-            
-            # 将单文件符号树插入到整体树中（保持与原有目录结构一致）
-            self._insert_file_symbols_into_tree(
-                tree=symbols_tree,
-                metadata=symbols_metadata,
-                file_path=dep_file_path,
-                file_symbols_tree=file_symbols_tree,
-                file_symbols_metadata=file_symbols_metadata,
+        if not dependency_symbol_tables:
+            print(f"  当前文件无可用依赖符号")
+        else:
+            print(f"  依赖文件数: {len(dependency_symbol_tables)}")
+        
+        if dependency_symbol_tables:
+            for dep_file_path, (file_symbols_tree, file_symbols_metadata) in dependency_symbol_tables.items():
+                print(f"  处理依赖: {dep_file_path}")
+                
+                if not file_symbols_tree and not file_symbols_metadata:
+                    print(f"    警告: 依赖符号数据为空")
+                    continue
+                
+                # 将单文件符号树插入到整体树中（保持与原有目录结构一致）
+                self._insert_file_symbols_into_tree(
+                    tree=symbols_tree,
+                    metadata=symbols_metadata,
+                    file_path=dep_file_path,
+                    file_symbols_tree=file_symbols_tree,
+                    file_symbols_metadata=file_symbols_metadata,
+                )
+        
+        # 如果需要包含本地符号，则将本地符号合并到可见符号树中
+        if include_local_symbols and local_symbols_tree and local_symbols_metadata:
+            print(f"  正在合并本地符号到可见符号树...")
+            self._merge_local_symbols(
+                symbols_tree=symbols_tree,
+                symbols_metadata=symbols_metadata,
+                local_symbols_tree=local_symbols_tree,
+                local_symbols_metadata=local_symbols_metadata,
+                current_file_path=current_file_path
             )
         
         print(f"  可见符号树构建完成")
@@ -146,6 +163,57 @@ class VisibleSymbolBuilder:
             else:
                 new_tree[key] = value
         return new_tree
+    
+    def _merge_local_symbols(
+        self,
+        symbols_tree: Dict[str, Any],
+        symbols_metadata: Dict[str, Dict[str, Any]],
+        local_symbols_tree: Dict[str, Any],
+        local_symbols_metadata: Dict[str, Dict[str, Any]],
+        current_file_path: str
+    ) -> None:
+        """将当前文件的本地符号合并到可见符号树中
+        
+        Args:
+            symbols_tree: 总符号树（会被原地修改）
+            symbols_metadata: 总符号元数据（会被原地修改）
+            local_symbols_tree: 当前文件的符号树
+            local_symbols_metadata: 当前文件的符号元数据
+            current_file_path: 当前文件路径
+        
+        注意：
+            - 本地符号直接挂载到根节点，不需要文件路径前缀
+            - 本地符号包含所有可见性（private/local也包含）
+            - 元数据中会添加特殊标记 '__is_local__': True，用于优先级判断
+        """
+        print(f"    开始合并本地符号...")
+        
+        # 统计本地符号数量
+        local_symbol_count = 0
+        
+        # 直接将本地符号树合并到根节点
+        for symbol_name, symbol_subtree in local_symbols_tree.items():
+            if symbol_name in symbols_tree:
+                print(f"      警告: 本地符号 '{symbol_name}' 与依赖符号重名，本地符号优先")
+            symbols_tree[symbol_name] = self._deep_copy_tree(symbol_subtree)
+            local_symbol_count += 1
+        
+        # 合并本地符号元数据
+        # 本地符号的元数据key不带文件路径前缀，直接使用相对路径
+        for relative_path, meta in local_symbols_metadata.items():
+            # 添加特殊标记表示这是本地符号
+            meta_copy = meta.copy()
+            meta_copy['__is_local__'] = True
+            meta_copy['__local_file__'] = current_file_path
+            
+            # 检查是否与依赖符号重名
+            if relative_path in symbols_metadata:
+                print(f"      警告: 本地符号元数据 '{relative_path}' 与依赖符号重名，本地符号优先")
+            
+            symbols_metadata[relative_path] = meta_copy
+            local_symbol_count += 1
+        
+        print(f"    本地符号合并完成，共合并 {local_symbol_count} 个符号")
     
     def _get_file_description(self, file_path: str) -> str:
         """从proj_root_dict获取文件描述
