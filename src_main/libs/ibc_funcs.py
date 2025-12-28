@@ -2,7 +2,7 @@ import os
 import json
 import re
 import hashlib
-from typing import List, Dict, Optional, Union, Set, Any
+from typing import List, Dict, Optional, Union, Set, Any, Tuple
 
 from typedef.exception_types import SymbolNotFoundError
 
@@ -22,6 +22,41 @@ class IbcFuncs:
             raise ValueError(f"文本编码错误,无法转换为UTF-8") from e
         except Exception as e:
             raise RuntimeError(f"计算文本MD5时发生未知错误") from e
+    
+    @staticmethod
+    def calculate_symbols_metadata_md5(symbols_metadata: Dict[str, Dict[str, Any]]) -> str:
+        """计算符号元数据的MD5校验值
+        
+        Args:
+            symbols_metadata: 符号元数据字典
+            
+        Returns:
+            str: MD5校验值
+        """
+        try:
+            # 将字典转换为JSON字符串(排序键以确保一致性)
+            metadata_json = json.dumps(symbols_metadata, sort_keys=True, ensure_ascii=False)
+            return IbcFuncs.calculate_text_md5(metadata_json)
+        except Exception as e:
+            raise RuntimeError(f"计算符号元数据MD5时发生错误: {e}") from e
+    
+    @staticmethod
+    def count_symbols_in_metadata(symbols_metadata: Dict[str, Dict[str, Any]]) -> int:
+        """统计符号元数据中的符号数量(排除文件夹和文件节点)
+        
+        Args:
+            symbols_metadata: 符号元数据字典
+            
+        Returns:
+            int: 符号数量
+        """
+        count = 0
+        for meta in symbols_metadata.values():
+            meta_type = meta.get("type", "")
+            # 只统计实际符号(class, func, var),不统计folder和file
+            if meta_type in ("class", "func", "var"):
+                count += 1
+        return count
     
     # ==================== 符号验证 ====================
     

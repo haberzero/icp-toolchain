@@ -120,7 +120,7 @@ class IbcDataStore:
             return IbcBaseAstNode.from_dict(node_dict)
     
     # ==================== 校验数据管理 ====================
-    # 新版：统一verify文件管理（保存在 icp_proj_data/update_flag_verify.json）
+    # 新版：统一verify文件管理（保存在 icp_proj_data/icp_verify_data.json）
     
     def load_file_verify_data(self, data_dir_path: str, file_path: str) -> Dict[str, str]:
         """从统一的verify文件中加载指定文件的校验数据
@@ -132,7 +132,7 @@ class IbcDataStore:
         Returns:
             Dict[str, str]: 该文件的校验数据，不存在时返回空字典
         """
-        verify_file_path = os.path.join(data_dir_path, 'update_flag_verify.json')
+        verify_file_path = os.path.join(data_dir_path, 'icp_verify_data.json')
         
         if not os.path.exists(verify_file_path):
             return {}
@@ -153,7 +153,7 @@ class IbcDataStore:
             file_path: 文件路径（如 "src/ball_physics/ball"）
             verify_data: 该文件的校验数据
         """
-        verify_file_path = os.path.join(data_dir_path, 'update_flag_verify.json')
+        verify_file_path = os.path.join(data_dir_path, 'icp_verify_data.json')
         
         # 加载所有verify数据
         all_verify_data = {}
@@ -175,6 +175,34 @@ class IbcDataStore:
                 json.dump(all_verify_data, f, indent=2, ensure_ascii=False)
         except Exception as e:
             raise IOError(f"保存verify文件失败 [{verify_file_path}]: {e}") from e
+    
+    def update_file_verify_data(self, data_dir_path: str, file_path: str, updates: Dict[str, str]) -> None:
+        """更新指定文件的校验数据中的特定字段（增量更新）
+        
+        此方法会自动加载现有数据，合并更新，然后保存。
+        相比 save_file_verify_data，此方法只更新指定的字段，保留其他字段不变。
+        
+        Args:
+            data_dir_path: 数据目录路径（通常为 icp_proj_data）
+            file_path: 文件路径（如 "src/ball_physics/ball"）
+            updates: 要更新的字段字典，例如 {"ibc_verify_code": "new_md5"}
+        
+        示例:
+            # 只更新 ibc_verify_code，保留其他字段不变
+            ibc_data_store.update_file_verify_data(
+                data_dir_path,
+                "src/ball/ball",
+                {"ibc_verify_code": "abc123"}
+            )
+        """
+        # 加载现有的验证数据
+        verify_data = self.load_file_verify_data(data_dir_path, file_path)
+        
+        # 合并更新
+        verify_data.update(updates)
+        
+        # 保存回去
+        self.save_file_verify_data(data_dir_path, file_path, verify_data)
     
     def batch_update_ibc_verify_codes(
         self,
@@ -205,12 +233,10 @@ class IbcDataStore:
                 # 计算MD5
                 current_md5 = IbcFuncs.calculate_text_md5(ibc_content)
                 
-                # 加载当前文件的verify数据
-                verify_data = self.load_file_verify_data(data_dir_path, file_path)
-                verify_data['ibc_verify_code'] = current_md5
-                
-                # 保存回去
-                self.save_file_verify_data(data_dir_path, file_path, verify_data)
+                # 使用 update 方法只更新 ibc_verify_code 字段
+                self.update_file_verify_data(data_dir_path, file_path, {
+                    'ibc_verify_code': current_md5
+                })
             except Exception as e:
                 # 单个文件失败不影响其他文件
                 continue
