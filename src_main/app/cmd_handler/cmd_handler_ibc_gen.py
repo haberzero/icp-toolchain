@@ -27,15 +27,7 @@ from utils.issue_recorder import IbcIssueRecorder
 
 
 class CmdHandlerIbcGen(BaseCmdHandler):
-    """将单文件需求描述转换为半自然语言行为描述代码
-    
-    设计结构：
-    1. 变量预准备：_build_pre_execution_variables() - 集中加载所需数据
-    2. 文件遍历：按依赖顺序遍历文件列表
-    3. 单文件处理：_create_single_ibc_file() - 包含重试逻辑的主流程
-    4. 提示词构建：_build_user_prompt_for_xxx() - 为不同角色构建提示词
-    5. 输出处理：验证、保存、解析、规范化、向量化
-    """
+    """将单文件需求描述转换为半自然语言行为描述代码"""
 
     def __init__(self):
         super().__init__()
@@ -242,7 +234,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 
                 if os.path.exists(ibc_path):
                     try:
-                        ibc_content = ibc_data_store.load_ibc_code(ibc_path)
+                        ibc_content = ibc_data_store.load_ibc_content(ibc_path)
                         if ibc_content:
                             current_ibc_md5 = IbcFuncs.calculate_text_md5(ibc_content)
                             
@@ -352,7 +344,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 验证成功，保存IBC代码和符号表
         ibc_data_store = get_ibc_data_store()
         ibc_path = ibc_data_store.build_ibc_path(self.work_ibc_dir_path, icp_json_file_path)
-        ibc_data_store.save_ibc_code(ibc_path, ibc_code)
+        ibc_data_store.save_ibc_content(ibc_path, ibc_content)
         print(f"    {Colors.OKGREEN}IBC代码已保存: {ibc_path}{Colors.ENDC}")
         
         # 保存符号数据（符号树+元数据）
@@ -362,35 +354,16 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         print(f"    {Colors.OKGREEN}符号表已保存: {symbols_path}{Colors.ENDC}")
         
         # 保存符号元数据到验证文件（符号数量和MD5）
-        self._save_symbols_verify_data(icp_json_file_path, symbols_metadata)
+        symbols_count = IbcFuncs.count_symbols_in_metadata(symbols_metadata)
+        symbols_metadata_md5 = IbcFuncs.calculate_symbols_metadata_md5(symbols_metadata)
+        ibc_data_store.update_file_verify_data(self.work_data_dir_path, icp_json_file_path, {
+            'symbols_count': str(symbols_count),
+            'symbols_metadata_md5': symbols_metadata_md5
+        })
+        print(f"    {Colors.OKGREEN}符号元数据已保存: 符号数量={symbols_count}, MD5={symbols_metadata_md5[:8]}...{Colors.ENDC}")
         
         # IBC代码和符号表保存成功，返回成功
         return True
-    
-    def _save_symbols_verify_data(self, icp_json_file_path: str, symbols_metadata: Dict[str, Dict[str, Any]]) -> None:
-        """保存符号元数据的验证信息(符号数量和MD5)到验证文件
-        
-        Args:
-            icp_json_file_path: 文件路径
-            symbols_metadata: 符号元数据字典
-        """
-        try:
-            # 计算符号数量
-            symbols_count = IbcFuncs.count_symbols_in_metadata(symbols_metadata)
-            
-            # 计算符号元数据MD5
-            symbols_metadata_md5 = IbcFuncs.calculate_symbols_metadata_md5(symbols_metadata)
-            
-            # 使用 update 方法直接更新符号相关的验证数据
-            ibc_data_store = get_ibc_data_store()
-            ibc_data_store.update_file_verify_data(self.work_data_dir_path, icp_json_file_path, {
-                'symbols_count': str(symbols_count),
-                'symbols_metadata_md5': symbols_metadata_md5
-            })
-            
-            print(f"    {Colors.OKGREEN}符号元数据已保存: 符号数量={symbols_count}, MD5={symbols_metadata_md5[:8]}...{Colors.ENDC}")
-        except Exception as e:
-            print(f"    {Colors.WARNING}警告: 保存符号元数据失败: {e}{Colors.ENDC}")
 
     def _build_user_prompt_for_ibc_generator(self, icp_json_file_path: str) -> str:
         """
@@ -494,7 +467,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
         # 填充占位符
         user_prompt_str = user_prompt_template_str
-        user_prompt_str = user_prompt_str.replace('USER_REQUIREMENTS_PLACEHOLDER', self.user_requirements_str)
+        # user_prompt_str = user_prompt_str.replace('USER_REQUIREMENTS_PLACEHOLDER', self.user_requirements_str)
         user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_str)
         user_prompt_str = user_prompt_str.replace('PROJECT_STRUCTURE_PLACEHOLDER', self.proj_root_dict_json_str)
         user_prompt_str = user_prompt_str.replace('CURRENT_FILE_PATH_PLACEHOLDER', icp_json_file_path)
