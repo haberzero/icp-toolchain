@@ -158,58 +158,5 @@ class IbcFuncs:
         # 如果没找到文件名（不应该发生），返回原路径
         return full_symbol_path
     
-    # ==================== 符号规范化验证 ====================
-    
-    @staticmethod
-    def validate_normalized_result(
-        response_content: str, 
-        symbols_to_normalize: Dict[str, Dict[str, Any]]
-    ) -> Dict[str, str]:
-        """验证AI返回的规范化结果
-        
-        Args:
-            response_content: AI返回的内容
-            symbols_to_normalize: 待规范化符号字典
-            
-        Returns:
-            验证通过的规范化结果 {symbol_path: normalized_name}
-        """
-        # 解析JSON
-        try:
-            result = json.loads(response_content)
-        except json.JSONDecodeError as e:
-            print(f"    警告: AI返回的JSON格式无效: {e}")
-            return {}
-        
-        if not isinstance(result, dict):
-            print(f"    警告: AI返回的结果不是字典格式")
-            return {}
-        
-        # 验证结果格式
-        validated_result = {}
-        invalid_count = 0
-        missing_count = 0
-        
-        # 检查所有待规范化的符号是否都有对应的规范化名称
-        for symbol_path in symbols_to_normalize.keys():
-            if symbol_path not in result:
-                missing_count += 1
-                continue
-            
-            normalized_name = result[symbol_path]
-            
-            # 验证 normalized_name 符合标识符规范
-            if isinstance(normalized_name, str) and normalized_name and IbcFuncs.validate_identifier(normalized_name):
-                validated_result[symbol_path] = normalized_name
-            else:
-                print(f"    警告: 符号 '{symbol_path}' 的规范化名称无效: '{normalized_name}'")
-                invalid_count += 1
-        
-        # 输出验证统计
-        if missing_count > 0:
-            print(f"    警告: {missing_count} 个符号未包含在AI返回结果中")
-        if invalid_count > 0:
-            print(f"    警告: {invalid_count} 个符号的规范化名称验证失败")
-        
-        return validated_result
+
     

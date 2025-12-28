@@ -1,7 +1,6 @@
 import os
 import asyncio
 import json
-import re
 from typing import Dict, Any, List
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
@@ -19,30 +18,7 @@ from utils.issue_recorder import TextIssueRecorder
 
 
 class CmdHandlerSymbolNormalize(BaseCmdHandler):
-    """符号规范化命令处理器
-    
-    设计结构：
-    1. 变量预准备：_build_pre_execution_variables() - 集中加载所需数据
-       - 利用 verify_data 中的 symbols_count 快速跳过无符号文件
-       - 只加载有待规范化符号的文件，提升效率
-    2. 更新状态初始化：_initialize_update_status() - 智能检查是否需要更新
-       - 优先检查是否有待规范化符号（最高优先级）
-       - 利用 verify_data 快速判断符号数量为 0 的文件
-       - 检查 IBC 文件和符号元数据的变化
-       - 依赖链传播更新
-    3. 文件遍历：按依赖顺序遍历文件列表
-    4. 单文件处理：_normalize_single_file_symbols() - 包含重试逻辑的主流程
-    5. 符号提取：_extract_symbols_from_metadata() - 从符号元数据中提取待规范化符号
-    6. 提示词构建：_build_user_prompt_for_symbol_normalizer() - 为规范化构建提示词
-    7. 结果验证：_validate_normalized_result() - 验证AI返回的规范化结果
-    8. 结果回写：_update_symbol_metadata() - 将规范化结果写回元数据
-    
-    优化要点：
-    - verify_data 中的 symbols_count 字段用于快速判断文件是否有符号
-    - 符号数量为 0 的文件会被直接跳过，无需加载符号表
-    - 预构建阶段的错误检查已放宽，因为 _initialize_update_status 会做全面检查
-    - 没有待规范化符号但需要更新验证数据的文件会被正确处理
-    """
+    """符号规范化命令处理器"""
 
     def __init__(self):
         super().__init__()
@@ -240,7 +216,7 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             ibc_path = ibc_data_store.build_ibc_path(self.work_ibc_dir_path, file_path)
             if os.path.exists(ibc_path):
                 try:
-                    current_ibc_md5 = IbcFuncs.calculate_text_md5(ibc_data_store.load_ibc_code(ibc_path) or "")
+                    current_ibc_md5 = IbcFuncs.calculate_text_md5(ibc_data_store.load_ibc_content(ibc_path) or "")
                     saved_ibc_md5 = verify_data.get('ibc_verify_code', None)
                     
                     if saved_ibc_md5 is not None and saved_ibc_md5 != current_ibc_md5:
@@ -333,6 +309,8 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
     def _normalize_single_file_symbols(self, icp_json_file_path: str) -> bool:
         """为单个文件的符号进行规范化处理（包含重试机制）
         
+        如果该文件被标记为需要更新但不存在待规范化符号，则仅刷新规范化验证数据（不调用AI）。
+        
         Args:
             icp_json_file_path: 文件路径
             
@@ -346,22 +324,24 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             print(f"    {Colors.WARNING}文件及其依赖均未变化，跳过规范化: {icp_json_file_path}{Colors.ENDC}")
             return True
         
-        # 检查是否有待规范化符号
-        if icp_json_file_path not in self.symbols_to_normalize_dict:
-            print(f"    {Colors.OKBLUE}没有需要规范化的符号，但需要更新验证数据{Colors.ENDC}")
-            # 虽然没有待规范化符号，但可能是依赖变化，需要更新验证数据
+        # 根据预处理阶段收集的结果获取待规范化符号列表
+        symbols_to_normalize = self.symbols_to_normalize_dict.get(icp_json_file_path)
+
+        # 虽然没有待规范化符号，但可能是依赖变化或符号元数据变化，需要更新验证数据
+        if not symbols_to_normalize:
+            print(f"    {Colors.OKBLUE}当前文件无待规范化符号，仅刷新规范化验证数据{Colors.ENDC}")
             ibc_data_store = get_ibc_data_store()
             symbols_path = ibc_data_store.build_symbols_path(self.work_ibc_dir_path, icp_json_file_path)
             file_name = os.path.basename(icp_json_file_path)
             symbols_tree, symbols_metadata = ibc_data_store.load_symbols(symbols_path, file_name)
             if symbols_metadata:
+                # 重新计算并保存 symbol_normalize_verify_code，避免下次重复被标记为需要更新
                 self._save_normalize_verify_data(icp_json_file_path, symbols_metadata)
             return True
         
-        symbols_to_normalize = self.symbols_to_normalize_dict[icp_json_file_path]
         print(f"    {Colors.OKBLUE}正在进行符号规范化... (共 {len(symbols_to_normalize)} 个符号){Colors.ENDC}")
         
-        # 重置实例变量
+        # 重置issue recorder和重试变量
         self.issue_recorder.clear()
         self.last_generated_content = None
         
@@ -374,7 +354,6 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         # 带重试的符号规范化生成逻辑
         max_attempts = 3
         is_valid = False
-        validated_result = None
         
         for attempt in range(max_attempts):
             print(f"    {Colors.OKBLUE}正在进行第 {attempt + 1}/{max_attempts} 次尝试...{Colors.ENDC}")
@@ -403,106 +382,115 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             cleaned_response = ICPChatHandler.clean_code_block_markers(response_content)
             
             # 验证规范化结果
-            is_valid, validated_result = self._validate_response(
-                cleaned_response, 
-                symbols_to_normalize, 
-                attempt, 
-                max_attempts
-            )
+            is_valid = self._validate_normalized_symbols(cleaned_response, symbols_to_normalize)
             
             if is_valid:
-                # 验证成功，跳出重试循环
+                # 验证通过，保存规范化结果
+                self._save_normalized_symbols(icp_json_file_path, cleaned_response, symbols_to_normalize)
                 break
             
             # 如果验证失败，保存当前生成的内容并构建重试提示词
             self.last_generated_content = cleaned_response
             self.user_prompt_retry_part = self._build_user_prompt_retry_part()
         
-        # 循环已跳出，检查运行结果并进行相应操作
-        # 处理验证结果
-        if validated_result and len(validated_result) > 0:
-            return self._save_normalized_symbols(icp_json_file_path, validated_result)
-        else:
-            print(f"  {Colors.FAIL}已达到最大重试次数({max_attempts})，未能生成有效的规范化结果{Colors.ENDC}")
+        # 循环已跳出，检查运行结果
+        if attempt == max_attempts - 1 and not is_valid:
+            print(f"  {Colors.FAIL}已达到最大重试次数({max_attempts})，跳过该文件{Colors.ENDC}")
             return False
+        
+        return True
 
-    def _validate_response(
+    def _validate_normalized_symbols(
         self, 
         cleaned_response: str, 
-        symbols_to_normalize: Dict[str, Dict[str, Any]],
-        attempt: int,
-        max_attempts: int
-    ) -> tuple[bool, Dict[str, str]]:
+        symbols_to_normalize: Dict[str, Dict[str, Any]]
+    ) -> bool:
         """验证AI返回的符号规范化结果
-            
+        
+        此方法只负责验证，不包含重试逻辑，也不进行任何数据更新或保存操作。
+        验证失败时，会将未成功规范化的符号记录到issue_recorder中。
+        
         Args:
             cleaned_response: 清理后的AI响应内容
             symbols_to_normalize: 待规范化符号字典
-            attempt: 当前尝试次数（从0开始）
-            max_attempts: 最大尝试次数
                 
         Returns:
-            tuple[bool, Dict[str, str]]: (是否完全成功, 验证通过的结果字典)
-            - 完全成功：所有符号都规范化成功
-            - 部分成功（最后一次重试）：返回部分结果以便保存
-            - 失败：返回空字典
+            bool: 是否验证完全成功（所有符号都规范化成功）
         """
         # 清空上一次验证的问题记录
         self.issue_recorder.clear()
+        
+        # 1. 解析JSON格式
+        try:
+            result = json.loads(cleaned_response)
+        except json.JSONDecodeError as e:
+            error_msg = f"JSON格式无效: {e}"
+            print(f"    {Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
+            return False
+        
+        if not isinstance(result, dict):
+            error_msg = "返回结果不是字典格式"
+            print(f"    {Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
+            return False
+        
+        # 2. 验证每个符号的规范化结果，收集未成功规范化的符号
+        failed_symbols = []
+        
+        for symbol_path, meta in symbols_to_normalize.items():
+            # 检查符号是否在返回结果中
+            if symbol_path not in result:
+                failed_symbols.append(f"{symbol_path} (未返回)")
+                continue
             
-        # 验证JSON格式和标识符有效性
-        validated_result = IbcFuncs.validate_normalized_result(cleaned_response, symbols_to_normalize)
+            normalized_name = result[symbol_path]
             
+            # 验证 normalized_name 符合标识符规范
+            if not isinstance(normalized_name, str) or not normalized_name:
+                failed_symbols.append(f"{symbol_path} (返回值为空)")
+            elif not IbcFuncs.validate_identifier(normalized_name):
+                failed_symbols.append(f"{symbol_path} (返回值'{normalized_name}'不符合标识符规范)")
+        
+        # 3. 检查验证结果
         total_symbols = len(symbols_to_normalize)
-        validated_count = len(validated_result)
-            
-        # 情入1：全部无效
-        if validated_count == 0:
-            error_msg = "AI返回的符号规范化结果为空或全部无效"
-            print(f"    {Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
-            self.issue_recorder.record_issue(error_msg)
-            return False, {}
-            
-        # 情入2：部分成功
-        if validated_count < total_symbols:
-            missing_symbols = set(symbols_to_normalize.keys()) - set(validated_result.keys())
-            error_msg = f"仅规范化了 {validated_count}/{total_symbols} 个符号，{len(missing_symbols)} 个符号未成功"
-            print(f"    {Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
-            print(f"    {Colors.WARNING}未成功的符号:{Colors.ENDC}")
-            for sym in list(missing_symbols)[:5]:  # 只显示前5个
-                print(f"      - {sym}")
-            if len(missing_symbols) > 5:
-                print(f"      ... 还有 {len(missing_symbols) - 5} 个")
-                
-            self.issue_recorder.record_issue(error_msg)
-                
-            # 如果还没到最后一次重试，继续重试
-            if attempt < max_attempts - 1:
-                print(f"    {Colors.WARNING}将在下次重试中尝试规范化所有符号{Colors.ENDC}")
-                return False, {}
-            else:
-                # 最后一次重试仍然部分失败，保存部分结果
-                print(f"    {Colors.WARNING}已达到最大重试次数{Colors.ENDC}")
-                print(f"    {Colors.WARNING}注意: 仍有 {len(missing_symbols)} 个符号未能规范化，这些符号将在下次执行时继续尝试{Colors.ENDC}")
-                return False, validated_result  # 返回部分结果用于保存
-            
-        # 情入3：全部成功
-        return True, validated_result
-    
+
+        if failed_symbols:
+            print(f"    {Colors.WARNING}警告: {len(failed_symbols)}/{total_symbols} 个符号未成功规范化{Colors.ENDC}")
+            # 将失败的符号记录到issue_recorder
+            for failed_symbol in failed_symbols:
+                self.issue_recorder.record_issue(failed_symbol)
+            return False
+        
+        print(f"    {Colors.OKGREEN}符号规范化验证通过（{total_symbols}/{total_symbols}）{Colors.ENDC}")
+        return True
+        
+
     def _save_normalized_symbols(
         self, 
-        icp_json_file_path: str, 
-        validated_result: Dict[str, str]
-    ) -> bool:
-        """保存规范化符号到符号表
+        icp_json_file_path: str,
+        cleaned_response: str,
+        symbols_to_normalize: Dict[str, Dict[str, Any]]
+    ) -> None:
+        """从AI返回结果中提取规范化数据，并保存到符号表
         
         Args:
             icp_json_file_path: 文件路径
-            validated_result: 验证通过的规范化结果
-            
-        Returns:
-            bool: 是否为完全成功（所有符号都规范化）
+            cleaned_response: 清理后的AI响应内容（已通过验证）
+            symbols_to_normalize: 待规范化符号字典
         """
+        result = json.loads(cleaned_response)
+        
+        # 提取已验证的规范化结果
+        validated_result = {}
+        for symbol_path in symbols_to_normalize.keys():
+            if symbol_path in result:
+                normalized_name = result[symbol_path]
+                # 再次验证以确保安全
+                if isinstance(normalized_name, str) and normalized_name and IbcFuncs.validate_identifier(normalized_name):
+                    validated_result[symbol_path] = normalized_name
+        
+        # 加载符号表
         ibc_data_store = get_ibc_data_store()
         symbols_path = ibc_data_store.build_symbols_path(self.work_ibc_dir_path, icp_json_file_path)
         file_name = os.path.basename(icp_json_file_path)
@@ -513,22 +501,12 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         
         # 保存更新后的符号数据
         ibc_data_store.save_symbols(symbols_path, file_name, symbols_tree, symbols_metadata)
+        print(f"    {Colors.OKGREEN}符号表已保存: {symbols_path}{Colors.ENDC}")
         
         # 保存规范化验证数据
         self._save_normalize_verify_data(icp_json_file_path, symbols_metadata)
         
-        # 判断是否完全成功
-        total_symbols = len(self.symbols_to_normalize_dict[icp_json_file_path])
-        is_complete = (updated_count == total_symbols)
-        
-        if is_complete:
-            print(f"    {Colors.OKGREEN}符号表已更新并保存: {symbols_path}{Colors.ENDC}")
-            print(f"    {Colors.OKGREEN}成功规范化全部 {updated_count} 个符号{Colors.ENDC}")
-        else:
-            print(f"    {Colors.WARNING}符号表已更新并保存: {symbols_path}{Colors.ENDC}")
-            print(f"    {Colors.WARNING}已保存部分成功的规范化结果 ({updated_count}/{total_symbols} 个符号){Colors.ENDC}")
-        
-        return is_complete
+        print(f"    {Colors.OKGREEN}成功规范化 {updated_count} 个符号{Colors.ENDC}")
 
     def _build_user_prompt_for_symbol_normalizer(self, icp_json_file_path: str) -> str:
         """
@@ -623,10 +601,8 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             
         Returns:
             成功更新的符号数量
-        
         """
         updated_count = 0
-        unmatched_keys = []
         
         for symbol_key, normalized_name in normalized_symbols.items():
             # 按照完整路径精确匹配
@@ -634,17 +610,6 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
                 symbols_metadata[symbol_key]["normalized_name"] = normalized_name
                 symbols_metadata[symbol_key]["normalization_status"] = "completed"
                 updated_count += 1
-            else:
-                # 不进行模糊匹配，AI 必须返回准确的 key
-                unmatched_keys.append(symbol_key)
-        
-        # 输出统计信息
-        if unmatched_keys:
-            print(f"    {Colors.WARNING}警告: 以下 {len(unmatched_keys)} 个符号路径在元数据中未找到（AI返回的key格式可能有误）:{Colors.ENDC}")
-            for key in unmatched_keys[:5]:  # 只显示前5个
-                print(f"      - {key}")
-            if len(unmatched_keys) > 5:
-                print(f"      ... 还有 {len(unmatched_keys) - 5} 个")
         
         return updated_count
 
@@ -655,19 +620,16 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             icp_json_file_path: 文件路径
             symbols_metadata: 符号元数据字典
         """
-        try:
-            # 计算规范化后的符号元数据MD5
-            normalized_md5 = IbcFuncs.calculate_symbols_metadata_md5(symbols_metadata)
-            
-            # 使用 update 方法直接更新规范化相关的验证数据
-            ibc_data_store = get_ibc_data_store()
-            ibc_data_store.update_file_verify_data(self.work_data_dir_path, icp_json_file_path, {
-                'symbol_normalize_verify_code': normalized_md5
-            })
-            
-            print(f"    {Colors.OKGREEN}规范化验证数据已保存: MD5={normalized_md5[:8]}...{Colors.ENDC}")
-        except Exception as e:
-            print(f"    {Colors.WARNING}警告: 保存规范化验证数据失败: {e}{Colors.ENDC}")
+        # 计算规范化后的符号元数据MD5
+        normalized_md5 = IbcFuncs.calculate_symbols_metadata_md5(symbols_metadata)
+        
+        # 更新规范化相关的验证数据
+        ibc_data_store = get_ibc_data_store()
+        ibc_data_store.update_file_verify_data(self.work_data_dir_path, icp_json_file_path, {
+            'symbol_normalize_verify_code': normalized_md5
+        })
+        
+        print(f"    {Colors.OKGREEN}规范化验证数据已保存: MD5={normalized_md5[:8]}...{Colors.ENDC}")
 
     def _build_user_prompt_retry_part(self) -> str:
         """构建用户提示词重试部分
