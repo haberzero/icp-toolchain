@@ -55,12 +55,16 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self.work_icp_config_file_path = os.path.join(self.work_config_dir_path, 'icp_config.json')
 
         self.role_ibc_gen = "7_intent_behavior_code_gen"
-        self.sys_prompt_ibc_gen = ""  # 系统提示词,在_init_ai_handlers中加载
+        self.sys_prompt_ibc_gen = ""  # 系统提示词基础部分,在_init_ai_handlers中加载
+        self.sys_prompt_retry_part = ""  # 系统提示词重试部分,在_init_ai_handlers中加载
         self.chat_handler = ICPChatHandler()
 
         # 初始化issue recorder和上一次生成的内容
         self.ibc_issue_recorder = IbcIssueRecorder()
-        self.last_generated_ibc_content = None  # 上一次生成的内容
+        self.last_generated_ibc_content = None  # 上一次生成的IBC内容
+        
+        self.user_prompt_base = ""  # 用户提示词基础部分
+        self.user_prompt_retry_part = ""  # 用户提示词重试部分
 
         self._init_ai_handlers()
     
@@ -284,25 +288,45 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             print(f"    {Colors.WARNING}文件及其依赖均未变化，跳过生成: {icp_json_file_path}{Colors.ENDC}")
             return True
 
+        # 重置实例变量
+        self.ibc_issue_recorder.clear()
+        self.last_generated_ibc_content = None
+        
+        # 构建用户提示词基础部分
+        self.user_prompt_base = self._build_user_prompt_for_ibc_generator(icp_json_file_path)
+        if not self.user_prompt_base:
+            print(f"{Colors.FAIL}错误: 用户提示词构建失败，终止执行{Colors.ENDC}")
+            return False
+
         # 带重试的生成逻辑（IBC 代码的生成过程不确定性更多，提供较多的重试次数）
         max_attempts = 5
+        is_valid = False
+        ast_dict = None
+        symbols_tree = None
+        symbols_metadata = None
+        ibc_code = None
+        
         for attempt in range(max_attempts):
-            print(f"    {Colors.OKBLUE}正在重试... (尝试 {attempt + 1}/{max_attempts}){Colors.ENDC}")
+            print(f"    {Colors.OKBLUE}正在进行第 {attempt + 1}/{max_attempts} 次尝试...{Colors.ENDC}")
 
-            # 构建用户提示词
-            user_prompt = self._build_user_prompt_for_ibc_generator(icp_json_file_path)
-            if not user_prompt:
-                print(f"{Colors.FAIL}错误: 用户提示词构建失败，终止执行{Colors.ENDC}")
-                return False
+            # 根据是否是重试来组合提示词
+            if attempt == 0:
+                # 第一次尝试,使用基础提示词
+                current_sys_prompt = self.sys_prompt_ibc_gen
+                current_user_prompt = self.user_prompt_base
+            else:
+                # 重试时,添加重试部分
+                current_sys_prompt = self.sys_prompt_ibc_gen + "\n\n" + self.sys_prompt_retry_part
+                current_user_prompt = self.user_prompt_base + "\n\n" + self.user_prompt_retry_part
             
             # 将用户提示词保存到stage文件夹以便查看生成过程
-            self._save_user_prompt_to_stage(icp_json_file_path, user_prompt, attempt + 1)
+            self._save_user_prompt_to_stage(icp_json_file_path, current_user_prompt, attempt + 1)
             
             # 调用AI生成IBC代码
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_ibc_gen,
-                sys_prompt=self.sys_prompt_ibc_gen,
-                user_prompt=user_prompt
+                sys_prompt=current_sys_prompt,
+                user_prompt=current_user_prompt
             ))
             
             if not success or not response_content:
@@ -312,38 +336,41 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             # 清理代码块标记
             ibc_code = ICPChatHandler.clean_code_block_markers(response_content)
 
+            # 每次分析前清空issue recorder
+            self.ibc_issue_recorder.clear()
+            
             # 解析IBC代码生成AST
             print(f"    {Colors.OKBLUE}正在分析IBC代码生成AST...{Colors.ENDC}")
             ast_dict, symbols_tree, symbols_metadata = analyze_ibc_code(ibc_code, self.ibc_issue_recorder)
             
-            # 检查是否得到有效的AST和符号数据
-            if not ast_dict:
-                print(f"    {Colors.WARNING}警告: IBC代码分析失败，未能生成有效的AST{Colors.ENDC}")
-                continue
-
-            # 保存IBC代码
-            ibc_data_store = get_ibc_data_store()
-            ibc_path = ibc_data_store.build_ibc_path(self.work_ibc_dir_path, icp_json_file_path)
-            ibc_data_store.save_ibc_code(ibc_path, ibc_code)
-            print(f"    {Colors.OKGREEN}IBC代码已保存: {ibc_path}{Colors.ENDC}")
+            # 验证是否得到有效的AST和符号数据
+            is_valid = self._validate_ibc_response(ast_dict, symbols_tree, symbols_metadata)
+            if is_valid:
+                break
             
-            # # 保存AST（暂时不需要保存到文件）
-            # ast_path = ibc_data_store.build_ast_path(self.work_ibc_dir_path, icp_json_file_path)
-            # ibc_data_store.save_ast(ast_path, ast_dict)
-            # print(f"    {Colors.OKGREEN}AST已保存: {ast_path}{Colors.ENDC}")
-            
-            # 保存符号数据（符号树+元数据）
-            file_name = os.path.basename(icp_json_file_path)
-            symbols_path = ibc_data_store.build_symbols_path(self.work_ibc_dir_path, icp_json_file_path)
-            ibc_data_store.save_symbols(symbols_path, file_name, symbols_tree, symbols_metadata)
-            print(f"    {Colors.OKGREEN}符号表已保存: {symbols_path}{Colors.ENDC}")
-            
-            # IBC代码和符号表保存成功，返回成功
-            return True
+            # 如果验证失败，保存当前生成的内容并构建重试提示词
+            self.last_generated_ibc_content = ibc_code
+            self.user_prompt_retry_part = self._build_user_prompt_retry_part()
         
-        # 达到最大重试次数
-        print(f"  {Colors.FAIL}已达到最大重试次数({max_attempts})，跳过该文件{Colors.ENDC}")
-        return False
+        # 循环已跳出，检查运行结果并进行相应操作
+        if attempt == max_attempts - 1 and not is_valid:
+            print(f"  {Colors.FAIL}已达到最大重试次数({max_attempts})，跳过该文件{Colors.ENDC}")
+            return False
+
+        # 验证成功，保存IBC代码和符号表
+        ibc_data_store = get_ibc_data_store()
+        ibc_path = ibc_data_store.build_ibc_path(self.work_ibc_dir_path, icp_json_file_path)
+        ibc_data_store.save_ibc_code(ibc_path, ibc_code)
+        print(f"    {Colors.OKGREEN}IBC代码已保存: {ibc_path}{Colors.ENDC}")
+        
+        # 保存符号数据（符号树+元数据）
+        file_name = os.path.basename(icp_json_file_path)
+        symbols_path = ibc_data_store.build_symbols_path(self.work_ibc_dir_path, icp_json_file_path)
+        ibc_data_store.save_symbols(symbols_path, file_name, symbols_tree, symbols_metadata)
+        print(f"    {Colors.OKGREEN}符号表已保存: {symbols_path}{Colors.ENDC}")
+        
+        # IBC代码和符号表保存成功，返回成功
+        return True
 
     def _build_user_prompt_for_ibc_generator(self, icp_json_file_path: str) -> str:
         """
@@ -536,6 +563,69 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         return '\n'.join(section_lines)
 
+    def _validate_ibc_response(self, ast_dict: Dict) -> bool:
+        """验证IBC代码分析结果是否有效
+        
+        Args:
+            ast_dict: AST字典
+            symbols_tree: 符号树
+            symbols_metadata: 符号元数据
+            
+        Returns:
+            bool: 是否有效
+        """
+        # 检查AST是否有效
+        if not ast_dict:
+            error_msg = "IBC代码分析失败，未能生成有效的AST"
+            print(f"    {Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+            # 如果分析失败没有记录issue，这里补充记录
+            if not self.ibc_issue_recorder.has_issues():
+                self.ibc_issue_recorder.record_issue(error_msg, 0, "")
+            return False
+        
+        # 如果没有问题，认为验证通过
+        if not self.ibc_issue_recorder.has_issues():
+            print(f"    {Colors.OKGREEN}IBC代码验证通过{Colors.ENDC}")
+            return True
+        
+        # 如果有问题，输出问题数量
+        issue_count = self.ibc_issue_recorder.get_issue_count()
+        print(f"    {Colors.WARNING}警告: IBC代码分析发现 {issue_count} 个问题{Colors.ENDC}")
+        return False
+    
+    def _build_user_prompt_retry_part(self) -> str:
+        """构建用户提示词重试部分
+        
+        Returns:
+            str: 重试部分的用户提示词，失败时返回空字符串
+        """
+        if not self.ibc_issue_recorder.has_issues() or not self.last_generated_ibc_content:
+            return ""
+        
+        # 读取重试提示词模板
+        app_data_store = get_app_data_store()
+        retry_template_path = os.path.join(app_data_store.get_user_prompt_dir(), 'retry_prompt_template.md')
+        
+        try:
+            with open(retry_template_path, 'r', encoding='utf-8') as f:
+                retry_template = f.read()
+        except Exception as e:
+            print(f"{Colors.FAIL}错误: 读取重试模板失败: {e}{Colors.ENDC}")
+            return ""
+        
+        # 格式化上一次生成的内容(不用代码块包裹)
+        formatted_content = self.last_generated_ibc_content
+        
+        # 格式化问题列表 - 使用IbcIssueRecorder的格式
+        ibc_issues = self.ibc_issue_recorder.get_issues()
+        issues_list = "\n".join([f"- 第{issue.line_num}行: {issue.message} (代码: {issue.line_content})" for issue in ibc_issues])
+        
+        # 替换占位符
+        retry_prompt = retry_template.replace('PREVIOUS_CONTENT_PLACEHOLDER', formatted_content)
+        retry_prompt = retry_prompt.replace('ISSUES_LIST_PLACEHOLDER', issues_list)
+        
+        return retry_prompt
+
     def is_cmd_valid(self):
         return self._check_cmd_requirement() and self._check_ai_handler()
 
@@ -643,10 +733,18 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         app_data_store = get_app_data_store()
         app_prompt_dir_path = app_data_store.get_prompt_dir()
         
-        # 加载IBC生成角色
+        # 加载IBC生成角色的系统提示词基础部分
         sys_prompt_path = os.path.join(app_prompt_dir_path, f"{self.role_ibc_gen}.md")
         try:
             with open(sys_prompt_path, 'r', encoding='utf-8') as f:
                 self.sys_prompt_ibc_gen = f.read()
         except Exception as e:
             print(f"错误: 读取系统提示词文件失败 ({self.role_ibc_gen}): {e}")
+        
+        # 加载系统提示词重试部分
+        retry_sys_prompt_path = os.path.join(app_prompt_dir_path, 'retry_sys_prompt.md')
+        try:
+            with open(retry_sys_prompt_path, 'r', encoding='utf-8') as f:
+                self.sys_prompt_retry_part = f.read()
+        except Exception as e:
+            print(f"错误: 读取系统提示词重试部分失败: {e}")

@@ -14,6 +14,7 @@ from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.ibc_funcs import IbcFuncs
+from utils.issue_recorder import TextIssueRecorder
 
 
 class CmdHandlerSymbolNormalize(BaseCmdHandler):
@@ -47,8 +48,16 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         self.work_icp_config_file_path = os.path.join(self.work_config_dir_path, 'icp_config.json')
 
         self.role_symbol_normalizer = "8_symbol_normalizer"
-        self.sys_prompt_symbol_normalizer = ""  # 系统提示词,在_init_ai_handlers中加载
+        self.sys_prompt_symbol_normalizer = ""  # 系统提示词基础部分,在_init_ai_handlers中加载
+        self.sys_prompt_retry_part = ""  # 系统提示词重试部分,在_init_ai_handlers中加载
         self.chat_handler = ICPChatHandler()
+        
+        # 初始化issue recorder和上一次生成的内容
+        self.issue_recorder = TextIssueRecorder()
+        self.last_generated_content = None  # 上一次生成的内容
+        
+        self.user_prompt_base = ""  # 用户提示词基础部分
+        self.user_prompt_retry_part = ""  # 用户提示词重试部分
         
         # 实例变量初始化（在_build_pre_execution_variables中赋值）
         self.dependent_relation = None
@@ -196,25 +205,39 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         symbols_to_normalize = self.symbols_to_normalize_dict[icp_json_file_path]
         print(f"    {Colors.OKBLUE}正在进行符号规范化... (共 {len(symbols_to_normalize)} 个符号){Colors.ENDC}")
         
+        # 重置实例变量
+        self.issue_recorder.clear()
+        self.last_generated_content = None
+        
+        # 构建用户提示词基础部分
+        self.user_prompt_base = self._build_user_prompt_for_symbol_normalizer(icp_json_file_path)
+        if not self.user_prompt_base:
+            print(f"{Colors.FAIL}错误: 用户提示词构建失败，终止执行{Colors.ENDC}")
+            return False
+        
         # 带重试的符号规范化生成逻辑
         max_attempts = 3
+        is_valid = False
         validated_result = None
         
         for attempt in range(max_attempts):
-            if attempt > 0:
-                print(f"    {Colors.OKBLUE}正在重试... (尝试 {attempt + 1}/{max_attempts}){Colors.ENDC}")
+            print(f"    {Colors.OKBLUE}正在进行第 {attempt + 1}/{max_attempts} 次尝试...{Colors.ENDC}")
             
-            # 构建用户提示词
-            user_prompt = self._build_user_prompt_for_symbol_normalizer(icp_json_file_path)
-            if not user_prompt:
-                print(f"{Colors.FAIL}错误: 用户提示词构建失败，终止执行{Colors.ENDC}")
-                return False
+            # 根据是否是重试来组合提示词
+            if attempt == 0:
+                # 第一次尝试,使用基础提示词
+                current_sys_prompt = self.sys_prompt_symbol_normalizer
+                current_user_prompt = self.user_prompt_base
+            else:
+                # 重试时,添加重试部分
+                current_sys_prompt = self.sys_prompt_symbol_normalizer + "\n\n" + self.sys_prompt_retry_part
+                current_user_prompt = self.user_prompt_base + "\n\n" + self.user_prompt_retry_part
             
             # 调用AI进行规范化
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_symbol_normalizer,
-                sys_prompt=self.sys_prompt_symbol_normalizer,
-                user_prompt=user_prompt
+                sys_prompt=current_sys_prompt,
+                user_prompt=current_user_prompt
             ))
             
             if not success or not response_content:
@@ -234,7 +257,12 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             if is_valid:
                 # 验证成功，跳出重试循环
                 break
+            
+            # 如果验证失败，保存当前生成的内容并构建重试提示词
+            self.last_generated_content = cleaned_response
+            self.user_prompt_retry_part = self._build_user_prompt_retry_part()
         
+        # 循环已跳出，检查运行结果并进行相应操作
         # 处理验证结果
         if validated_result and len(validated_result) > 0:
             return self._save_normalized_symbols(icp_json_file_path, validated_result)
@@ -250,40 +278,48 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         max_attempts: int
     ) -> tuple[bool, Dict[str, str]]:
         """验证AI返回的符号规范化结果
-        
+            
         Args:
             cleaned_response: 清理后的AI响应内容
             symbols_to_normalize: 待规范化符号字典
             attempt: 当前尝试次数（从0开始）
             max_attempts: 最大尝试次数
-            
+                
         Returns:
             tuple[bool, Dict[str, str]]: (是否完全成功, 验证通过的结果字典)
             - 完全成功：所有符号都规范化成功
             - 部分成功（最后一次重试）：返回部分结果以便保存
             - 失败：返回空字典
         """
+        # 清空上一次验证的问题记录
+        self.issue_recorder.clear()
+            
         # 验证JSON格式和标识符有效性
         validated_result = IbcFuncs.validate_normalized_result(cleaned_response, symbols_to_normalize)
-        
+            
         total_symbols = len(symbols_to_normalize)
         validated_count = len(validated_result)
-        
-        # 情况1：全部无效
+            
+        # 情入1：全部无效
         if validated_count == 0:
-            print(f"    {Colors.WARNING}警告: AI返回的符号规范化结果为空或全部无效{Colors.ENDC}")
+            error_msg = "AI返回的符号规范化结果为空或全部无效"
+            print(f"    {Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+            self.issue_recorder.record_issue(error_msg)
             return False, {}
-        
-        # 情况2：部分成功
+            
+        # 情入2：部分成功
         if validated_count < total_symbols:
             missing_symbols = set(symbols_to_normalize.keys()) - set(validated_result.keys())
-            print(f"    {Colors.WARNING}警告: 仅规范化了 {validated_count}/{total_symbols} 个符号，{len(missing_symbols)} 个符号未成功{Colors.ENDC}")
+            error_msg = f"仅规范化了 {validated_count}/{total_symbols} 个符号，{len(missing_symbols)} 个符号未成功"
+            print(f"    {Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
             print(f"    {Colors.WARNING}未成功的符号:{Colors.ENDC}")
             for sym in list(missing_symbols)[:5]:  # 只显示前5个
                 print(f"      - {sym}")
             if len(missing_symbols) > 5:
                 print(f"      ... 还有 {len(missing_symbols) - 5} 个")
-            
+                
+            self.issue_recorder.record_issue(error_msg)
+                
             # 如果还没到最后一次重试，继续重试
             if attempt < max_attempts - 1:
                 print(f"    {Colors.WARNING}将在下次重试中尝试规范化所有符号{Colors.ENDC}")
@@ -293,8 +329,8 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
                 print(f"    {Colors.WARNING}已达到最大重试次数{Colors.ENDC}")
                 print(f"    {Colors.WARNING}注意: 仍有 {len(missing_symbols)} 个符号未能规范化，这些符号将在下次执行时继续尝试{Colors.ENDC}")
                 return False, validated_result  # 返回部分结果用于保存
-        
-        # 情况3：全部成功
+            
+        # 情入3：全部成功
         return True, validated_result
     
     def _save_normalized_symbols(
@@ -451,6 +487,38 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         
         return updated_count
 
+    def _build_user_prompt_retry_part(self) -> str:
+        """构建用户提示词重试部分
+        
+        Returns:
+            str: 重试部分的用户提示词，失败时返回空字符串
+        """
+        if not self.issue_recorder.has_issues() or not self.last_generated_content:
+            return ""
+        
+        # 读取重试提示词模板
+        app_data_store = get_app_data_store()
+        retry_template_path = os.path.join(app_data_store.get_user_prompt_dir(), 'retry_prompt_template.md')
+        
+        try:
+            with open(retry_template_path, 'r', encoding='utf-8') as f:
+                retry_template = f.read()
+        except Exception as e:
+            print(f"{Colors.FAIL}错误: 读取重试模板失败: {e}{Colors.ENDC}")
+            return ""
+        
+        # 格式化上一次生成的内容（用json代码块包裹）
+        formatted_content = f"```json\n{self.last_generated_content}\n```"
+        
+        # 格式化问题列表
+        issues_list = "\n".join([f"- {issue.issue_content}" for issue in self.issue_recorder.get_issues()])
+        
+        # 替换占位符
+        retry_prompt = retry_template.replace('PREVIOUS_CONTENT_PLACEHOLDER', formatted_content)
+        retry_prompt = retry_prompt.replace('ISSUES_LIST_PLACEHOLDER', issues_list)
+        
+        return retry_prompt
+
         
     def is_cmd_valid(self):
         return self._check_cmd_requirement() and self._check_ai_handler()
@@ -548,10 +616,18 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         app_data_store = get_app_data_store()
         app_prompt_dir_path = app_data_store.get_prompt_dir()
         
-        # 加载符号规范化角色
+        # 加载符号规范化角色的系统提示词基础部分
         sys_prompt_path = os.path.join(app_prompt_dir_path, f"{self.role_symbol_normalizer}.md")
         try:
             with open(sys_prompt_path, 'r', encoding='utf-8') as f:
                 self.sys_prompt_symbol_normalizer = f.read()
         except Exception as e:
             print(f"错误: 读取系统提示词文件失败 ({self.role_symbol_normalizer}): {e}")
+        
+        # 加载系统提示词重试部分
+        retry_sys_prompt_path = os.path.join(app_prompt_dir_path, 'retry_sys_prompt.md')
+        try:
+            with open(retry_sys_prompt_path, 'r', encoding='utf-8') as f:
+                self.sys_prompt_retry_part = f.read()
+        except Exception as e:
+            print(f"错误: 读取系统提示词重试部分失败: {e}")

@@ -103,7 +103,7 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             self.user_prompt_retry_part = self._build_user_prompt_retry_part()
 
         if attempt == max_attempts - 1 and not is_valid:
-            print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的依赖关系{Colors.ENDC}")
+            print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的目录结构{Colors.ENDC}")
             return
         
         # 保存结果到icp_dir_content.json
