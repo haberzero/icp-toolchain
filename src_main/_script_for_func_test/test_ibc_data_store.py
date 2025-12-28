@@ -74,12 +74,12 @@ class User():
         验证用户身份
         返回登录结果
 """
-    ibc_data_store.save_ibc_code(ibc_path, test_code)
+    ibc_data_store.save_ibc_content(ibc_path, test_code)
     print(f"   ✓ IBC代码保存成功")
     
     # 测试用例3: 加载IBC代码
     print("\n1.3 测试加载IBC代码...")
-    loaded_code = ibc_data_store.load_ibc_code(ibc_path)
+    loaded_code = ibc_data_store.load_ibc_content(ibc_path)
     if loaded_code == test_code:
         print(f"   ✓ IBC代码加载正确，长度: {len(loaded_code)}")
     else:
@@ -89,7 +89,7 @@ class User():
     # 测试用例4: 加载不存在的文件
     print("\n1.4 测试加载不存在的文件...")
     non_exist_path = ibc_data_store.build_ibc_path(test_ibc_root, "non/exist")
-    loaded_code = ibc_data_store.load_ibc_code(non_exist_path)
+    loaded_code = ibc_data_store.load_ibc_content(non_exist_path)
     if loaded_code == "":
         print(f"   ✓ 不存在文件返回空字符串")
     else:
@@ -335,7 +335,7 @@ def test_verify_data_management():
     file_path = "test/verify"
     ibc_code = "module TestVerify: 测试校验码"
     ibc_path = ibc_data_store.build_ibc_path(test_ibc_root, file_path)
-    ibc_data_store.save_ibc_code(ibc_path, ibc_code)
+    ibc_data_store.save_ibc_content(ibc_path, ibc_code)
     
     ibc_data_store.update_verify_code(test_ibc_root, file_path)
     
@@ -355,7 +355,7 @@ def test_verify_data_management():
     file_paths = ["batch/file1", "batch/file2", "batch/file3"]
     for fp in file_paths:
         ibc_path = ibc_data_store.build_ibc_path(test_ibc_root, fp)
-        ibc_data_store.save_ibc_code(ibc_path, f"module {fp}: 测试")
+        ibc_data_store.save_ibc_content(ibc_path, f"module {fp}: 测试")
     
     ibc_data_store.batch_update_verify_codes(test_ibc_root, file_paths)
     print(f"   ✓ 批量更新成功: {len(file_paths)} 个文件")

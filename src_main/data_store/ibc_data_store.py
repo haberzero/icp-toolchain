@@ -32,7 +32,7 @@ class IbcDataStore:
         normalized_file_path = file_path.replace('/', os.sep)
         return os.path.join(ibc_root, f"{normalized_file_path}.ibc")
     
-    def save_ibc_code(self, ibc_path: str, ibc_code: str) -> None:
+    def save_ibc_content(self, ibc_path: str, ibc_code: str) -> None:
         """保存IBC代码到文件"""
         try:
             directory = os.path.dirname(ibc_path)
@@ -44,7 +44,7 @@ class IbcDataStore:
         except Exception as e:
             raise IOError(f"保存IBC代码失败 [{ibc_path}]: {e}") from e
     
-    def load_ibc_code(self, ibc_path: str) -> str:
+    def load_ibc_content(self, ibc_path: str) -> str:
         """加载IBC代码，文件不存在时返回空字符串"""
         if not os.path.exists(ibc_path):
             return ""
@@ -226,7 +226,7 @@ class IbcDataStore:
                 continue
             
             try:
-                ibc_content = self.load_ibc_code(ibc_path)
+                ibc_content = self.load_ibc_content(ibc_path)
                 if not ibc_content:
                     continue
                 
@@ -294,7 +294,7 @@ class IbcDataStore:
         if not os.path.exists(ibc_path):
             raise FileNotFoundError(f"IBC文件不存在: {ibc_path}")
         
-        ibc_content = self.load_ibc_code(ibc_path)
+        ibc_content = self.load_ibc_content(ibc_path)
         if not ibc_content:
             raise ValueError(f"IBC文件内容为空: {ibc_path}")
         
