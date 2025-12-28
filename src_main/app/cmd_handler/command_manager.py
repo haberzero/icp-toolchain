@@ -3,7 +3,7 @@ from typing import Dict, List, Optional
 from .base_cmd_handler import BaseCmdHandler
 from .cmd_handler_quit import CmdHandlerQuit
 from .cmd_handler_help import CmdHandlerHelp
-# from .cmd_handler_para_extract import CmdHandlerParaExtract
+from .cmd_handler_para_extract import CmdHandlerParaExtract
 from .cmd_handler_req_analysis import CmdHandlerReqAnalysis
 from .cmd_handler_module_to_dir import CmdHandlerModuleToDir
 from .cmd_handler_dir_file_fill import CmdHandlerDirFileFill
@@ -67,9 +67,9 @@ class CommandManager:
         help_cmd = CmdHandlerHelp()
         commands.append(help_cmd)
         
-        # # 参数提取命令（demo阶段暂时不使用了，目前没有精力仔细debug以及编写相关的使用代码）
-        # para_extract_cmd = CmdHandlerParaExtract()
-        # commands.append(para_extract_cmd)
+        # 参数提取命令
+        para_extract_cmd = CmdHandlerParaExtract()
+        commands.append(para_extract_cmd)
         
         # 需求分析命令
         req_analysis_cmd = CmdHandlerReqAnalysis()
