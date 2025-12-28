@@ -347,11 +347,7 @@ class IbcDataStore:
             
         symbols_tree = file_symbol_data.get("symbols_tree", {})
         symbols_metadata = file_symbol_data.get("symbols_metadata", {})
-            
-        if not isinstance(symbols_tree, dict) or not isinstance(symbols_metadata, dict):
-            # 兼容旧数据格式时的保护（理论上迁移后不应再出现）
-            return {}, {}
-            
+
         return symbols_tree, symbols_metadata
         
     def load_dependency_symbol_tables(
