@@ -10,11 +10,23 @@ TARGET_LANGUAGE_PLACEHOLDER
 
 CURRENT_FILE_PATH_PLACEHOLDER
 
-## 用户原始需求
+## 重要参数
 
-以下是用户的原始编程需求，这是最终目标：
+以下是从用户原始需求中提取出的重要参数，请你在完成目标代码时进行参考
 
-USER_REQUIREMENTS_PLACEHOLDER
+EXTRACTED_PARAM_PLACEHOLDER 
+
+## 可调用的库文件
+
+以下是你可以使用的库以及其用途，请确保正确导入和使用。不允许使用未列出的库。
+
+LIBRARY_PLACEHOLDER
+
+## 工程目录结构
+
+以下是你需要参考的工程目录结构，描述了当前项目中各个文件和文件夹的组织方式：
+
+PROJROOT_DIRCONTENT_PLACEHOLDER
 
 ## 文件级实现规划
 
@@ -24,7 +36,7 @@ IMPLEMENTATION_PLAN_PLACEHOLDER
 
 ## 规范化后的IBC代码
 
-以下是已经过符号规范化的IBC代码，所有符号名称已转换为符合目标语言规范的标识符：
+以下是一段名为intent_behavior_code的自然语言代码，这是你需要转化为目标编程语言代码的所有内容
 
 ```intent_behavior_code
 IBC_CODE_PLACEHOLDER
@@ -32,11 +44,11 @@ IBC_CODE_PLACEHOLDER
 
 ## 任务要求
 
-请基于上述IBC代码，生成完整的、可直接运行的目标语言代码文件。
+请基于上述IBC代码，生成完整的、可直接运行的目标语言代码文件。不允许遗漏功能，必须完整转换。
 
 **注意事项：**
 
-1. **符号引用**：代码中的`$符号名$`表示外部符号引用，请正确导入和使用
+1. **符号引用**：自然语言代码中的`$符号名`表示外部符号引用，请正确导入和使用
 2. **结构完整**：生成的代码应包含所有必要的导入语句、类型声明等
 3. **功能正确**：准确实现IBC中描述的所有功能和行为逻辑
 4. **代码质量**：遵循目标语言的编码规范，代码清晰易读
