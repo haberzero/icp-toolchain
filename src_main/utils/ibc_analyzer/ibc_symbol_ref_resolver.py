@@ -8,10 +8,7 @@ from typedef.ibc_data_types import (
     IbcBaseAstNode, ModuleNode, FunctionNode, VariableNode, BehaviorStepNode, ClassNode,
 )
 from libs.dir_json_funcs import DirJsonFuncs
-
-
-
-# matches = difflib.get_close_matches(target, candidates, n=3, cutoff=0.3)
+from utils.issue_recorder import IbcIssueRecorder
 
 
 class SymbolRefResolver:
@@ -28,317 +25,287 @@ class SymbolRefResolver:
     注意：可见符号表的构建由 VisibleSymbolBuilder 负责
     """
     
-    def __init__(self, visible_symbol_tree: Dict[str, Any]):
+    def __init__(
+        self, 
+        ast_dict: Dict[int, IbcBaseAstNode],
+        symbols_tree: Dict[str, Any],
+        symbols_metadata: Dict[str, Dict[str, Any]],
+        ibc_issue_recorder: IbcIssueRecorder,
+        proj_root_dict: Dict[str, Any],
+        dependent_relation: Dict[str, List[str]],
+        current_file_path: str
+    ):
         """
         初始化符号引用解析器
         
         Args:
-            visible_symbol_tree: 可见符号树（由VisibleSymbolBuilder构建）
+            ast_dict: AST字典
+            symbols_tree: 可见符号树（由VisibleSymbolBuilder构建）
+            symbols_metadata: 可见符号元数据
+            ibc_issue_recorder: 问题记录器
+            proj_root_dict: 项目根目录字典
+            dependent_relation: 依赖关系
+            current_file_path: 当前文件路径
         """
-        print(f"初始化符号引用解析器")
-        self.visible_symbol_tree = visible_symbol_tree
+        self.ast_dict = ast_dict
+        self.symbols_tree = symbols_tree
+        self.symbols_metadata = symbols_metadata
+        self.ibc_issue_recorder = ibc_issue_recorder
+        self.proj_root_dict = proj_root_dict
+        self.dependent_relation = dependent_relation
+        self.current_file_path = current_file_path
         
-        # 存储从 ast_dict 中提取的各类引用
-        self.module_refs: List[str] = []  # module 引用列表
-        self.param_type_refs: List[Tuple[str, str]] = []  # (参数名, 符号引用) 元组列表
-        self.var_type_refs: List[Tuple[str, str]] = []  # (变量名, 符号引用) 元组列表
-        self.behavior_refs: List[str] = []  # 行为描述中的符号引用列表
-        self.class_inherit_refs: List[str] = []  # 类继承中的符号引用列表
-
-
-    def set_visible_symbol_tree(self, visible_symbol_tree: Dict[str, Any]) -> None:
-        """
-        设置/更新可见符号树
+        # 从AST中提取模块引用信息
+        self.module_imports = self._extract_module_imports()
         
-        Args:
-            visible_symbol_tree: 新的可见符号树
-        """
-        self.visible_symbol_tree = visible_symbol_tree
-        print(f"可见符号树已更新")
-
+        # 外部库依赖（从proj_root_dict中获取）
+        self.external_library_dependencies = self._extract_external_libraries()
     
-    def extract_all_refs_from_ast_dict(self, ast_dict: Dict[int, IbcBaseAstNode]) -> None:
-        """
-        从 AST 字典中提取所有符号引用
+    def _extract_module_imports(self) -> Dict[str, str]:
+        """从AST中提取所有module声明
         
-        遍历 ast_dict，从各类节点中提取:
-        - module 引用
-        - 函数参数类型引用
-        - 变量类型引用
-        - 类继承引用
-        - 行为描述中的符号引用
-        
-        Args:
-            ast_dict: AST 节点字典
-        """
-        print(f"开始从 AST 中提取符号引用")
-        
-        # 清空之前的引用记录
-        self.module_refs.clear()
-        self.param_type_refs.clear()
-        self.var_type_refs.clear()
-        self.class_inherit_refs.clear()
-        self.behavior_refs.clear()
-        
-        for uid, ast_node in ast_dict.items():
-            if isinstance(ast_node, ModuleNode):
-                self._extract_module_refs(ast_node)
-            elif isinstance(ast_node, ClassNode):
-                self._extract_class_refs(ast_node)
-            elif isinstance(ast_node, FunctionNode):
-                self._extract_function_refs(ast_node)
-            elif isinstance(ast_node, VariableNode):
-                self._extract_variable_refs(ast_node)
-            elif isinstance(ast_node, BehaviorStepNode):
-                self._extract_behavior_refs(ast_node)
-        
-        print(f"  module 引用数: {len(self.module_refs)}")
-        print(f"  函数参数类型引用数: {len(self.param_type_refs)}")
-        print(f"  变量类型引用数: {len(self.var_type_refs)}")
-        print(f"  类继承引用数: {len(self.class_inherit_refs)}")
-        print(f"  行为描述引用数: {len(self.behavior_refs)}")
-    
-    def _extract_module_refs(self, module_node: ModuleNode) -> None:
-        """
-        提取 module 节点中的引用
-        
-        Args:
-            module_node: module 节点
-        """
-        if module_node.identifier:
-            self.module_refs.append(module_node.identifier)
-    
-    def _extract_class_refs(self, class_node: ClassNode) -> None:
-        """
-        提取 class 节点中的继承引用
-        
-        Args:
-            class_node: class 节点
-        """
-        # 从 inh_params 字典中提取父类符号引用
-        for param_key, param_value in class_node.inh_params.items():
-            # param_key 可能是父类的符号引用
-            if param_key:
-                self.class_inherit_refs.append(param_key)
-    
-    def _extract_function_refs(self, function_node: FunctionNode) -> None:
-        """
-        提取 function 节点中的参数类型引用
-        
-        Args:
-            function_node: function 节点
-        """
-        # 从 param_type_refs 字典中提取符号引用
-        for param_name, type_ref in function_node.param_type_refs.items():
-            if type_ref:
-                self.param_type_refs.append((param_name, type_ref))
-    
-    def _extract_variable_refs(self, variable_node: VariableNode) -> None:
-        """
-        提取 variable 节点中的类型引用
-        
-        Args:
-            variable_node: variable 节点
-        """
-        # 从 type_ref 字段中提取符号引用
-        if variable_node.type_ref:
-            self.var_type_refs.append((variable_node.identifier, variable_node.type_ref))
-    
-    def _extract_behavior_refs(self, behavior_node: BehaviorStepNode) -> None:
-        """
-        提取 behavior 节点中的符号引用
-        
-        Args:
-            behavior_node: behavior 节点
-        """
-        # 从 symbol_refs 列表中提取符号引用
-        for symbol_ref in behavior_node.symbol_refs:
-            if symbol_ref:
-                self.behavior_refs.append(symbol_ref)
-
-
-
-    def resolve_module_ref(self, module_ref: str) -> Tuple[bool, Optional[Dict[str, Any]], str]:
-        """
-        解析module引用，在可见符号树中查找对应的模块/文件
-        
-        Args:
-            module_ref: module引用字符串，如 "src.ball.ball_entity"
-            
         Returns:
-            Tuple[bool, Optional[Dict], str]: 
-                - 是否找到
-                - 找到的符号节点（如果找到）
-                - 描述信息
+            Dict[str, str]: {模块别名: 模块完整路径}
+            例如: {"ball_entity": "src.ball.ball_entity"}
         """
-        if not module_ref:
-            return False, None, "module引用为空"
+        module_imports = {}
         
-        # 解析路径
-        path_parts = self.parse_ref_path(module_ref)
-        if not path_parts:
-            return False, None, f"module引用解析失败: {module_ref}"
+        # 遍历AST，查找ModuleNode
+        for uid, node in self.ast_dict.items():
+            if isinstance(node, ModuleNode):
+                # module节点的identifier存储的是完整路径，如"src.ball.ball_entity"
+                full_path = node.identifier
+                # 从完整路径提取模块名（最后一部分）
+                module_name = full_path.split('.')[-1] if '.' in full_path else full_path
+                module_imports[module_name] = full_path
         
-        # 在可见符号树中逐级查找
-        current_node = self.visible_symbol_tree
-        for part in path_parts:
-            if isinstance(current_node, dict) and part in current_node:
-                current_node = current_node[part]
-            else:
-                return False, None, f"找不到路径: {module_ref} (在 {part} 处断开)"
-        
-        return True, current_node, f"成功找到: {module_ref}"
+        return module_imports
     
-    def parse_ref_path(self, symbol_ref: str) -> List[str]:
+    def _extract_external_libraries(self) -> Set[str]:
+        """从proj_root_dict中提取外部库依赖
+        
+        Returns:
+            Set[str]: 外部库名称集合
         """
-        解析符号引用路径，将其按 . 分割成路径组件列表
+        external_libs = set()
+        
+        # 检查proj_root_dict中是否有ExternalLibraryDependencies节点
+        if "ExternalLibraryDependencies" in self.proj_root_dict:
+            ext_deps = self.proj_root_dict["ExternalLibraryDependencies"]
+            if isinstance(ext_deps, dict):
+                external_libs.update(ext_deps.keys())
+        
+        return external_libs
+    
+    def resolve_all_references(self) -> None:
+        """解析AST中的所有符号引用并验证"""
+        # 遍历AST，查找所有包含符号引用的节点
+        for uid, node in self.ast_dict.items():
+            self._resolve_node_references(node)
+    
+    def _resolve_node_references(self, node: IbcBaseAstNode) -> None:
+        """解析单个节点中的符号引用
         
         Args:
-            symbol_ref: 符号引用字符串，如 "module.submodule.Class.method"
-            
-        Returns:
-            路径组件列表，如 ["module", "submodule", "Class", "method"]
+            node: AST节点
         """
-        if not symbol_ref:
-            return []
+        if isinstance(node, VariableNode):
+            # 变量节点的type_ref字段包含符号引用列表
+            for ref in node.type_ref:
+                self._validate_symbol_reference(ref, node.line_number)
         
-        # 按 . 分割
-        parts = symbol_ref.split('.')
+        elif isinstance(node, FunctionNode):
+            # 函数参数的param_type_refs字段包含符号引用
+            for param_name, ref in node.param_type_refs.items():
+                self._validate_symbol_reference(ref, node.line_number)
         
-        # 过滤空字符串
-        return [part.strip() for part in parts if part.strip()]
+        elif isinstance(node, BehaviorStepNode):
+            # 行为步骤的symbol_refs字段包含符号引用列表
+            for ref in node.symbol_refs:
+                self._validate_symbol_reference(ref, node.line_number)
     
-    def resolve_symbol_in_visible_tree(self, symbol_ref: str) -> Tuple[bool, Optional[Dict[str, Any]], str]:
-        """
-        在可见符号树中检索符号引用
-        
-        基于 . 符号分割的路径，在可见符号树中进行逐级索引
+    def _validate_symbol_reference(self, ref: str, line_num: int) -> None:
+        """验证单个符号引用
         
         Args:
-            symbol_ref: 符号引用字符串，如 "ball_entity.BallEntity.get_position"
-            
-        Returns:
-            Tuple[bool, Optional[Dict], str]:
-                - 是否找到
-                - 找到的符号节点（如果找到）
-                - 描述信息
+            ref: 符号引用字符串（如"ball_entity.BallEntity"或"self.ball.get_position"）
+            line_num: 行号
         """
-        if not symbol_ref:
-            return False, None, "符号引用为空"
+        if not ref:
+            return
         
-        # 解析路径
-        path_parts = self.parse_ref_path(symbol_ref)
+        # 解析引用路径
+        parts = ref.split('.')
+        if len(parts) < 2:
+            # 引用至少需要两部分：模块名.符号名
+            self.ibc_issue_recorder.record_issue(
+                message=f"符号引用格式错误，至少需要'模块.符号'的形式: {ref}",
+                line_num=line_num,
+                line_content=""
+            )
+            return
         
-        if not path_parts:
-            return False, None, f"符号引用解析失败: {symbol_ref}"
+        # 第一部分是起点（模块名或self）
+        start_point = parts[0]
         
-        # 在可见符号树中逐级查找
-        current_node = self.visible_symbol_tree
-        path_traveled = []
+        # 如果是self引用，跳过验证（属于内部引用）
+        if start_point == "self":
+            return
         
-        for part in path_parts:
-            path_traveled.append(part)
-            
-            if isinstance(current_node, dict) and part in current_node:
-                current_node = current_node[part]
-            else:
-                # 尝试模糊匹配
-                if isinstance(current_node, dict):
-                    # 查找相似的键
-                    available_keys = [k for k in current_node.keys() if not k.startswith('_')]
-                    if available_keys:
-                        matches = difflib.get_close_matches(part, available_keys, n=3, cutoff=0.6)
-                        if matches:
-                            suggestion = f"找不到 '{part}'，可能是: {', '.join(matches)}"
-                        else:
-                            suggestion = f"找不到 '{part}'，可用选项: {', '.join(available_keys[:5])}"
-                    else:
-                        suggestion = f"找不到 '{part}'，该节点下无可用符号"
-                else:
-                    suggestion = f"'{'.'.join(path_traveled[:-1])}' 不是容器节点"
-                
-                return False, None, f"符号 {symbol_ref} 查找失败: {suggestion}"
+        # 验证起点是否在导入的模块中
+        if start_point not in self.module_imports:
+            # 起点不在导入模块中，尝试模糊匹配
+            self._record_module_not_found(start_point, line_num, ref)
+            return
         
-        # 检查最终节点是否是符号节点
-        if isinstance(current_node, dict) and '_symbol_type' in current_node:
-            symbol_type = current_node.get('_symbol_type', 'unknown')
-            visibility = current_node.get('_visibility', 'unknown')
-            description = current_node.get('_description', '')
-            return True, current_node, f"找到符号: {symbol_ref} ({symbol_type}, {visibility}): {description}"
-        elif isinstance(current_node, dict):
-            # 找到的是容器节点（目录/文件）
-            return True, current_node, f"找到容器节点: {symbol_ref}"
+        # 获取模块的完整路径
+        module_full_path = self.module_imports[start_point]
+        
+        # 检查模块是否是外部库
+        if self._is_external_library_module(module_full_path):
+            # 外部库引用，认为正确，跳过后续验证
+            return
+        
+        # 内部模块引用，需要在可见符号树中查找
+        symbol_path = '.'.join(parts[1:])  # 去掉起点，得到符号路径
+        self._validate_internal_symbol(module_full_path, symbol_path, line_num, ref)
+    
+    def _is_external_library_module(self, module_path: str) -> bool:
+        """判断模块是否属于外部库
+        
+        Args:
+            module_path: 模块完整路径（如"numpy.array"）
+        
+        Returns:
+            bool: 是否为外部库
+        """
+        # 获取模块的顶层包名
+        top_level_package = module_path.split('.')[0]
+        return top_level_package in self.external_library_dependencies
+    
+    def _validate_internal_symbol(
+        self, 
+        module_path: str, 
+        symbol_path: str, 
+        line_num: int,
+        original_ref: str
+    ) -> None:
+        """验证内部符号引用是否存在于可见符号树中
+        
+        Args:
+            module_path: 模块完整路径（如"src.ball.ball_entity"）
+            symbol_path: 符号路径（如"BallEntity.get_position"）
+            line_num: 行号
+            original_ref: 原始引用字符串
+        """
+        # 构建在symbols_metadata中的完整路径
+        full_symbol_path = f"{module_path}.{symbol_path}"
+        
+        # 检查符号是否存在
+        if full_symbol_path in self.symbols_metadata:
+            # 符号存在，验证通过
+            return
+        
+        # 符号不存在，尝试模糊匹配
+        self._record_symbol_not_found(full_symbol_path, module_path, line_num, original_ref)
+    
+    def _record_module_not_found(self, module_name: str, line_num: int, original_ref: str) -> None:
+        """记录模块未找到的问题，并尝试模糊匹配
+        
+        Args:
+            module_name: 模块名
+            line_num: 行号
+            original_ref: 原始引用字符串
+        """
+        # 收集所有可能的模块名候选
+        candidates = []
+        
+        # 从导入的模块中收集
+        candidates.extend(self.module_imports.keys())
+        
+        # 从外部库中收集
+        candidates.extend(self.external_library_dependencies)
+        
+        # 从依赖文件中收集（提取文件名作为候选）
+        if self.current_file_path in self.dependent_relation:
+            for dep_path in self.dependent_relation[self.current_file_path]:
+                # 提取文件名
+                file_name = dep_path.split('/')[-1]
+                if file_name not in candidates:
+                    candidates.append(file_name)
+        
+        # 从所有依赖关系中收集文件名（作为补充候选）
+        for deps in self.dependent_relation.values():
+            for dep_path in deps:
+                file_name = dep_path.split('/')[-1]
+                if file_name not in candidates:
+                    candidates.append(file_name)
+        
+        # 使用difflib进行模糊匹配
+        matches = difflib.get_close_matches(module_name, candidates, n=3, cutoff=0.3)
+        
+        if matches:
+            suggestion = f"你是否想引用: {', '.join(matches)}？"
         else:
-            return False, None, f"符号 {symbol_ref} 指向的不是有效节点"
+            suggestion = "未找到相似的模块名"
+        
+        message = f"模块引用错误：模块'{module_name}'未在导入列表或依赖关系中找到。{suggestion} 原始引用: {original_ref}"
+        
+        self.ibc_issue_recorder.record_issue(
+            message=message,
+            line_num=line_num,
+            line_content=""
+        )
     
-    def validate_all_refs(self) -> Dict[str, List[Tuple]]:
+    def _record_symbol_not_found(
+        self, 
+        full_symbol_path: str, 
+        module_path: str,
+        line_num: int,
+        original_ref: str
+    ) -> None:
+        """记录符号未找到的问题，并尝试模糊匹配
+        
+        Args:
+            full_symbol_path: 完整符号路径
+            module_path: 模块路径
+            line_num: 行号
+            original_ref: 原始引用字符串
         """
-        验证所有提取的符号引用
+        # 收集该模块下所有可见符号作为候选
+        candidates = []
         
-        对所有类型的引用进行验证:
-        - module 引用（验证module路径是否存在）
-        - 函数参数类型引用
-        - 变量类型引用
-        - 类继承引用
-        - 行为描述引用
+        for meta_path, meta in self.symbols_metadata.items():
+            # 只收集属于该模块的符号（不包括folder和file）
+            if meta_path.startswith(module_path + '.') and meta.get('type') not in ('folder', 'file'):
+                # 提取相对于模块的符号路径
+                relative_path = meta_path[len(module_path) + 1:]
+                candidates.append(relative_path)
         
-        Returns:
-            包含各类引用验证结果的字典
-        """
-        print(f"开始验证所有符号引用")
+        # 提取待查找的符号路径（去掉模块前缀）
+        symbol_to_find = full_symbol_path[len(module_path) + 1:]
         
-        validation_results = {
-            "module_refs": [],
-            "param_type_refs": [],
-            "var_type_refs": [],
-            "class_inherit_refs": [],
-            "behavior_refs": []
-        }
+        # 使用difflib进行模糊匹配
+        matches = difflib.get_close_matches(symbol_to_find, candidates, n=3, cutoff=0.3)
         
-        # 验证module引用
-        for module_ref in self.module_refs:
-            found, node, msg = self.resolve_module_ref(module_ref)
-            validation_results["module_refs"].append((module_ref, found, msg))
+        if matches:
+            # 构建建议信息，包含符号描述
+            suggestions = []
+            for match in matches:
+                match_full_path = f"{module_path}.{match}"
+                meta = self.symbols_metadata.get(match_full_path, {})
+                desc = meta.get('description', '无描述')
+                suggestions.append(f"{match} ({desc})")
+            
+            suggestion = f"你是否想引用: {'; '.join(suggestions)}？"
+        else:
+            suggestion = f"在模块'{module_path}'中未找到相似的符号"
         
-        # 验证函数参数类型引用
-        for param_name, type_ref in self.param_type_refs:
-            found, node, msg = self.resolve_symbol_in_visible_tree(type_ref)
-            validation_results["param_type_refs"].append((param_name, type_ref, found, msg))
+        message = f"符号引用错误：符号'{symbol_to_find}'在模块'{module_path}'的可见符号中未找到。{suggestion} 原始引用: {original_ref}"
         
-        # 验证变量类型引用
-        for var_name, type_ref in self.var_type_refs:
-            found, node, msg = self.resolve_symbol_in_visible_tree(type_ref)
-            validation_results["var_type_refs"].append((var_name, type_ref, found, msg))
-        
-        # 验证类继承引用
-        for inherit_ref in self.class_inherit_refs:
-            found, node, msg = self.resolve_symbol_in_visible_tree(inherit_ref)
-            validation_results["class_inherit_refs"].append((inherit_ref, found, msg))
-        
-        # 验证行为描述引用
-        for behavior_ref in self.behavior_refs:
-            found, node, msg = self.resolve_symbol_in_visible_tree(behavior_ref)
-            validation_results["behavior_refs"].append((behavior_ref, found, msg))
-        
-        print(f"  符号引用验证完成")
-        return validation_results
+        self.ibc_issue_recorder.record_issue(
+            message=message,
+            line_num=line_num,
+            line_content=""
+        )
     
-    def get_module_refs(self) -> List[str]:
-        """获取所有 module 引用"""
-        return self.module_refs.copy()
-    
-    def get_param_type_refs(self) -> List[Tuple[str, str]]:
-        """获取所有函数参数类型引用"""
-        return self.param_type_refs.copy()
-    
-    def get_var_type_refs(self) -> List[Tuple[str, str]]:
-        """获取所有变量类型引用"""
-        return self.var_type_refs.copy()
-    
-    def get_class_inherit_refs(self) -> List[str]:
-        """获取所有类继承引用"""
-        return self.class_inherit_refs.copy()
-    
-    def get_behavior_refs(self) -> List[str]:
-        """获取所有行为描述引用"""
-        return self.behavior_refs.copy()

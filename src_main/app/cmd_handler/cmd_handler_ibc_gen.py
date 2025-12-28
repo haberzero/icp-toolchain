@@ -21,6 +21,7 @@ from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code
 from utils.ibc_analyzer.ibc_visible_symbol_builder import VisibleSymbolBuilder
+from utils.ibc_analyzer.ibc_symbol_ref_resolver import SymbolRefResolver
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.ibc_funcs import IbcFuncs
 from utils.issue_recorder import IbcIssueRecorder
@@ -327,8 +328,11 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             print(f"    {Colors.OKBLUE}正在分析IBC代码生成AST...{Colors.ENDC}")
             ast_dict, symbols_tree, symbols_metadata = analyze_ibc_code(ibc_content, self.ibc_issue_recorder)
             
-            # 验证是否得到有效的AST和符号数据
-            is_valid = self._validate_ibc_response(ast_dict)
+            # 验证是否得到有效的AST和符号数据（包括符号引用验证）
+            is_valid = self._validate_ibc_response(
+                ast_dict=ast_dict,
+                current_file_path=icp_json_file_path
+            )
             if is_valid:
                 break
             
@@ -556,13 +560,16 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         
         return '\n'.join(section_lines)
 
-    def _validate_ibc_response(self, ast_dict: Dict[str, Any]) -> bool:
+    def _validate_ibc_response(
+        self, 
+        ast_dict: Dict[str, Any],
+        current_file_path: str
+    ) -> bool:
         """验证IBC代码分析结果是否有效
         
         Args:
             ast_dict: AST字典
-            symbols_tree: 符号树
-            symbols_metadata: 符号元数据
+            current_file_path: 当前文件路径
             
         Returns:
             bool: 是否有效
@@ -579,6 +586,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 self.ibc_issue_recorder.record_issue(error_msg, 0, "")
             return False
         
+        # 执行符号引用验证
+        print(f"    {Colors.OKBLUE}正在验证符号引用...{Colors.ENDC}")
+        self._validate_symbol_references(ast_dict, current_file_path)
+        
         # 如果没有问题，认为验证通过
         if not self.ibc_issue_recorder.has_issues():
             print(f"    {Colors.OKGREEN}IBC代码验证通过{Colors.ENDC}")
@@ -588,6 +599,55 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         issue_count = self.ibc_issue_recorder.get_issue_count()
         print(f"    {Colors.WARNING}警告: IBC代码分析发现 {issue_count} 个问题{Colors.ENDC}")
         return False
+    
+    def _validate_symbol_references(
+        self,
+        ast_dict: Dict[int, IbcBaseAstNode],
+        current_file_path: str
+    ) -> None:
+        """验证AST中的所有符号引用
+        
+        Args:
+            ast_dict: AST字典
+            current_file_path: 当前文件路径
+        """
+        # 获取当前文件的可见符号树（用于符号引用验证）
+        ibc_data_store = get_ibc_data_store()
+        
+        # 检查依赖符号表是否有效
+        if not ibc_data_store.is_dependency_symbol_tables_valid(
+            ibc_root=self.work_ibc_dir_path,
+            dependent_relation=self.dependent_relation,
+            current_file_path=current_file_path,
+        ):
+            # 如果依赖符号表无效，跳过符号引用验证
+            # 这种情况通常发生在文件没有依赖或依赖文件尚未生成符号表时
+            return
+        
+        # 加载依赖符号表
+        dependency_symbol_tables = ibc_data_store.load_dependency_symbol_tables(
+            ibc_root=self.work_ibc_dir_path,
+            dependent_relation=self.dependent_relation,
+            current_file_path=current_file_path,
+        )
+        
+        # 构建可见符号树
+        visible_symbols_tree, visible_symbols_metadata = self.visible_symbol_builder.build_visible_symbol_tree(
+            current_file_path=current_file_path,
+            dependency_symbol_tables=dependency_symbol_tables,
+        )
+        
+        # 创建符号引用解析器并执行验证
+        ref_resolver = SymbolRefResolver(
+            ast_dict=ast_dict,
+            symbols_tree=visible_symbols_tree,
+            symbols_metadata=visible_symbols_metadata,
+            ibc_issue_recorder=self.ibc_issue_recorder,
+            proj_root_dict=self.proj_root_dict,
+            dependent_relation=self.dependent_relation,
+            current_file_path=current_file_path
+        )
+        ref_resolver.resolve_all_references()
     
     def _build_user_prompt_retry_part(self) -> str:
         """构建用户提示词重试部分
