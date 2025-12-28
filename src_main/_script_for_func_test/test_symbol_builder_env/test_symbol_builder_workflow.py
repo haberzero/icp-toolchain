@@ -223,7 +223,7 @@ class SymbolBuilderWorkflowTest:
                 print(f"    {Colors.FAIL}错误: IBC文件不存在: {ibc_path}{Colors.ENDC}")
                 continue
             
-            ibc_code = self.ibc_data_store.load_ibc_code(ibc_path)
+            ibc_code = self.ibc_data_store.load_ibc_content(ibc_path)
             print(f"    [OK] 加载IBC代码: {len(ibc_code)} 字符")
             
             # 1.2 使用IbcAnalyzer分析生成AST和符号树
@@ -350,7 +350,7 @@ class TestPhysics():
         # 保存IBC文件
         ibc_path = self.ibc_data_store.build_ibc_path(self.work_ibc_dir_path, test_file_path)
         os.makedirs(os.path.dirname(ibc_path), exist_ok=True)
-        self.ibc_data_store.save_ibc_code(ibc_path, test_ibc_code)
+        self.ibc_data_store.save_ibc_content(ibc_path, test_ibc_code)
         print(f"  [OK] 测试IBC文件已创建: {ibc_path}")
         
         # 4.2 分析并生成符号树
