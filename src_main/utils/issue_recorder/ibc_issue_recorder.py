@@ -45,3 +45,9 @@ class IbcIssueRecorder:
     def to_dict_list(self) -> List[Dict[str, Any]]:
         """将所有问题转换为字典列表"""
         return [issue.to_dict() for issue in self._issues]
+    
+    def print_issues(self) -> None:
+        """打印所有问题"""
+        for issue in self._issues:
+            print(f"Line {issue.line_num}: {issue.message}")
+            print(f"  {issue.line_content}")
