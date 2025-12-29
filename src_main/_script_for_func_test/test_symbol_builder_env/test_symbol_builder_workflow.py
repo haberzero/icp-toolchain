@@ -91,7 +91,7 @@ project_root = os.path.abspath(os.path.join(test_env_root, '..', '..'))
 sys.path.insert(0, project_root)
 
 # 导入真实的工程模块
-from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code
+from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 from utils.ibc_analyzer.ibc_visible_symbol_builder import VisibleSymbolBuilder
 from data_store.ibc_data_store import get_instance as get_ibc_data_store
 from typedef.cmd_data_types import Colors
@@ -223,11 +223,11 @@ class SymbolBuilderWorkflowTest:
                 print(f"    {Colors.FAIL}错误: IBC文件不存在: {ibc_path}{Colors.ENDC}")
                 continue
             
-            ibc_code = self.ibc_data_store.load_ibc_content(ibc_path)
-            print(f"    [OK] 加载IBC代码: {len(ibc_code)} 字符")
+            ibc_content = self.ibc_data_store.load_ibc_content(ibc_path)
+            print(f"    [OK] 加载IBC代码: {len(ibc_content)} 字符")
             
             # 1.2 使用IbcAnalyzer分析生成AST和符号树
-            ast_dict, symbols_tree, symbols_metadata = analyze_ibc_code(ibc_code)
+            ast_dict, symbols_tree, symbols_metadata = analyze_ibc_content(ibc_content)
             
             if not ast_dict:
                 print(f"    {Colors.WARNING}警告: 分析失败{Colors.ENDC}")
@@ -333,7 +333,7 @@ class SymbolBuilderWorkflowTest:
         
         # 4.1 创建一个新的IBC文件，依赖ball_entity和heptagon_shape
         test_file_path = 'src/test_physics'
-        test_ibc_code = """module src.ball.ball_entity: 球体实体模块
+        test_ibc_content = """module src.ball.ball_entity: 球体实体模块
 module src.heptagon.heptagon_shape: 七边形模块
 
 description: 简化的物理引擎，用于测试符号引用
@@ -350,11 +350,11 @@ class TestPhysics():
         # 保存IBC文件
         ibc_path = self.ibc_data_store.build_ibc_path(self.work_ibc_dir_path, test_file_path)
         os.makedirs(os.path.dirname(ibc_path), exist_ok=True)
-        self.ibc_data_store.save_ibc_content(ibc_path, test_ibc_code)
+        self.ibc_data_store.save_ibc_content(ibc_path, test_ibc_content)
         print(f"  [OK] 测试IBC文件已创建: {ibc_path}")
         
         # 4.2 分析并生成符号树
-        ast_dict, symbols_tree, symbols_metadata = analyze_ibc_code(test_ibc_code)
+        ast_dict, symbols_tree, symbols_metadata = analyze_ibc_content(test_ibc_content)
         print(f"  [OK] AST节点数: {len(ast_dict)}")
         print(f"  [OK] 符号数量: {len(symbols_metadata)}")
         

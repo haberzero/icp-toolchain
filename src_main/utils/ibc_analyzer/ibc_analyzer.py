@@ -10,7 +10,7 @@ from typedef.ibc_data_types import IbcBaseAstNode
 from typedef.exception_types import IbcAnalyzerError
 
 
-def analyze_ibc_code(
+def analyze_ibc_content(
     text: str, 
     ibc_issue_recorder: Optional[IbcIssueRecorder] = None
 ) -> Tuple[Dict, Dict, Dict]:

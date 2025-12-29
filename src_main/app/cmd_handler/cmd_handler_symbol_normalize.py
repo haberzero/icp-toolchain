@@ -526,7 +526,7 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         ibc_path = ibc_data_store.build_ibc_path(self.work_ibc_dir_path, icp_json_file_path)
         try:
             with open(ibc_path, 'r', encoding='utf-8') as f:
-                ibc_code = f.read()
+                ibc_content = f.read()
         except Exception as e:
             print(f"  {Colors.FAIL}错误: 读取IBC代码失败: {e}{Colors.ENDC}")
             return ""
@@ -556,7 +556,7 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         # 填充占位符
         user_prompt_str = user_prompt_template_str.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
         user_prompt_str = user_prompt_str.replace('FILE_PATH_PLACEHOLDER', icp_json_file_path)
-        user_prompt_str = user_prompt_str.replace('CONTEXT_INFO_PLACEHOLDER', ibc_code)
+        user_prompt_str = user_prompt_str.replace('CONTEXT_INFO_PLACEHOLDER', ibc_content)
         user_prompt_str = user_prompt_str.replace('AST_SYMBOLS_PLACEHOLDER', symbols_text)
         
         return user_prompt_str

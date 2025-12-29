@@ -21,7 +21,7 @@ from typedef.ibc_data_types import (
     VisibilityTypes
 )
 from data_store.ibc_data_store import get_instance as get_ibc_data_store
-from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code
+from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 from libs.ibc_funcs import IbcFuncs
 
 
@@ -42,7 +42,7 @@ def setup_test_environment():
     return test_ibc_root
 
 
-def test_ibc_code_management():
+def test_ibc_content_management():
     """测试IBC代码文件管理功能"""
     
     print("=" * 60)
@@ -206,7 +206,7 @@ def test_ast_management():
     return True
 
 
-def test_ast_with_real_ibc_code():
+def test_ast_with_real_ibc_content():
     """测试真实IBC代码的AST持久化"""
     
     print("\n" + "=" * 60)
@@ -217,7 +217,7 @@ def test_ast_with_real_ibc_code():
     ibc_data_store = get_ibc_data_store()
     
     # 示例IBC代码
-    ibc_code = """
+    ibc_content = """
 module UserManagement: 用户管理模块
 
 class User():
@@ -242,7 +242,7 @@ class User():
     # 解析IBC代码生成AST
     print("\n3.1 解析IBC代码...")
     try:
-        ast_dict, symbols_tree, symbols_metadata = analyze_ibc_code(ibc_code)
+        ast_dict, symbols_tree, symbols_metadata = analyze_ibc_content(ibc_content)
     except Exception as e:
         print(f"   ✗ 解析失败: {e}")
         return False
@@ -333,16 +333,16 @@ def test_verify_data_management():
     # 测试用例2: 更新校验码
     print("\n4.2 测试更新IBC校验码...")
     file_path = "test/verify"
-    ibc_code = "module TestVerify: 测试校验码"
+    ibc_content = "module TestVerify: 测试校验码"
     ibc_path = ibc_data_store.build_ibc_path(test_ibc_root, file_path)
-    ibc_data_store.save_ibc_content(ibc_path, ibc_code)
+    ibc_data_store.save_ibc_content(ibc_path, ibc_content)
     
     ibc_data_store.update_verify_code(test_ibc_root, file_path)
     
     # 验证校验码
     verify_path = ibc_data_store.build_verify_path(test_ibc_root, file_path)
     verify_data = ibc_data_store.load_verify_data(verify_path)
-    expected_md5 = IbcFuncs.calculate_text_md5(ibc_code)
+    expected_md5 = IbcFuncs.calculate_text_md5(ibc_content)
     
     if verify_data.get('ibc_verify_code') == expected_md5:
         print(f"   ✓ 校验码更新成功且值正确")
@@ -427,9 +427,9 @@ if __name__ == "__main__":
     
     try:
         # 运行所有测试
-        result1 = test_ibc_code_management()
+        result1 = test_ibc_content_management()
         result2 = test_ast_management()
-        result3 = test_ast_with_real_ibc_code()
+        result3 = test_ast_with_real_ibc_content()
         result4 = test_verify_data_management()
         result5 = test_symbol_management()
         

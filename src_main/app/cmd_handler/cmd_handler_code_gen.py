@@ -15,7 +15,7 @@ from utils.icp_ai_handler import ICPChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.ibc_funcs import IbcFuncs
 from utils.issue_recorder import TextIssueRecorder
-from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code
+from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 
 
 class CmdHandlerCodeGen(BaseCmdHandler):
@@ -445,7 +445,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
                 
                 # 重新解析IBC代码生成AST（用于符号替换）
                 print(f"    {Colors.OKBLUE}正在解析IBC代码以生成AST...{Colors.ENDC}")
-                ast_dict, _, _ = analyze_ibc_code(ibc_content)
+                ast_dict, _, _ = analyze_ibc_content(ibc_content)
                 
                 if not ast_dict:
                     print(f"  {Colors.WARNING}警告: AST生成失败，将使用未替换的IBC代码{Colors.ENDC}")

@@ -16,7 +16,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 from utils.ibc_analyzer.ibc_visible_symbol_builder import VisibleSymbolBuilder
-from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code
+from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 from utils.ibc_analyzer.ibc_symbol_ref_resolver import SymbolRefResolver
 from utils.issue_recorder import IbcIssueRecorder
 from typedef.cmd_data_types import Colors
@@ -126,7 +126,7 @@ def test_external_reference_multi_modules():
     print(f"{Colors.OKBLUE}测试2.1: 外部符号引用（多模块）{Colors.ENDC}")
     print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
     
-    ibc_code = """module src.ball.ball_entity: 球体实体模块
+    ibc_content = """module src.ball.ball_entity: 球体实体模块
 module src.shape.shape_base: 形状基类模块
 
 description: 测试类
@@ -169,7 +169,7 @@ class TestClass():
     dependent_relation = {"src/test": ["src/ball/ball_entity", "src/shape/shape_base"]}
     
     issue_recorder = IbcIssueRecorder()
-    ast_dict, _, _ = analyze_ibc_code(ibc_code, issue_recorder)
+    ast_dict, _, _ = analyze_ibc_content(ibc_content, issue_recorder)
     
     if not ast_dict:
         print(f"{Colors.FAIL}AST解析失败{Colors.ENDC}")
@@ -203,7 +203,7 @@ def test_module_not_found_and_invalid_format():
     print(f"{Colors.OKBLUE}测试2.2: 模块未找到和无效格式{Colors.ENDC}")
     print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
     
-    ibc_code = """module src.ball.ball_entity: 球体实体模块
+    ibc_content = """module src.ball.ball_entity: 球体实体模块
 
 description: 测试类
 class TestClass():
@@ -241,7 +241,7 @@ class TestClass():
     }
     
     issue_recorder = IbcIssueRecorder()
-    ast_dict, _, _ = analyze_ibc_code(ibc_code, issue_recorder)
+    ast_dict, _, _ = analyze_ibc_content(ibc_content, issue_recorder)
     
     if not ast_dict:
         print(f"{Colors.FAIL}AST解析失败{Colors.ENDC}")
@@ -264,7 +264,7 @@ class TestClass():
         return False
     
     # 场景2: 无效引用格式
-    ibc_code2 = """module src.ball.ball_entity: 球体实体模块
+    ibc_content2 = """module src.ball.ball_entity: 球体实体模块
 
 description: 测试类
 class TestClass():
@@ -272,7 +272,7 @@ class TestClass():
 """
     
     issue_recorder2 = IbcIssueRecorder()
-    ast_dict2, _, _ = analyze_ibc_code(ibc_code2, issue_recorder2)
+    ast_dict2, _, _ = analyze_ibc_content(ibc_content2, issue_recorder2)
     
     if ast_dict2:
         resolver2 = SymbolRefResolver(
@@ -301,7 +301,7 @@ def test_external_library_reference():
     print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
     
     # 场景1: 外部库引用
-    ibc_code = """module numpy: 数值计算库
+    ibc_content = """module numpy: 数值计算库
 
 description: 测试类
 class TestClass():
@@ -315,7 +315,7 @@ class TestClass():
     }
     
     issue_recorder = IbcIssueRecorder()
-    ast_dict, _, _ = analyze_ibc_code(ibc_code, issue_recorder)
+    ast_dict, _, _ = analyze_ibc_content(ibc_content, issue_recorder)
     
     if not ast_dict:
         print(f"{Colors.FAIL}AST解析失败{Colors.ENDC}")
@@ -338,7 +338,7 @@ class TestClass():
         return False
     
     # 场景2: 没有模块导入的情况
-    ibc_code2 = """description: 测试类
+    ibc_content2 = """description: 测试类
 class TestClass():
     var data: 数据，类型为 $ball_entity.BallEntity
 """
@@ -352,7 +352,7 @@ class TestClass():
     }
     
     issue_recorder2 = IbcIssueRecorder()
-    ast_dict2, _, _ = analyze_ibc_code(ibc_code2, issue_recorder2)
+    ast_dict2, _, _ = analyze_ibc_content(ibc_content2, issue_recorder2)
     
     if ast_dict2:
         resolver2 = SymbolRefResolver(
@@ -385,7 +385,7 @@ def test_self_reference_valid_and_invalid():
     print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
     
     # 场景1: 正确self引用
-    ibc_code1 = """description: 测试类
+    ibc_content1 = """description: 测试类
 class TestClass():
     var internal_data: 内部数据
     var ball: 球体对象
@@ -396,7 +396,7 @@ class TestClass():
 """
     
     issue_recorder1 = IbcIssueRecorder()
-    ast_dict1, _, _ = analyze_ibc_code(ibc_code1, issue_recorder1)
+    ast_dict1, _, _ = analyze_ibc_content(ibc_content1, issue_recorder1)
     
     if ast_dict1:
         resolver1 = SymbolRefResolver(
@@ -415,7 +415,7 @@ class TestClass():
             return False
     
     # 场景2: 错误的self引用
-    ibc_code2 = """description: 测试类
+    ibc_content2 = """description: 测试类
 class TestClass():
     var internal_data: 内部数据
     
@@ -425,7 +425,7 @@ class TestClass():
 """
     
     issue_recorder2 = IbcIssueRecorder()
-    ast_dict2, _, _ = analyze_ibc_code(ibc_code2, issue_recorder2)
+    ast_dict2, _, _ = analyze_ibc_content(ibc_content2, issue_recorder2)
     
     if ast_dict2:
         resolver2 = SymbolRefResolver(
@@ -453,7 +453,7 @@ def test_scope_visibility():
     print(f"{Colors.OKBLUE}测试3.2: 作用域可见性{Colors.ENDC}")
     print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
     
-    ibc_code = """description: 测试类
+    ibc_content = """description: 测试类
 class TestClass():
     var class_var: 类变量
     
@@ -474,7 +474,7 @@ class TestClass():
     dependent_relation = {"src/test": []}
     
     issue_recorder = IbcIssueRecorder()
-    ast_dict, _, _ = analyze_ibc_code(ibc_code, issue_recorder)
+    ast_dict, _, _ = analyze_ibc_content(ibc_content, issue_recorder)
     
     if not ast_dict:
         print(f"{Colors.FAIL}AST解析失败{Colors.ENDC}")
@@ -516,7 +516,7 @@ def test_local_symbol_dollar_reference():
     print(f"{Colors.OKBLUE}测试4.1: 本地符号的$引用{Colors.ENDC}")
     print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
     
-    ibc_code = """
+    ibc_content = """
 description: 测试本地符号引用
 
 class Ball():
@@ -529,7 +529,7 @@ class Ball():
 """
     
     issue_recorder = IbcIssueRecorder()
-    ast_dict, symbols_tree, symbols_metadata = analyze_ibc_code(ibc_code, issue_recorder)
+    ast_dict, symbols_tree, symbols_metadata = analyze_ibc_content(ibc_content, issue_recorder)
     
     if not ast_dict:
         print(f"{Colors.FAIL}IBC代码解析失败{Colors.ENDC}")
@@ -577,7 +577,7 @@ def test_local_symbol_reference_before_after():
     print(f"{Colors.OKBLUE}测试4.2: 包含本地符号前后的差异对比{Colors.ENDC}")
     print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
     
-    ibc_code = """
+    ibc_content = """
 description: 测试本地符号引用
 
 class Ball():
@@ -595,7 +595,7 @@ class Ball():
 """
     
     issue_recorder = IbcIssueRecorder()
-    ast_dict, symbols_tree, symbols_metadata = analyze_ibc_code(ibc_code, issue_recorder)
+    ast_dict, symbols_tree, symbols_metadata = analyze_ibc_content(ibc_content, issue_recorder)
     
     if not ast_dict:
         print(f"{Colors.FAIL}IBC代码解析失败{Colors.ENDC}")
@@ -664,7 +664,7 @@ def test_mixed_external_internal_and_params():
     print(f"{Colors.OKBLUE}测试5.1: 混合引用{Colors.ENDC}")
     print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
     
-    ibc_code = """module numpy: 数值计算库
+    ibc_content = """module numpy: 数值计算库
 module src.ball.ball_entity: 球体实体模块
 
 description: 测试类
@@ -704,7 +704,7 @@ class TestClass():
     dependent_relation = {"src/test": ["src/ball/ball_entity"]}
     
     issue_recorder = IbcIssueRecorder()
-    ast_dict, _, _ = analyze_ibc_code(ibc_code, issue_recorder)
+    ast_dict, _, _ = analyze_ibc_content(ibc_content, issue_recorder)
     
     if not ast_dict:
         print(f"{Colors.FAIL}AST解析失败{Colors.ENDC}")

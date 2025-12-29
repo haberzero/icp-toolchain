@@ -19,7 +19,7 @@ from data_store.ibc_data_store import get_instance as get_ibc_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
-from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_code
+from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 from utils.ibc_analyzer.ibc_visible_symbol_builder import VisibleSymbolBuilder
 from utils.ibc_analyzer.ibc_symbol_ref_resolver import SymbolRefResolver
 from libs.dir_json_funcs import DirJsonFuncs
@@ -326,7 +326,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                     
             # 解析IBC代码生成AST
             print(f"    {Colors.OKBLUE}正在分析IBC代码生成AST...{Colors.ENDC}")
-            ast_dict, symbols_tree, symbols_metadata = analyze_ibc_code(ibc_content, self.ibc_issue_recorder)
+            ast_dict, symbols_tree, symbols_metadata = analyze_ibc_content(ibc_content, self.ibc_issue_recorder)
             
             # 验证是否得到有效的AST和符号数据（包括符号引用验证）
             is_valid = self._validate_ibc_response(

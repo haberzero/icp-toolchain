@@ -32,7 +32,7 @@ class IbcDataStore:
         normalized_file_path = file_path.replace('/', os.sep)
         return os.path.join(ibc_root, f"{normalized_file_path}.ibc")
     
-    def save_ibc_content(self, ibc_path: str, ibc_code: str) -> None:
+    def save_ibc_content(self, ibc_path: str, ibc_content: str) -> None:
         """保存IBC代码到文件"""
         try:
             directory = os.path.dirname(ibc_path)
@@ -40,7 +40,7 @@ class IbcDataStore:
                 os.makedirs(directory)
             
             with open(ibc_path, 'w', encoding='utf-8') as f:
-                f.write(ibc_code)
+                f.write(ibc_content)
         except Exception as e:
             raise IOError(f"保存IBC代码失败 [{ibc_path}]: {e}") from e
     
