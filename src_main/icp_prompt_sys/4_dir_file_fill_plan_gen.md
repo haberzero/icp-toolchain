@@ -65,18 +65,20 @@
 
 ## OutputFormat
 
-1. **结构规范**：
-   - format: text/plain
-   - structure: 结构化文本，按逻辑顺序组织
-   - style: 技术文档风格，清晰准确
-   - special_requirements: 禁止添加装饰性文本，聚焦实现规划
+**结构规范**：
 
-2. **内容组织**：
-   - encoding: UTF-8
-   - sections: 按程序执行流程组织章节
-   - level: 保持在文件级别的抽象，不深入代码细节
+- format: text/plain
+- structure: 结构化文本，按逻辑顺序组织
+- style: 技术文档风格，清晰准确
+- special_requirements: 禁止添加装饰性文本，聚焦实现规划
 
-3. **输出模板**：
+**内容组织**：
+
+- encoding: UTF-8
+- sections: 按程序执行流程组织章节
+- level: 保持在文件级别的抽象，不深入代码细节
+
+**输出模板**：
 
 ```text
 # 文件级实现规划
@@ -115,7 +117,8 @@
 <总结所有文件如何协同工作，最终达成用户的编程目标>
 ```
 
-4. **示例说明**：
+**示例说明**：
+
    1. Web应用示例:
       - 格式类型: text
       - 说明: Web应用的文件级实现规划
