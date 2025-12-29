@@ -512,15 +512,12 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             cleaned_path = file_path.replace("_one_file_req.txt", "")
             normed_path = os.path.normpath(cleaned_path)
             
-            # 提取import section
-            import_content = self._extract_section_content(file_content, 'import')
+            # import_content = self._extract_section_content(file_content, 'import')
             behavior_content = self._extract_section_content(file_content, 'behavior')
             
             formatted = f"## 文件: {normed_path}\n\n"
             if behavior_content:
-                formatted += f"**behavior（行为逻辑）:**\n{behavior_content}\n\n"
-            if import_content:
-                formatted += f"**import（模块依赖）:**\n{import_content}\n\n"
+                formatted += f"文件的功能逻辑简述:\n{behavior_content}\n\n"
             
             all_file_reqs.append(formatted)
         
@@ -546,7 +543,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         
         # 填充占位符
         user_prompt_str = user_prompt_template_str
-        user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', self.implementation_plan_str)
+        # user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', self.implementation_plan_str)
         user_prompt_str = user_prompt_str.replace('ALL_FILE_REQUIREMENTS_PLACEHOLDER', all_file_reqs_text)
         user_prompt_str = user_prompt_str.replace('CURRENT_JSON_STRUCTURE_PLACEHOLDER', current_json_str)
         user_prompt_str = user_prompt_str.replace('FILE_PATHS_PLACEHOLDER', file_paths_text)
