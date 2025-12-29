@@ -387,7 +387,7 @@ class SymbolRefResolver:
         
         # 如果引用路径超过一层，验证嵌套符号（简单处理，不深入验证）
         # 实际场景中，嵌套引用需要更复杂的类型推导，这里只做第一层验证
-    
+
     def _find_scope_node(self, node_uid: int) -> Optional[IbcBaseAstNode]:
         """找到包含指定UID节点的作用域节点（ClassNode或FunctionNode）
         
@@ -412,7 +412,7 @@ class SymbolRefResolver:
         return None
     
     def _build_local_symbol_table(self, scope_node: IbcBaseAstNode) -> Dict[str, str]:
-        """构建局部筦号表
+        """构建局部符号表
         
         Args:
             scope_node: 作用域节点（ClassNode或FunctionNode）
@@ -462,8 +462,8 @@ class SymbolRefResolver:
                     if isinstance(child_node, VariableNode):
                         # class的成员变量
                         local_symbols[child_node.identifier] = 'class_var'
-                    elif isinstance(child_node, FunctionNode) and child_node.uid != scope_node.uid:
-                        # class的其他方法
+                    elif isinstance(child_node, FunctionNode):
+                        # class的所有方法（包括当前函数自己，因为函数可能需要通过self引用自己，如递归或回调）
                         local_symbols[child_node.identifier] = 'class_func'
         
         return local_symbols
