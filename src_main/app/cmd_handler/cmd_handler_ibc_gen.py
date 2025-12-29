@@ -606,9 +606,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             print(f"    {Colors.OKGREEN}IBC代码验证通过{Colors.ENDC}")
             return True
         
-        # 如果有问题，输出问题数量
+        # 如果有问题，输出问题数量以及具体的问题内容
         issue_count = self.ibc_issue_recorder.get_issue_count()
         print(f"    {Colors.WARNING}警告: IBC代码分析发现 {issue_count} 个问题{Colors.ENDC}")
+        self.ibc_issue_recorder.print_issues()
         return False
     
     def _validate_symbol_references(
