@@ -47,6 +47,7 @@ OTHERS_CONTENT_PLACEHOLDER
 MODULE_DEPENDENCIES_PLACEHOLDER
 
 引用示例：
+
 ```Intent Behavior Code
 module utils.validator
 module utils.logger
@@ -70,7 +71,6 @@ func 验证用户数据(用户数据):
 
 - 每一行使用 `filename.symbol` 的点号路径形式，对应一个可用符号
 - 行的基本格式为：`$filename.symbol: <符号的对外功能描述>`
-- 符号引用时使用 `$` 前缀，例如 `$ball_entity.BallEntity` 表示引用 ball_entity 文件中的 BallEntity 类
 
 AVAILABLE_SYMBOLS_PLACEHOLDER
 
