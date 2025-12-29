@@ -20,6 +20,7 @@ class IbcTokenType(Enum):
     EQUAL = "EQUAL"  # 等号 =
     BACKSLASH = "BACKSLASH"  # 反斜杠 \
     REF_IDENTIFIER = "REF_IDENTIFIER"  # 符号引用
+    SELF_REF_IDENTIFIER = "SELF_REF_IDENTIFIER"  # self引用（self.xxx格式）
     INDENT = "INDENT"  # 缩进
     DEDENT = "DEDENT"  # 退格
     NEWLINE = "NEWLINE"  # 换行符
@@ -174,7 +175,8 @@ class VariableNode(IbcBaseAstNode):
 class BehaviorStepNode(IbcBaseAstNode):
     """行为步骤节点类"""
     content: str = ""
-    symbol_refs: List[str] = field(default_factory=list)
+    symbol_refs: List[str] = field(default_factory=list)  # $开头的符号引用
+    self_refs: List[str] = field(default_factory=list)  # self.xxx格式的引用
     new_block_flag: bool = False
 
     def __repr__(self):

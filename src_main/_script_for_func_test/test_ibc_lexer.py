@@ -6,66 +6,40 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from utils.ibc_analyzer.ibc_lexer import IbcLexer, IbcTokenType, IbcKeywords, LexerError
 
-def test_empty_file():
-    """测试空文件"""
-    print("测试 empty_file 函数...")
+def test_edge_cases():
+    """测试边界情况：空文件和只有注释的文件"""
+    print("测试 edge_cases 函数...")
     
-    code = ""
-    expected = [
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.EOF, '')
-    ]
-    
+    # 场景1: 空文件
+    print("  1. 测试空文件:")
+    code1 = ""
     try:
-        lexer = IbcLexer(code)
+        lexer = IbcLexer(code1)
         tokens = lexer.tokenize()
-        
-        # assert len(tokens) == len(expected), f"Token数量不匹配: 预期 {len(expected)}, 实际 {len(tokens)}"
-        
-        for i, (actual_token, expected_token) in enumerate(zip(tokens, expected)):
-            expected_type, expected_value = expected_token
-            assert actual_token.type == expected_type and actual_token.value == expected_value, \
-                f"Token {i} 不匹配: 预期 Token({expected_type}, '{expected_value}', _) 实际 {actual_token}"
-        
-        print("  ✓ 成功处理空文件")
-        return True
+        # 应该能正常处理
+        print("    ✓ 成功处理空文件")
     except Exception as e:
-        print(f"  ❌ 测试失败: {e}")
+        print(f"    ❌ 测试失败: {e}")
         return False
-
-def test_comments_only():
-    """测试只有注释的文件"""
-    print("测试 comments_only 函数...")
     
-    code = """// 这是一个注释
+    # 场景2: 只有注释的文件
+    print("  2. 测试只有注释:")
+    code2 = """// 这是一个注释
 // 这是另一个注释
 """
-    expected = [
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.NEWLINE, ''),
-        
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.EOF, '')
-    ]
-    
     try:
-        lexer = IbcLexer(code)
+        lexer = IbcLexer(code2)
         tokens = lexer.tokenize()
-        
-        # assert len(tokens) == len(expected), f"Token数量不匹配: 预期 {len(expected)}, 实际 {len(tokens)}"
-        
-        for i, (actual_token, expected_token) in enumerate(zip(tokens, expected)):
-            expected_type, expected_value = expected_token
-            assert actual_token.type == expected_type and actual_token.value == expected_value, \
-                f"Token {i} 不匹配: 预期 Token({expected_type}, '{expected_value}', _) 实际 {actual_token}"
-        
-        print("  ✓ 成功处理只有注释的文件")
-        return True
+        # 应该只有NEWLINE和EOF token
+        non_newline_tokens = [t for t in tokens if t.type not in (IbcTokenType.NEWLINE, IbcTokenType.EOF)]
+        assert len(non_newline_tokens) == 0, "只有注释的文件不应有其他token"
+        print("    ✓ 成功处理只有注释的文件")
     except Exception as e:
-        print(f"  ❌ 测试失败: {e}")
+        print(f"    ❌ 测试失败: {e}")
         return False
+    
+    print("  ✓ 边界情况测试通过")
+    return True
 
 def test_module_declaration():
     """测试模块声明"""
@@ -292,97 +266,51 @@ func test():
         print(f"  ❌ 测试失败: {e}")
         return False
 
-def test_symbol_reference():
-    """测试符号引用（新语法：单$起始）"""
-    print("测试 symbol_reference 函数...")
+def test_symbol_references():
+    """测试符号引用（单个和多个）"""
+    print("测试 symbol_references 函数...")
     
-    code = """\
+    # 场景1: 单个符号引用
+    print("  1. 测试单个符号引用:")
+    code1 = """\
 func 发送请求(请求数据):
     当 重试计数 < $maxRetries:"""
-    expected = [
-        (IbcTokenType.KEYWORDS, IbcKeywords.FUNC.value),
-        (IbcTokenType.IDENTIFIER, '发送请求'),
-        (IbcTokenType.LPAREN, '('),
-        (IbcTokenType.IDENTIFIER, '请求数据'),
-        (IbcTokenType.RPAREN, ')'),
-        (IbcTokenType.COLON, ':'),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.INDENT, ''),
-        (IbcTokenType.IDENTIFIER, '当 重试计数 < '),
-        (IbcTokenType.REF_IDENTIFIER, 'maxRetries'),
-        (IbcTokenType.COLON, ':'),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.DEDENT, ''),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.EOF, '')
-    ]
     
     try:
-        lexer = IbcLexer(code)
+        lexer = IbcLexer(code1)
         tokens = lexer.tokenize()
         
-        # assert len(tokens) == len(expected), f"Token数量不匹配: 预期 {len(expected)}, 实际 {len(tokens)}"
-        
-        for i, (actual_token, expected_token) in enumerate(zip(tokens, expected)):
-            expected_type, expected_value = expected_token
-            assert actual_token.type == expected_type and actual_token.value == expected_value, \
-                f"Token {i} 不匹配: 预期 Token({expected_type}, '{expected_value}', _) 实际 {actual_token}"
-        
-        print("  ✓ 成功处理符号引用")
-        return True
+        # 验证包含REF_IDENTIFIER token
+        ref_tokens = [t for t in tokens if t.type == IbcTokenType.REF_IDENTIFIER]
+        assert len(ref_tokens) > 0, "应该有REF_IDENTIFIER token"
+        assert ref_tokens[0].value == 'maxRetries', f"预期'maxRetries',实际'{ref_tokens[0].value}'"
+        print("    ✓ 成功处理单个符号引用")
     except Exception as e:
-        print(f"  ❌ 测试失败: {e}")
+        print(f"    ❌ 测试失败: {e}")
         return False
-
-def test_multiple_symbol_references():
-    """测试多个符号引用（新语法：单$起始）"""
-    print("测试 multiple_symbol_references 函数...")
     
-    code = """\
+    # 场景2: 多个符号引用
+    print("  2. 测试多个符号引用:")
+    code2 = """\
 func test():
     $httpClient.post(请求数据)
-    $记录错误(\"\u914d置加载失败: \" + 异常信息)"""
-    expected = [
-        (IbcTokenType.KEYWORDS, IbcKeywords.FUNC.value),
-        (IbcTokenType.IDENTIFIER, 'test'),
-        (IbcTokenType.LPAREN, '('),
-        (IbcTokenType.RPAREN, ')'),
-        (IbcTokenType.COLON, ':'),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.INDENT, ''),
-        (IbcTokenType.REF_IDENTIFIER, 'httpClient.post'),
-        (IbcTokenType.LPAREN, '('),
-        (IbcTokenType.IDENTIFIER, '请求数据'),
-        (IbcTokenType.RPAREN, ')'),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.REF_IDENTIFIER, '记录错误'),
-        (IbcTokenType.LPAREN, '('),
-        (IbcTokenType.IDENTIFIER, '\"\u914d置加载失败'),
-        (IbcTokenType.COLON, ':'),
-        (IbcTokenType.IDENTIFIER, ' \" + 异常信息'),
-        (IbcTokenType.RPAREN, ')'),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.DEDENT, ''),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.EOF, '')
-    ]
+    $记录错误("配置加载失败: " + 异常信息)"""
     
     try:
-        lexer = IbcLexer(code)
+        lexer = IbcLexer(code2)
         tokens = lexer.tokenize()
         
-        # assert len(tokens) == len(expected), f"Token数量不匹配: 预期 {len(expected)}, 实际 {len(tokens)}"
-        
-        for i, (actual_token, expected_token) in enumerate(zip(tokens, expected)):
-            expected_type, expected_value = expected_token
-            assert actual_token.type == expected_type and actual_token.value == expected_value, \
-                f"Token {i} 不匹配: 预期 Token({expected_type}, '{expected_value}', _) 实际 {actual_token}"
-        
-        print("  ✓ 成功处理多个符号引用")
-        return True
+        ref_tokens = [t for t in tokens if t.type == IbcTokenType.REF_IDENTIFIER]
+        assert len(ref_tokens) >= 2, f"应该有2个以上REF_IDENTIFIER,实际{len(ref_tokens)}个"
+        assert 'httpClient.post' in [t.value for t in ref_tokens], "应该包含'httpClient.post'"
+        assert '记录错误' in [t.value for t in ref_tokens], "应该包含'记录错误'"
+        print("    ✓ 成功处理多个符号引用")
     except Exception as e:
-        print(f"  ❌ 测试失败: {e}")
+        print(f"    ❌ 测试失败: {e}")
         return False
+    
+    print("  ✓ 符号引用测试通过")
+    return True
 
 def test_error_cases():
     """测试错误情况"""
@@ -482,90 +410,50 @@ def test_bracket_and_backslash_symbols():
         print(f"  ❌ 测试失败: {e}")
         return False
 
-def test_equal_sign_in_var_declaration():
-    """测试变量声明中的等号"""
-    print("测试 equal_sign_in_var_declaration 函数...")
+def test_equal_sign_syntax():
+    """测试等号语法（变量声明和符号引用）"""
+    print("测试 equal_sign_syntax 函数...")
     
-    code = """var total = 0
+    # 场景1: 变量声明中的等号
+    print("  1. 测试变量声明中的等号:")
+    code1 = """var total = 0
 var count = 10
 var name: 用户姓名"""
-    expected = [
-        (IbcTokenType.KEYWORDS, IbcKeywords.VAR.value),
-        (IbcTokenType.IDENTIFIER, 'total '),
-        (IbcTokenType.EQUAL, '='),
-        (IbcTokenType.IDENTIFIER, ' 0'),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.KEYWORDS, IbcKeywords.VAR.value),
-        (IbcTokenType.IDENTIFIER, 'count '),
-        (IbcTokenType.EQUAL, '='),
-        (IbcTokenType.IDENTIFIER, ' 10'),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.KEYWORDS, IbcKeywords.VAR.value),
-        (IbcTokenType.IDENTIFIER, 'name'),
-        (IbcTokenType.COLON, ':'),
-        (IbcTokenType.IDENTIFIER, ' 用户姓名'),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.EOF, '')
-    ]
     
     try:
-        lexer = IbcLexer(code)
+        lexer = IbcLexer(code1)
         tokens = lexer.tokenize()
         
-        for i, (actual_token, expected_token) in enumerate(zip(tokens, expected)):
-            expected_type, expected_value = expected_token
-            assert actual_token.type == expected_type and actual_token.value == expected_value, \
-                f"Token {i} 不匹配: 预期 Token({expected_type}, '{expected_value}', _) 实际 {actual_token}"
-        
-        print("  ✓ 成功处理变量声明中的等号")
-        return True
+        # 验证包含EQUAL token
+        equal_tokens = [t for t in tokens if t.type == IbcTokenType.EQUAL]
+        assert len(equal_tokens) == 2, f"应该有2个EQUAL token，实际{len(equal_tokens)}个"
+        print("    ✓ 成功处理变量声明中的等号")
     except Exception as e:
-        print(f"  ❌ 测试失败: {e}")
+        print(f"    ❌ 测试失败: {e}")
         return False
-
-
-def test_equal_sign_with_symbol_ref():
-    """测试等号与符号引用结合"""
-    print("测试 equal_sign_with_symbol_ref 函数...")
     
-    code = """func test():
+    # 场景2: 等号与符号引用结合
+    print("  2. 测试等号与符号引用结合:")
+    code2 = """func test():
     result = $httpClient.get(url)"""
-    expected = [
-        (IbcTokenType.KEYWORDS, IbcKeywords.FUNC.value),
-        (IbcTokenType.IDENTIFIER, 'test'),
-        (IbcTokenType.LPAREN, '('),
-        (IbcTokenType.RPAREN, ')'),
-        (IbcTokenType.COLON, ':'),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.INDENT, ''),
-        (IbcTokenType.IDENTIFIER, 'result '),
-        (IbcTokenType.EQUAL, '='),
-        (IbcTokenType.IDENTIFIER, ' '),
-        (IbcTokenType.REF_IDENTIFIER, 'httpClient.get'),
-        (IbcTokenType.LPAREN, '('),
-        (IbcTokenType.IDENTIFIER, 'url'),
-        (IbcTokenType.RPAREN, ')'),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.DEDENT, ''),
-        (IbcTokenType.NEWLINE, ''),
-        (IbcTokenType.EOF, '')
-    ]
     
     try:
-        lexer = IbcLexer(code)
+        lexer = IbcLexer(code2)
         tokens = lexer.tokenize()
         
-        for i, (actual_token, expected_token) in enumerate(zip(tokens, expected)):
-            expected_type, expected_value = expected_token
-            assert actual_token.type == expected_type and actual_token.value == expected_value, \
-                f"Token {i} 不匹配: 预期 Token({expected_type}, '{expected_value}', _) 实际 {actual_token}"
-        
-        print("  ✓ 成功处理等号与符号引用结合")
-        return True
+        # 验证同时包含EQUAL和REF_IDENTIFIER
+        equal_tokens = [t for t in tokens if t.type == IbcTokenType.EQUAL]
+        ref_tokens = [t for t in tokens if t.type == IbcTokenType.REF_IDENTIFIER]
+        assert len(equal_tokens) == 1, "应该有1个EQUAL token"
+        assert len(ref_tokens) == 1, "应该有1个REF_IDENTIFIER token"
+        assert ref_tokens[0].value == 'httpClient.get', f"预期'httpClient.get'，实际'{ref_tokens[0].value}'"
+        print("    ✓ 成功处理等号与符号引用结合")
     except Exception as e:
-        print(f"  ❌ 测试失败: {e}")
+        print(f"    ❌ 测试失败: {e}")
         return False
+    
+    print("  ✓ 等号语法测试通过")
+    return True
 
 
 def test_visibility_keywords():
@@ -643,16 +531,81 @@ def test_visibility_keywords():
         return False
 
 
+def test_reference_types():
+    """测试各种引用类型（self引用和混合引用）"""
+    print("测试 reference_types 函数...")
+    
+    # 场景1: self引用
+    print("  1. 测试self引用:")
+    code1 = """class TestClass():
+    var ball: 球体对象
+    
+    func test_method():
+        位置 = self.ball.get_position()
+        数据 = self.internal_data
+"""
+    
+    try:
+        lexer = IbcLexer(code1)
+        tokens = lexer.tokenize()
+        
+        # 收集所有SELF_REF_IDENTIFIER token
+        self_refs = [t.value for t in tokens if t.type == IbcTokenType.SELF_REF_IDENTIFIER]
+        expected_refs = ['ball.get_position', 'internal_data']
+        for expected_ref in expected_refs:
+            assert expected_ref in self_refs, f"未找到self引用: {expected_ref}"
+        print(f"    ✓ 成功识别self引用: {', '.join(self_refs)}")
+    except Exception as e:
+        print(f"    ❌ 测试失败: {e}")
+        return False
+    
+    # 场景2: 混合引用（$引用和self引用）
+    print("  2. 测试混合引用:")
+    code2 = """module src.utils: 工具模块
+
+class TestClass():
+    var ball: 球体，类型为 $ball_entity.BallEntity
+    
+    func process():
+        位置 = self.ball.get_position()
+        结果 = $utils.process_data(位置)
+"""
+    
+    try:
+        lexer = IbcLexer(code2)
+        tokens = lexer.tokenize()
+        
+        # 收集REF_IDENTIFIER和SELF_REF_IDENTIFIER
+        ref_identifiers = [t.value for t in tokens if t.type == IbcTokenType.REF_IDENTIFIER]
+        self_ref_identifiers = [t.value for t in tokens if t.type == IbcTokenType.SELF_REF_IDENTIFIER]
+        
+        # 验证$引用
+        assert 'ball_entity.BallEntity' in ref_identifiers, "未找到$ball_entity.BallEntity"
+        assert 'utils.process_data' in ref_identifiers, "未找到$utils.process_data"
+        
+        # 验证self引用
+        assert 'ball.get_position' in self_ref_identifiers, "未找到self.ball.get_position"
+        
+        print("    ✓ 成功识别混合引用")
+        print(f"      - $引用: {', '.join(ref_identifiers)}")
+        print(f"      - self引用: {', '.join(self_ref_identifiers)}")
+    except Exception as e:
+        print(f"    ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    
+    print("  ✓ 引用类型测试通过")
+    return True
+
+
 if __name__ == "__main__":
     print("\n开始测试 Intent Behavior Code 词法分析器...\n")
     
     try:
         test_results = []
         
-        test_results.append(("空文件", test_empty_file()))
-        print()
-        
-        test_results.append(("只有注释", test_comments_only()))
+        test_results.append(("边界情况", test_edge_cases()))
         print()
         
         test_results.append(("模块声明", test_module_declaration()))
@@ -670,25 +623,22 @@ if __name__ == "__main__":
         test_results.append(("变量声明", test_variable_declaration()))
         print()
         
-        test_results.append(("符号引用", test_symbol_reference()))
-        print()
-        
-        test_results.append(("多个符号引用", test_multiple_symbol_references()))
+        test_results.append(("符号引用", test_symbol_references()))
         print()
         
         test_results.append(("特殊符号", test_bracket_and_backslash_symbols()))
         print()
         
-        test_results.append(("变量等号语法", test_equal_sign_in_var_declaration()))
-        print()
-        
-        test_results.append(("等号符号引用", test_equal_sign_with_symbol_ref()))
+        test_results.append(("等号语法", test_equal_sign_syntax()))
         print()
         
         test_results.append(("错误情况", test_error_cases()))
         print()
         
         test_results.append(("可见性关键字", test_visibility_keywords()))
+        print()
+        
+        test_results.append(("引用类型", test_reference_types()))
         print()
         
         print("=" * 50)

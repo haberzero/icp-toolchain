@@ -968,7 +968,8 @@ class BehaviorStepState(BaseState):
         super().__init__(parent_uid, uid_generator, ast_node_dict)
         self.state_type = ParserState.BEHAVIOR_STEP
         self.content = ""
-        self.symbol_refs: List[str] = []
+        self.symbol_refs: List[str] = []  # $开头的符号引用
+        self.self_refs: List[str] = []  # self.xxx格式的引用
         self.new_block_flag = False
         self.pop_flag = False
         self.pass_in_token_flag = False
@@ -989,6 +990,13 @@ class BehaviorStepState(BaseState):
         if token.type == IbcTokenType.REF_IDENTIFIER:
             self.symbol_refs.append(token.value.strip())
             self.content += token.value
+            return
+        
+        # 处理self引用（在所有子状态下都适用）
+        if token.type == IbcTokenType.SELF_REF_IDENTIFIER:
+            self.self_refs.append(token.value.strip())
+            # 在content中恢复self.前缀，保持原始格式
+            self.content += 'self.' + token.value
             return
         
         # 根据子状态处理token
@@ -1240,6 +1248,7 @@ class BehaviorStepState(BaseState):
             line_number=line_num,
             content=self.content,
             symbol_refs=self.symbol_refs,
+            self_refs=self.self_refs,  # 添加self引用列表
             new_block_flag=self.new_block_flag
         )
         

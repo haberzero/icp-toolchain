@@ -526,7 +526,7 @@ def test_local_variable_scope_and_name_collision():
         symbol_gen = IbcSymbolProcessor(ast_dict)
         symbols_tree, symbols_metadata = symbol_gen.build_symbol_tree()
         
-        # 查找所有名为“法向量”、类型为变量的条目
+        # 查找所有名为"法向量"、类型为变量的条目
         local_vars = []
         for path, meta in symbols_metadata.items():
             name = path.split(".")[-1]
@@ -538,7 +538,7 @@ def test_local_variable_scope_and_name_collision():
         paths = {p for p, _ in local_vars}
         assert len(paths) == 2
         
-        # 所有“法向量”都应标记为 scope=local
+        # 所有"法向量"都应标记为 scope=local
         for path, meta in local_vars:
             assert meta.get("scope") == "local"
         
@@ -546,6 +546,155 @@ def test_local_variable_scope_and_name_collision():
         assert "法向量" not in symbols_metadata
         
         print("\n[通过] 同名局部变量作用域与路径测试通过\n")
+        return True
+    except Exception as e:
+        print(f"\n[失败] 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_nested_visibility_scopes():
+    """测试嵌套的可见性作用域：多个可见性声明的交替使用"""
+    print("=" * 60)
+    print("测试嵌套可见性作用域")
+    print("=" * 60)
+    
+    code = """class DataProcessor():
+    public
+    var publicData: 公开数据
+    
+    func publicMethod():
+        执行公开操作
+    
+    private
+    var _internalBuffer: 内部缓冲区
+    var _tempCache: 临时缓存
+    
+    func _internalProcess():
+        执行内部处理
+    
+    protected
+    var _protectedState: 受保护状态
+    
+    func _protectedHelper():
+        执行受保护辅助操作
+    
+    public
+    func anotherPublicMethod():
+        执行另一个公开操作
+"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_dict = parser.parse()
+        
+        symbol_gen = IbcSymbolProcessor(ast_dict)
+        symbols_tree, symbols_metadata = symbol_gen.build_symbol_tree()
+        
+        # 验证公开成员
+        public_members = []
+        private_members = []
+        protected_members = []
+        
+        for path, meta in symbols_metadata.items():
+            name = path.split(".")[-1]
+            visibility = meta.get("visibility")
+            symbol_type = meta.get("type")
+            
+            if symbol_type in ("var", "func"):
+                if visibility == VisibilityTypes.PUBLIC.value:
+                    public_members.append(name)
+                elif visibility == VisibilityTypes.PRIVATE.value:
+                    private_members.append(name)
+                elif visibility == VisibilityTypes.PROTECTED.value:
+                    protected_members.append(name)
+        
+        # 验证公开成员
+        assert "publicData" in public_members
+        assert "publicMethod" in public_members
+        assert "anotherPublicMethod" in public_members
+        print(f"  ✓ 公开成员正确: {len(public_members)} 个")
+        
+        # 验证私有成员
+        assert "_internalBuffer" in private_members
+        assert "_tempCache" in private_members
+        assert "_internalProcess" in private_members
+        print(f"  ✓ 私有成员正确: {len(private_members)} 个")
+        
+        # 验证受保护成员
+        assert "_protectedState" in protected_members
+        assert "_protectedHelper" in protected_members
+        print(f"  ✓ 受保护成员正确: {len(protected_members)} 个")
+        
+        print("\n[通过] 嵌套可见性作用域测试通过\n")
+        return True
+    except Exception as e:
+        print(f"\n[失败] 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_multiple_inheritance_symbols():
+    """测试多重继承的符号提取（注：IBC语法实际不支持多重继承，此处测试单继承链）"""
+    print("=" * 60)
+    print("测试继承符号提取")
+    print("=" * 60)
+    
+    # IBC语法不支持多重继承，此处测试继承链
+    code = """class Base():
+    var base_data: 基类数据
+
+class Derived($Base: 继承基类):
+    var derived_data: 派生类数据
+    
+    func process():
+        处理数据
+"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_dict = parser.parse()
+        
+        symbol_gen = IbcSymbolProcessor(ast_dict)
+        symbols_tree, symbols_metadata = symbol_gen.build_symbol_tree()
+        
+        # 找到类节点
+        base_class_meta = None
+        derived_class_meta = None
+        for path, meta in symbols_metadata.items():
+            name = path.split(".")[-1]
+            if name == "Base" and meta.get("type") == "class":
+                base_class_meta = meta
+            elif name == "Derived" and meta.get("type") == "class":
+                derived_class_meta = meta
+        
+        assert base_class_meta is not None, "未找到Base类"
+        assert derived_class_meta is not None, "未找到Derived类"
+        
+        print(f"  ✓ 基类和派生类节点已提取")
+        
+        # 验证类成员也正确提取
+        base_member_names = []
+        derived_member_names = []
+        for path, meta in symbols_metadata.items():
+            if "Base." in path and "." in path:
+                base_member_names.append(path.split(".")[-1])
+            elif "Derived." in path and "." in path:
+                derived_member_names.append(path.split(".")[-1])
+        
+        assert "base_data" in base_member_names
+        assert "derived_data" in derived_member_names
+        assert "process" in derived_member_names
+        print(f"  ✓ 基类成员: {base_member_names}")
+        print(f"  ✓ 派生类成员: {derived_member_names}")
+        
+        print("\n[通过] 继承符号提取测试通过\n")
         return True
     except Exception as e:
         print(f"\n[失败] 测试失败: {e}")
@@ -567,6 +716,8 @@ if __name__ == "__main__":
             ("函数参数提取", test_function_parameters_extraction),
             ("类成员符号提取", test_class_with_members_extraction),
             ("同名局部变量作用域", test_local_variable_scope_and_name_collision),
+            ("嵌套可见性作用域", test_nested_visibility_scopes),
+            ("继承符号提取", test_multiple_inheritance_symbols),
         ]),
         ("序列化与集成测试", [
             ("符号表序列化", test_symbol_table_serialization),

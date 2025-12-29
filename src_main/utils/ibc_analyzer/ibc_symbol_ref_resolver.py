@@ -15,12 +15,13 @@ class SymbolRefResolver:
     """
     符号引用解析器
     
-    职责：解析IBC代码中以$符号标记的外部符号引用
+    职责：解析IBC代码中以$符号标记的外部符号引用和self.xxx格式的引用
     
     功能:
-    1. 从 ast_dict 中提取所有符号引用（$标记的引用）
+    1. 从 ast_dict 中提取所有符号引用（$标记的引用和self.xxx引用）
     2. 在可见符号树中解析和验证这些符号引用
     3. 提供符号引用的查找和匹配功能
+    4. 支持局部作用域符号表构建和self引用验证
     
     注意：可见符号表的构建由 VisibleSymbolBuilder 负责
     """
@@ -123,6 +124,9 @@ class SymbolRefResolver:
             # 行为步骤的symbol_refs字段包含符号引用列表
             for ref in node.symbol_refs:
                 self._validate_symbol_reference(ref, node.line_number)
+            # 验证self引用
+            for self_ref in node.self_refs:
+                self._validate_self_reference(self_ref, node)
     
     def _validate_symbol_reference(self, ref: str, line_num: int) -> None:
         """验证单个符号引用
@@ -340,4 +344,150 @@ class SymbolRefResolver:
             line_num=line_num,
             line_content=""
         )
+    
+    def _validate_self_reference(self, ref: str, node: BehaviorStepNode) -> None:
+        """验证self引用（self.xxx格式）
+        
+        Args:
+            ref: 引用字符串（如"ball.get_position"或"internal_data"）
+            node: BehaviorStepNode节点
+        """
+        if not ref:
+            return
+        
+        # 解析引用路径
+        parts = ref.split('.')
+        first_part = parts[0]  # 第一部分是属性名或方法名
+        
+        # 获取当前作用域（找到包含该behavior节点的class或func）
+        scope_node = self._find_scope_node(node.uid)
+        
+        if scope_node is None:
+            # 没有找到作用域，跳过验证
+            return
+        
+        # 构建局部符号表
+        local_symbols = self._build_local_symbol_table(scope_node)
+        
+        # 验证引用的第一部分是否在局部符号表中
+        if first_part not in local_symbols:
+            # 第一部分不在局部符号表中，记录问题
+            suggestions = difflib.get_close_matches(first_part, local_symbols.keys(), n=3, cutoff=0.3)
+            if suggestions:
+                suggestion_msg = f"你是否想引用: {', '.join(suggestions)}？"
+            else:
+                suggestion_msg = "在当前作用域未找到相似的符号"
+            
+            self.ibc_issue_recorder.record_issue(
+                message=f"self引用错误：符号'{first_part}'在当前作用域中不可见。{suggestion_msg} 原始引用: self.{ref}",
+                line_num=node.line_number,
+                line_content=""
+            )
+            return
+        
+        # 如果引用路径超过一层，验证嵌套符号（简单处理，不深入验证）
+        # 实际场景中，嵌套引用需要更复杂的类型推导，这里只做第一层验证
+    
+    def _find_scope_node(self, node_uid: int) -> Optional[IbcBaseAstNode]:
+        """找到包含指定UID节点的作用域节点（ClassNode或FunctionNode）
+        
+        Args:
+            node_uid: 节点UID
+        
+        Returns:
+            ClassNode或FunctionNode，如果没有找到则返回None
+        """
+        current_uid = node_uid
+        
+        while current_uid in self.ast_dict:
+            node = self.ast_dict[current_uid]
+            # 向上遍历，找到class或func节点
+            if isinstance(node, (ClassNode, FunctionNode)):
+                return node
+            current_uid = node.parent_uid
+            # 防止无限循环
+            if current_uid == 0:
+                break
+        
+        return None
+    
+    def _build_local_symbol_table(self, scope_node: IbcBaseAstNode) -> Dict[str, str]:
+        """构建局部筦号表
+        
+        Args:
+            scope_node: 作用域节点（ClassNode或FunctionNode）
+        
+        Returns:
+            局部符号字典 {symbol_name: symbol_type}
+        """
+        local_symbols = {}
+        
+        if isinstance(scope_node, ClassNode):
+            # 对于class作用域，收集成员变量和方法
+            for child_uid in scope_node.children_uids:
+                if child_uid not in self.ast_dict:
+                    continue
+                child_node = self.ast_dict[child_uid]
+                
+                if isinstance(child_node, VariableNode):
+                    # 成员变量
+                    local_symbols[child_node.identifier] = 'var'
+                elif isinstance(child_node, FunctionNode):
+                    # 成员方法
+                    local_symbols[child_node.identifier] = 'func'
+        
+        elif isinstance(scope_node, FunctionNode):
+            # 对于func作用域，收集函数参数和局部变量
+            # 函数参数
+            for param_name in scope_node.params.keys():
+                local_symbols[param_name] = 'param'
+            
+            # 局部变量（var定义）
+            for child_uid in scope_node.children_uids:
+                if child_uid not in self.ast_dict:
+                    continue
+                child_node = self.ast_dict[child_uid]
+                
+                if isinstance(child_node, VariableNode):
+                    local_symbols[child_node.identifier] = 'var'
+            
+            # 如果func在class内，还需要收集class的成员
+            parent_class = self._find_parent_class(scope_node.uid)
+            if parent_class:
+                for child_uid in parent_class.children_uids:
+                    if child_uid not in self.ast_dict:
+                        continue
+                    child_node = self.ast_dict[child_uid]
+                    
+                    if isinstance(child_node, VariableNode):
+                        # class的成员变量
+                        local_symbols[child_node.identifier] = 'class_var'
+                    elif isinstance(child_node, FunctionNode) and child_node.uid != scope_node.uid:
+                        # class的其他方法
+                        local_symbols[child_node.identifier] = 'class_func'
+        
+        return local_symbols
+    
+    def _find_parent_class(self, node_uid: int) -> Optional[ClassNode]:
+        """找到包含指定UID节点的父级ClassNode
+        
+        Args:
+            node_uid: 节点UID
+        
+        Returns:
+            ClassNode，如果没有找到则返回None
+        """
+        current_uid = node_uid
+        
+        while current_uid in self.ast_dict:
+            node = self.ast_dict[current_uid]
+            # 向上遍历，找到class节点
+            if isinstance(node, ClassNode):
+                return node
+            current_uid = node.parent_uid
+            # 防止无限循环
+            if current_uid == 0:
+                break
+        
+        return None
     

@@ -83,9 +83,11 @@ class IbcLexer:
     
     def _tokenize_line(self, content_line: str) -> None:
         """对当前行进行词法分析"""
-        # 检查是否包含符号引用
-        ref_parts: list[str] = content_line.split(sep='$')
-        if len(ref_parts) > 1:  # 包含$符号
+        # 检查是否包含符号引用（$或self.）
+        has_dollar = '$' in content_line
+        has_self_ref = 'self.' in content_line
+        
+        if has_dollar or has_self_ref:
             # 处理包含符号引用的行
             self._tokenize_line_with_refs(content_line)
             return 
@@ -95,7 +97,9 @@ class IbcLexer:
         return
     
     def _tokenize_line_with_refs(self, content_line: str) -> None:
-        """处理包含符号引用的行使用$作为起始标记，后续连续的非保留符号作为引用内容，包含 . 符号 """
+        """处理包含符号引用的行使用$作为起始标记，后续连续的非保留符号作为引用内容，包含 . 符号 
+        同时支持识别self.开头的引用（不需要$前缀）
+        """
         i = 0
         n = len(content_line)
         special_chars = '(){}[],:\\=$'  # 特殊符号集合
@@ -116,11 +120,30 @@ class IbcLexer:
                 # 不消耗分隔符（包括$），继续由常规文本分词处理
             else:
                 start = i
-                while i < n and content_line[i] != '$':
-                    i += 1
-                text_part = content_line[start:i]
-                if text_part.strip():
-                    self._tokenize_text_part(text_part)
+                # 查找self.开头的引用
+                if content_line[i:i+5] == 'self.' and (i == 0 or content_line[i-1].isspace() or content_line[i-1] in special_chars):
+                    # 找到self.开头，提取完整的self.xxx.yyy引用
+                    i += 5  # 跳过'self.'
+                    start_ref = i
+                    # 收集self后面的内容，包括.号
+                    while i < n and (content_line[i] not in special_chars) and (not content_line[i].isspace()):
+                        i += 1
+                    ref_content = content_line[start_ref:i]
+                    if ref_content.strip():
+                        # 生成SELF_REF_IDENTIFIER token，内容不包括'self.'前缀，只包拫xxx.yyy部分
+                        self.tokens.append(Token(IbcTokenType.SELF_REF_IDENTIFIER, ref_content, self.line_num))
+                    else:
+                        print(f"Warning: Line {self.line_num}: Empty reference after 'self.', will be removed")
+                else:
+                    # 普通文本，直到遇到$或self.
+                    while i < n and content_line[i] != '$':
+                        # 检查是否遇到self.
+                        if content_line[i:i+5] == 'self.' and (i == 0 or content_line[i-1].isspace() or content_line[i-1] in special_chars):
+                            break
+                        i += 1
+                    text_part = content_line[start:i]
+                    if text_part.strip():
+                        self._tokenize_text_part(text_part)
     
     def _tokenize_text_part(self, text: str):
         r"""对文本部分进行分词：识别 ( ) { } [ ] , : \ = $ 等特殊符号
