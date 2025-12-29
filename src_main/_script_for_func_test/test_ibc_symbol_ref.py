@@ -1,12 +1,14 @@
-"""
-局部符号和符号引用解析器综合测试脚本
+"""符号引用解析器综合测试脚本
 
 测试覆盖范围：
 1. 本地符号管理：合并、优先级、空表处理、特殊标记验证
 2. 外部符号引用：$引用语法、模块检测、外部库、多模块、无效格式
 3. self引用验证：正确/错误引用、作用域可见性
 4. 本地符号的$引用：本地符号引用、前后差异对比
-5. 边界条件：参数类型、混合引用、无导入检测
+5. 符号自引用：函数递归（$引用）、类方法递归（self引用）、类$引用自身成员
+6. 作用域隔离：private成员访问控制
+7. Module层次引用：文件夹级别、深层文件夹、类级别、函数级别
+8. 边界条件：参数类型、混合引用、无导入检测
 """
 import sys
 import os
@@ -20,6 +22,132 @@ from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 from utils.ibc_analyzer.ibc_symbol_ref_resolver import SymbolRefResolver
 from utils.issue_recorder import IbcIssueRecorder
 from typedef.cmd_data_types import Colors
+
+
+# ===========================
+# 测试辅助函数
+# ===========================
+
+def run_test(
+    test_name: str,
+    ibc_content: str,
+    symbols_tree: dict = None,
+    symbols_metadata: dict = None,
+    proj_root_dict: dict = None,
+    dependent_relation: dict = None,
+    current_file_path: str = "src/test",
+    include_local_symbols: bool = True,
+    expected_issues: int = 0,
+    expected_issue_keywords: list = None
+) -> bool:
+    """运行单个测试用例
+    
+    Args:
+        test_name: 测试名称
+        ibc_content: IBC代码内容
+        symbols_tree: 外部可见符号树
+        symbols_metadata: 外部符号元数据
+        proj_root_dict: 项目根目录字典
+        dependent_relation: 依赖关系
+        current_file_path: 当前文件路径
+        include_local_symbols: 是否包含本地符号
+        expected_issues: 预期的问题数量
+        expected_issue_keywords: 预期问题消息中包含的关键词列表
+    
+    Returns:
+        bool: 测试是否通过
+    """
+    print(f"\n{Colors.OKBLUE}{'='*60}{Colors.ENDC}")
+    print(f"{Colors.OKBLUE}测试: {test_name}{Colors.ENDC}")
+    print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
+    
+    if symbols_tree is None:
+        symbols_tree = {}
+    if symbols_metadata is None:
+        symbols_metadata = {}
+    if proj_root_dict is None:
+        proj_root_dict = {"src": {"test": "测试模块"}}
+    if dependent_relation is None:
+        dependent_relation = {current_file_path: []}
+    
+    # 解析IBC代码
+    issue_recorder = IbcIssueRecorder()
+    ast_dict, local_symbols_tree, local_symbols_metadata = analyze_ibc_content(ibc_content, issue_recorder)
+    
+    if not ast_dict:
+        print(f"{Colors.FAIL}IBC代码解析失败{Colors.ENDC}")
+        return False
+    
+    # 构建可见符号树
+    builder = VisibleSymbolBuilder(proj_root_dict)
+    
+    # 准备依赖符号表
+    dependency_symbol_tables = {}
+    for dep_path in dependent_relation.get(current_file_path, []):
+        dep_key = dep_path.replace('/', '.')
+        if dep_key in symbols_tree or any(k.startswith(dep_key) for k in symbols_metadata):
+            # 添加每个匹配的依赖，不要break
+            dependency_symbol_tables[dep_path] = (symbols_tree, symbols_metadata)
+    
+    if dependency_symbol_tables:
+        visible_symbols_tree, visible_symbols_metadata = builder.build_visible_symbol_tree(
+            current_file_path=current_file_path,
+            dependency_symbol_tables=dependency_symbol_tables,
+            include_local_symbols=include_local_symbols,
+            local_symbols_tree=local_symbols_tree if include_local_symbols else None,
+            local_symbols_metadata=local_symbols_metadata if include_local_symbols else None
+        )
+    else:
+        visible_symbols_tree, visible_symbols_metadata = builder.build_visible_symbol_tree(
+            current_file_path=current_file_path,
+            dependency_symbol_tables={},
+            include_local_symbols=include_local_symbols,
+            local_symbols_tree=local_symbols_tree if include_local_symbols else None,
+            local_symbols_metadata=local_symbols_metadata if include_local_symbols else None
+        )
+    
+    # 创建解析器
+    issue_recorder.clear()
+    resolver = SymbolRefResolver(
+        ast_dict=ast_dict,
+        symbols_tree=visible_symbols_tree,
+        symbols_metadata=visible_symbols_metadata,
+        ibc_issue_recorder=issue_recorder,
+        proj_root_dict=proj_root_dict,
+        dependent_relation=dependent_relation,
+        current_file_path=current_file_path
+    )
+    
+    # 解析所有引用
+    resolver.resolve_all_references()
+    
+    # 检查结果
+    issues = issue_recorder.get_issues()
+    actual_issues = len(issues)
+    
+    print(f"  预期问题数: {expected_issues}")
+    print(f"  实际问题数: {actual_issues}")
+    
+    if issues:
+        print(f"  问题列表:")
+        for issue in issues:
+            print(f"    - {issue.message}")
+    
+    # 验证问题数量
+    if actual_issues != expected_issues:
+        print(f"{Colors.FAIL}✗ 测试失败: 问题数量不匹配{Colors.ENDC}")
+        return False
+    
+    # 验证问题关键词
+    if expected_issue_keywords:
+        for keyword in expected_issue_keywords:
+            found = any(keyword in issue.message for issue in issues)
+            if not found:
+                print(f"{Colors.FAIL}✗ 测试失败: 未找到预期的关键词 '{keyword}'{Colors.ENDC}")
+                return False
+    
+    print(f"{Colors.OKGREEN}✓ 测试通过{Colors.ENDC}")
+    return True
 
 
 # ===========================
@@ -121,11 +249,7 @@ def test_local_symbol_priority():
 # ===========================
 
 def test_external_reference_multi_modules():
-    """测试2.1: 外部符号引用（单模块和多模块）"""
-    print(f"\n{Colors.OKBLUE}{'='*60}{Colors.ENDC}")
-    print(f"{Colors.OKBLUE}测试2.1: 外部符号引用（多模块）{Colors.ENDC}")
-    print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
-    
+    """测试2.1: 外部符号引用（多模块）"""
     ibc_content = """module src.ball.ball_entity: 球体实体模块
 module src.shape.shape_base: 形状基类模块
 
@@ -157,150 +281,49 @@ class TestClass():
     
     proj_root_dict = {
         "src": {
-            "ball": {
-                "ball_entity": "球体实体文件"
-            },
-            "shape": {
-                "shape_base": "形状基类文件"
-            }
+            "ball": {"ball_entity": "球体实体文件"},
+            "shape": {"shape_base": "形状基类文件"}
         }
     }
     
-    dependent_relation = {"src/test": ["src/ball/ball_entity", "src/shape/shape_base"]}
-    
-    issue_recorder = IbcIssueRecorder()
-    ast_dict, _, _ = analyze_ibc_content(ibc_content, issue_recorder)
-    
-    if not ast_dict:
-        print(f"{Colors.FAIL}AST解析失败{Colors.ENDC}")
-        return False
-    
-    resolver = SymbolRefResolver(
-        ast_dict=ast_dict,
+    return run_test(
+        test_name="2.1 外部符号引用（多模块）",
+        ibc_content=ibc_content,
         symbols_tree=symbols_tree,
         symbols_metadata=symbols_metadata,
-        ibc_issue_recorder=issue_recorder,
         proj_root_dict=proj_root_dict,
-        dependent_relation=dependent_relation,
-        current_file_path="src/test"
+        dependent_relation={"src/test": ["src/ball/ball_entity", "src/shape/shape_base"]},
+        expected_issues=0
     )
-    
-    resolver.resolve_all_references()
-    
-    if issue_recorder.has_issues():
-        print(f"{Colors.FAIL}测试失败: 多模块引用不应该报错{Colors.ENDC}")
-        for issue in issue_recorder.get_issues():
-            print(f"  - {issue.message}")
-        return False
-    
-    print(f"{Colors.OKGREEN}✓ 测试通过{Colors.ENDC}")
-    return True
 
 
-def test_module_not_found_and_invalid_format():
-    """测试2.2: 模块未找到检测和无效引用格式"""
-    print(f"\n{Colors.OKBLUE}{'='*60}{Colors.ENDC}")
-    print(f"{Colors.OKBLUE}测试2.2: 模块未找到和无效格式{Colors.ENDC}")
-    print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
-    
+def test_module_not_found():
+    """测试2.2: 模块未找到检测"""
     ibc_content = """module src.ball.ball_entity: 球体实体模块
 
 description: 测试类
 class TestClass():
-    var shape: 七边形实例，类型为 $heptagon_shape.HeptagonShape
+    var shape: 形状，类型为 $heptagon_shape.HeptagonShape
 """
-    
-    symbols_tree = {
-        "src": {
-            "ball": {
-                "ball_entity": {
-                    "BallEntity": {}
-                }
-            }
-        }
-    }
-    
-    symbols_metadata = {
-        "src.ball.ball_entity.BallEntity": {"type": "class", "visibility": "public"}
-    }
     
     proj_root_dict = {
         "src": {
-            "ball": {
-                "ball_entity": "球体实体文件"
-            },
-            "heptagon": {
-                "heptagon_shape": "七边形文件"
-            }
+            "ball": {"ball_entity": "球体实体文件"},
+            "heptagon": {"heptagon_shape": "七边形文件"}
         }
     }
     
-    dependent_relation = {
-        "src/test": ["src/ball/ball_entity"],
-        "src/other": ["src/heptagon/heptagon_shape"]
-    }
-    
-    issue_recorder = IbcIssueRecorder()
-    ast_dict, _, _ = analyze_ibc_content(ibc_content, issue_recorder)
-    
-    if not ast_dict:
-        print(f"{Colors.FAIL}AST解析失败{Colors.ENDC}")
-        return False
-    
-    resolver = SymbolRefResolver(
-        ast_dict=ast_dict,
-        symbols_tree=symbols_tree,
-        symbols_metadata=symbols_metadata,
-        ibc_issue_recorder=issue_recorder,
+    return run_test(
+        test_name="2.2 模块未找到检测",
+        ibc_content=ibc_content,
         proj_root_dict=proj_root_dict,
-        dependent_relation=dependent_relation,
-        current_file_path="src/test"
+        expected_issues=1,
+        expected_issue_keywords=["heptagon_shape"]
     )
-    
-    resolver.resolve_all_references()
-    
-    if not issue_recorder.has_issues():
-        print(f"{Colors.FAIL}测试失败: 应该检测到模块未找到{Colors.ENDC}")
-        return False
-    
-    # 场景2: 无效引用格式
-    ibc_content2 = """module src.ball.ball_entity: 球体实体模块
-
-description: 测试类
-class TestClass():
-    var invalid: 无效引用，类型为 $BallEntity
-"""
-    
-    issue_recorder2 = IbcIssueRecorder()
-    ast_dict2, _, _ = analyze_ibc_content(ibc_content2, issue_recorder2)
-    
-    if ast_dict2:
-        resolver2 = SymbolRefResolver(
-            ast_dict=ast_dict2,
-            symbols_tree=symbols_tree,
-            symbols_metadata=symbols_metadata,
-            ibc_issue_recorder=issue_recorder2,
-            proj_root_dict=proj_root_dict,
-            dependent_relation=dependent_relation,
-            current_file_path="src/test"
-        )
-        resolver2.resolve_all_references()
-        
-        if not issue_recorder2.has_issues():
-            print(f"{Colors.FAIL}测试失败: 应该检测到引用格式错误{Colors.ENDC}")
-            return False
-    
-    print(f"{Colors.OKGREEN}✓ 测试通过{Colors.ENDC}")
-    return True
 
 
 def test_external_library_reference():
-    """测试2.3: 外部库引用和无导入检测"""
-    print(f"\n{Colors.OKBLUE}{'='*60}{Colors.ENDC}")
-    print(f"{Colors.OKBLUE}测试2.3: 外部库引用和无导入检测{Colors.ENDC}")
-    print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
-    
-    # 场景1: 外部库引用
+    """测试2.3: 外部库引用"""
     ibc_content = """module numpy: 数值计算库
 
 description: 测试类
@@ -314,78 +337,45 @@ class TestClass():
         }
     }
     
-    issue_recorder = IbcIssueRecorder()
-    ast_dict, _, _ = analyze_ibc_content(ibc_content, issue_recorder)
-    
-    if not ast_dict:
-        print(f"{Colors.FAIL}AST解析失败{Colors.ENDC}")
-        return False
-    
-    resolver = SymbolRefResolver(
-        ast_dict=ast_dict,
-        symbols_tree={},
-        symbols_metadata={},
-        ibc_issue_recorder=issue_recorder,
+    return run_test(
+        test_name="2.3 外部库引用",
+        ibc_content=ibc_content,
         proj_root_dict=proj_root_dict,
-        dependent_relation={"src/test": []},
-        current_file_path="src/test"
+        expected_issues=0
     )
-    
-    resolver.resolve_all_references()
-    
-    if issue_recorder.has_issues():
-        print(f"{Colors.FAIL}测试失败: 外部库引用不应该报错{Colors.ENDC}")
-        return False
-    
-    # 场景2: 没有模块导入的情况
-    ibc_content2 = """description: 测试类
+
+
+def test_no_import_reference():
+    """测试2.4: 无导入时的引用检测"""
+    ibc_content = """description: 测试类
 class TestClass():
     var data: 数据，类型为 $ball_entity.BallEntity
 """
     
-    proj_root_dict2 = {
+    proj_root_dict = {
         "src": {
-            "ball": {
-                "ball_entity": "球体实体文件"
-            }
+            "ball": {"ball_entity": "球体实体文件"}
         }
     }
     
-    issue_recorder2 = IbcIssueRecorder()
-    ast_dict2, _, _ = analyze_ibc_content(ibc_content2, issue_recorder2)
-    
-    if ast_dict2:
-        resolver2 = SymbolRefResolver(
-            ast_dict=ast_dict2,
-            symbols_tree={},
-            symbols_metadata={},
-            ibc_issue_recorder=issue_recorder2,
-            proj_root_dict=proj_root_dict2,
-            dependent_relation={"src/test": []},
-            current_file_path="src/test"
-        )
-        resolver2.resolve_all_references()
-        
-        if not issue_recorder2.has_issues():
-            print(f"{Colors.FAIL}测试失败: 应该检测到模块未导入{Colors.ENDC}")
-            return False
-    
-    print(f"{Colors.OKGREEN}✓ 测试通过{Colors.ENDC}")
-    return True
+    return run_test(
+        test_name="2.4 无导入时的引用检测",
+        ibc_content=ibc_content,
+        proj_root_dict=proj_root_dict,
+        expected_issues=1,
+        expected_issue_keywords=["ball_entity"]
+    )
 
 
 # ===========================
 # 3. self引用验证测试
 # ===========================
 
-def test_self_reference_valid_and_invalid():
-    """测试3.1: class中self引用（正确和错误场景）"""
-    print(f"\n{Colors.OKBLUE}{'='*60}{Colors.ENDC}")
-    print(f"{Colors.OKBLUE}测试3.1: self引用（正确/错误）{Colors.ENDC}")
-    print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
-    
-    # 场景1: 正确self引用
-    ibc_content1 = """description: 测试类
+def test_self_reference_valid():
+    """测试3.1: 有效的self引用"""
+    ibc_content = """
+description: self引用测试
+
 class TestClass():
     var internal_data: 内部数据
     var ball: 球体对象
@@ -394,66 +384,37 @@ class TestClass():
         数据 = self.internal_data
         结果 = self.ball.get_position()
 """
-    
-    issue_recorder1 = IbcIssueRecorder()
-    ast_dict1, _, _ = analyze_ibc_content(ibc_content1, issue_recorder1)
-    
-    if ast_dict1:
-        resolver1 = SymbolRefResolver(
-            ast_dict=ast_dict1,
-            symbols_tree={},
-            symbols_metadata={},
-            ibc_issue_recorder=issue_recorder1,
-            proj_root_dict={},
-            dependent_relation={"src/test": []},
-            current_file_path="src/test"
-        )
-        resolver1.resolve_all_references()
-        
-        if issue_recorder1.has_issues():
-            print(f"{Colors.FAIL}测试失败: 正确self引用不应该报错{Colors.ENDC}")
-            return False
-    
-    # 场景2: 错误的self引用
-    ibc_content2 = """description: 测试类
+    return run_test(
+        test_name="3.1 有效的self引用",
+        ibc_content=ibc_content,
+        expected_issues=0
+    )
+
+
+def test_self_reference_invalid():
+    """测试3.2: 无效的self引用"""
+    ibc_content = """
+description: 无效self引用测试
+
 class TestClass():
     var internal_data: 内部数据
     
     func test_method():
-        # invalid_var在类中未定义
-        数据 = self.invalid_var
+        数据 = self.nonexistent_var
 """
-    
-    issue_recorder2 = IbcIssueRecorder()
-    ast_dict2, _, _ = analyze_ibc_content(ibc_content2, issue_recorder2)
-    
-    if ast_dict2:
-        resolver2 = SymbolRefResolver(
-            ast_dict=ast_dict2,
-            symbols_tree={},
-            symbols_metadata={},
-            ibc_issue_recorder=issue_recorder2,
-            proj_root_dict={},
-            dependent_relation={"src/test": []},
-            current_file_path="src/test"
-        )
-        resolver2.resolve_all_references()
-        
-        if not issue_recorder2.has_issues():
-            print(f"{Colors.FAIL}测试失败: 应该检测到self引用错误{Colors.ENDC}")
-            return False
-    
-    print(f"{Colors.OKGREEN}✓ 测试通过{Colors.ENDC}")
-    return True
+    return run_test(
+        test_name="3.2 无效的self引用",
+        ibc_content=ibc_content,
+        expected_issues=1,
+        expected_issue_keywords=["nonexistent_var"]
+    )
 
 
-def test_scope_visibility():
-    """测试3.2: 作用域可见性（局部变量作用域隔离）"""
-    print(f"\n{Colors.OKBLUE}{'='*60}{Colors.ENDC}")
-    print(f"{Colors.OKBLUE}测试3.2: 作用域可见性{Colors.ENDC}")
-    print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
-    
-    ibc_content = """description: 测试类
+def test_scope_visibility_across_methods():
+    """测试3.3: 跨方法的作用域可见性"""
+    ibc_content = """
+description: 作用域可见性测试
+
 class TestClass():
     var class_var: 类变量
     
@@ -464,46 +425,14 @@ class TestClass():
         数据3 = self.local_var_a
     
     func method_b():
-        # 不应该能访问method_a的局部变量
         数据 = self.local_var_a
 """
-    
-    symbols_tree = {}
-    symbols_metadata = {}
-    proj_root_dict = {}
-    dependent_relation = {"src/test": []}
-    
-    issue_recorder = IbcIssueRecorder()
-    ast_dict, _, _ = analyze_ibc_content(ibc_content, issue_recorder)
-    
-    if not ast_dict:
-        print(f"{Colors.FAIL}AST解析失败{Colors.ENDC}")
-        return False
-    
-    resolver = SymbolRefResolver(
-        ast_dict=ast_dict,
-        symbols_tree=symbols_tree,
-        symbols_metadata=symbols_metadata,
-        ibc_issue_recorder=issue_recorder,
-        proj_root_dict=proj_root_dict,
-        dependent_relation=dependent_relation,
-        current_file_path="src/test"
+    return run_test(
+        test_name="3.3 跨方法作用域可见性",
+        ibc_content=ibc_content,
+        expected_issues=1,
+        expected_issue_keywords=["local_var_a"]
     )
-    
-    resolver.resolve_all_references()
-    
-    if issue_recorder.has_issues():
-        issues = issue_recorder.get_issues()
-        has_local_var_error = any("local_var_a" in issue.message for issue in issues)
-        if has_local_var_error:
-            print(f"{Colors.OKGREEN}✓ 测试通过: 正确检测到跨作用域访问错误{Colors.ENDC}")
-            return True
-        else:
-            print(f"{Colors.FAIL}测试失败: 未检测到local_var_a的作用域错误{Colors.ENDC}")
-            return False
-    else:
-        print(f"{Colors.FAIL}测试失败: 应该检测到作用域访问错误{Colors.ENDC}")
-        return False
 
 
 # ===========================
@@ -512,63 +441,22 @@ class TestClass():
 
 def test_local_symbol_dollar_reference():
     """测试4.1: 本地符号的$引用"""
-    print(f"\n{Colors.OKBLUE}{'='*60}{Colors.ENDC}")
-    print(f"{Colors.OKBLUE}测试4.1: 本地符号的$引用{Colors.ENDC}")
-    print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
-    
     ibc_content = """
-description: 测试本地符号引用
+description: 本地符号引用测试
 
 class Ball():
-    var position_x: float
-    var position_y: float
+    var position_x: 横坐标
+    var position_y: 纵坐标
     
     func update_position(delta_x: float, delta_y: float):
         新x = $Ball.position_x + delta_x
         新y = $Ball.position_y + delta_y
 """
-    
-    issue_recorder = IbcIssueRecorder()
-    ast_dict, symbols_tree, symbols_metadata = analyze_ibc_content(ibc_content, issue_recorder)
-    
-    if not ast_dict:
-        print(f"{Colors.FAIL}IBC代码解析失败{Colors.ENDC}")
-        return False
-    
-    # 构建包含本地符号的可见符号树
-    proj_root_dict = {"src": {"test": "测试模块"}}
-    builder = VisibleSymbolBuilder(proj_root_dict)
-    
-    visible_symbols_tree, visible_symbols_metadata = builder.build_visible_symbol_tree(
-        current_file_path="src/test",
-        dependency_symbol_tables={},
-        include_local_symbols=True,
-        local_symbols_tree=symbols_tree,
-        local_symbols_metadata=symbols_metadata
+    return run_test(
+        test_name="4.1 本地符号$引用",
+        ibc_content=ibc_content,
+        expected_issues=0
     )
-    
-    # 验证符号引用
-    issue_recorder.clear()
-    ref_resolver = SymbolRefResolver(
-        ast_dict=ast_dict,
-        symbols_tree=visible_symbols_tree,
-        symbols_metadata=visible_symbols_metadata,
-        ibc_issue_recorder=issue_recorder,
-        proj_root_dict=proj_root_dict,
-        dependent_relation={},
-        current_file_path="src/test"
-    )
-    ref_resolver.resolve_all_references()
-    
-    issues = issue_recorder.get_issues()
-    if issues:
-        print(f"{Colors.FAIL}测试失败: 本地符号$引用不应该报错{Colors.ENDC}")
-        for issue in issues:
-            print(f"  - {issue.message}")
-        return False
-    
-    print(f"{Colors.OKGREEN}✓ 测试通过{Colors.ENDC}")
-    return True
 
 
 def test_local_symbol_reference_before_after():
@@ -655,15 +543,481 @@ class Ball():
 
 
 # ===========================
-# 5. 边界条件和错误处理测试
+# 5. 符号自引用测试
 # ===========================
 
-def test_mixed_external_internal_and_params():
-    """测试5.1: 混合引用（外部+内部+参数类型）"""
-    print(f"\n{Colors.OKBLUE}{'='*60}{Colors.ENDC}")
-    print(f"{Colors.OKBLUE}测试5.1: 混合引用{Colors.ENDC}")
-    print(f"{Colors.OKBLUE}{'='*60}{Colors.ENDC}\n")
+def test_recursive_function_with_dollar_reference():
+    """测试5.1: 函数递归调用（$单个符号名引用）"""
+    ibc_content = """
+description: 递归函数测试
+
+class MathUtils():
+    func factorial(n: int):
+        如果 n <= 1:
+            返回 1
+        否则:
+            返回 n * $factorial(n - 1)
     
+    func fibonacci(n: int):
+        如果 n <= 1:
+            返回 n
+        否则:
+            返回 $fibonacci(n - 1) + $fibonacci(n - 2)
+"""
+    return run_test(
+        test_name="5.1 函数递归调用（$引用）",
+        ibc_content=ibc_content,
+        expected_issues=0
+    )
+
+
+def test_class_method_self_recursive():
+    """测试5.2: 类方法self递归调用"""
+    ibc_content = """
+description: 类方法递归调用测试
+
+class TreeNode():
+    var value: 节点值
+    var left: 左子节点
+    var right: 右子节点
+    
+    func calculate_height():
+        如果 self.left 为空 且 self.right 为空:
+            返回 1
+        否则:
+            左高度 = self.left.calculate_height()
+            右高度 = self.right.calculate_height()
+            返回 1 + max(左高度, 右高度)
+"""
+    return run_test(
+        test_name="5.2 类方法self递归调用",
+        ibc_content=ibc_content,
+        expected_issues=0
+    )
+
+
+def test_class_self_reference_with_dollar():
+    """测试5.3: 类中使用$引用访问自身的方法和属性"""
+    ibc_content = """
+description: 类中使用$引用自身
+
+class Calculator():
+    var result: 计算结果
+    var history: 历史记录列表
+    
+    func add(a: float, b: float):
+        self.result = a + b
+        调用 $Calculator.save_to_history(self.result)
+        返回 self.result
+    
+    func save_to_history(value: float):
+        将 value 添加到 self.history
+    
+    func get_result():
+        返回 $Calculator.result
+"""
+    return run_test(
+        test_name="5.3 类中$引用自身成员",
+        ibc_content=ibc_content,
+        expected_issues=0
+    )
+
+
+def test_local_var_dollar_reference():
+    """测试5.4: 函数局部变量的$引用"""
+    ibc_content = """
+description: 局部变量引用测试
+
+class DataProcessor():
+    func process_data(input_data: 输入数据):
+        var temp_result: 临时结果
+        var final_result: 最终结果
+        
+        temp_result = 处理(input_data)
+        final_result = 转换($temp_result)
+        返回 $final_result
+"""
+    return run_test(
+        test_name="5.4 函数局部变量$引用",
+        ibc_content=ibc_content,
+        expected_issues=0
+    )
+
+
+def test_single_symbol_ambiguity():
+    """测试5.5: 单个符号引用的歧义性处理"""
+    ibc_content = """
+description: 符号歧义性测试
+
+class ClassA():
+    func process():
+        执行 A 的处理
+
+class ClassB():
+    func process():
+        调用 $process()
+        执行 B 的处理
+"""
+    return run_test(
+        test_name="5.5 单符号引用歧义性",
+        ibc_content=ibc_content,
+        expected_issues=0
+    )
+
+
+# ===========================
+# 6. 作用域隔离测试
+# ===========================
+
+def test_private_member_access_same_class():
+    """测试6.1: 同一类内访问private成员（应该允许）"""
+    ibc_content = """
+description: private成员访问测试
+
+class DataProcessor():
+    private
+    var _cache: 内部缓存
+    
+    func _validate(data: 数据):
+        返回 验证结果
+    
+    public
+    func process(data: 数据):
+        验证 = self._validate(data)
+        缓存 = self._cache
+        返回 处理结果
+"""
+    return run_test(
+        test_name="6.1 同一类内访问private成员",
+        ibc_content=ibc_content,
+        expected_issues=0
+    )
+
+
+# ===========================
+# 7. Module层次引用测试
+# ===========================
+
+def test_module_folder_level_import():
+    """测试7.1: 文件夹级别的module引入"""
+    ibc_content = """module src.ball: 球体模块文件夹
+
+description: 测试文件夹级别引用
+class TestClass():
+    var entity: 球体实体，类型为 $ball.ball_entity.BallEntity
+"""
+    
+    symbols_tree = {
+        "src": {
+            "ball": {
+                "ball_entity": {
+                    "BallEntity": {"get_position": {}}
+                },
+                "ball_physics": {
+                    "BallPhysics": {}
+                }
+            }
+        }
+    }
+    
+    symbols_metadata = {
+        "src.ball": {"type": "folder", "visibility": "public"},
+        "src.ball.ball_entity": {"type": "file", "visibility": "public"},
+        "src.ball.ball_entity.BallEntity": {"type": "class", "visibility": "public"},
+        "src.ball.ball_entity.BallEntity.get_position": {"type": "func", "visibility": "public"},
+        "src.ball.ball_physics": {"type": "file", "visibility": "public"},
+        "src.ball.ball_physics.BallPhysics": {"type": "class", "visibility": "public"}
+    }
+    
+    proj_root_dict = {
+        "src": {
+            "ball": {
+                "ball_entity": "球体实体文件",
+                "ball_physics": "球体物理文件"
+            }
+        }
+    }
+    
+    return run_test(
+        test_name="7.1 文件夹级别module引入",
+        ibc_content=ibc_content,
+        symbols_tree=symbols_tree,
+        symbols_metadata=symbols_metadata,
+        proj_root_dict=proj_root_dict,
+        dependent_relation={"src/test": ["src/ball"]},
+        expected_issues=0
+    )
+
+
+def test_module_deep_folder_import():
+    """测试7.2: 深层文件夹结构的module引入"""
+    ibc_content = """module src.engine.physics: 物理引擎核心模块
+
+description: 测试深层文件夹引用
+class TestClass():
+    var core: 物理核心，类型为 $physics.core.PhysicsCore
+    var collision: 碰撞检测器，类型为 $physics.collision.detector.CollisionDetector
+"""
+    
+    symbols_tree = {
+        "src": {
+            "engine": {
+                "physics": {
+                    "core": {
+                        "PhysicsCore": {}
+                    },
+                    "collision": {
+                        "detector": {
+                            "CollisionDetector": {}
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    symbols_metadata = {
+        "src.engine.physics": {"type": "folder", "visibility": "public"},
+        "src.engine.physics.core": {"type": "file", "visibility": "public"},
+        "src.engine.physics.core.PhysicsCore": {"type": "class", "visibility": "public"},
+        "src.engine.physics.collision": {"type": "folder", "visibility": "public"},
+        "src.engine.physics.collision.detector": {"type": "file", "visibility": "public"},
+        "src.engine.physics.collision.detector.CollisionDetector": {"type": "class", "visibility": "public"}
+    }
+    
+    proj_root_dict = {
+        "src": {
+            "engine": {
+                "physics": {
+                    "core": "物理核心文件",
+                    "collision": {
+                        "detector": "碰撞检测器文件"
+                    }
+                }
+            }
+        }
+    }
+    
+    return run_test(
+        test_name="7.2 深层文件夹结构module引入",
+        ibc_content=ibc_content,
+        symbols_tree=symbols_tree,
+        symbols_metadata=symbols_metadata,
+        proj_root_dict=proj_root_dict,
+        dependent_relation={"src/test": ["src/engine/physics"]},
+        expected_issues=0
+    )
+
+
+def test_module_class_level_import():
+    """测试7.3: 类级别的module引入"""
+    ibc_content = """module src.ball.ball_entity.BallEntity: 球体实体类
+
+description: 测试类级别引用
+class TestClass():
+    var entity: 球体实例，类型为 $BallEntity
+    
+    func get_ball_position():
+        位置 = $BallEntity.get_position()
+        返回 位置
+"""
+    
+    symbols_tree = {
+        "src": {
+            "ball": {
+                "ball_entity": {
+                    "BallEntity": {
+                        "get_position": {},
+                        "set_position": {}
+                    }
+                }
+            }
+        }
+    }
+    
+    symbols_metadata = {
+        "src.ball.ball_entity": {"type": "file", "visibility": "public"},
+        "src.ball.ball_entity.BallEntity": {"type": "class", "visibility": "public"},
+        "src.ball.ball_entity.BallEntity.get_position": {"type": "func", "visibility": "public"},
+        "src.ball.ball_entity.BallEntity.set_position": {"type": "func", "visibility": "public"}
+    }
+    
+    proj_root_dict = {
+        "src": {
+            "ball": {
+                "ball_entity": "球体实体文件"
+            }
+        }
+    }
+    
+    return run_test(
+        test_name="7.3 类级别module引入",
+        ibc_content=ibc_content,
+        symbols_tree=symbols_tree,
+        symbols_metadata=symbols_metadata,
+        proj_root_dict=proj_root_dict,
+        dependent_relation={"src/test": ["src/ball/ball_entity"]},
+        expected_issues=0
+    )
+
+
+def test_module_function_level_import():
+    """测试7.4: 函数级别的module引入"""
+    ibc_content = """module src.utils.math_helper.calculate_distance: 距离计算函数
+
+description: 测试函数级别引用
+class TestClass():
+    func test_distance():
+        距离 = $calculate_distance(点A, 点B)
+        返回 距离
+"""
+    
+    symbols_tree = {
+        "src": {
+            "utils": {
+                "math_helper": {
+                    "calculate_distance": {},
+                    "calculate_angle": {}
+                }
+            }
+        }
+    }
+    
+    symbols_metadata = {
+        "src.utils.math_helper": {"type": "file", "visibility": "public"},
+        "src.utils.math_helper.calculate_distance": {"type": "func", "visibility": "public"},
+        "src.utils.math_helper.calculate_angle": {"type": "func", "visibility": "public"}
+    }
+    
+    proj_root_dict = {
+        "src": {
+            "utils": {
+                "math_helper": "数学辅助函数文件"
+            }
+        }
+    }
+    
+    return run_test(
+        test_name="7.4 函数级别module引入",
+        ibc_content=ibc_content,
+        symbols_tree=symbols_tree,
+        symbols_metadata=symbols_metadata,
+        proj_root_dict=proj_root_dict,
+        dependent_relation={"src/test": ["src/utils/math_helper"]},
+        expected_issues=0
+    )
+
+
+def test_module_multi_level_mixed():
+    """测试7.5: 多层级混合引入"""
+    ibc_content = """module src.engine: 引擎文件夹
+module src.ball.ball_entity.BallEntity: 球体类
+module numpy: 数值计算库
+
+description: 测试多层级混合引用
+class TestClass():
+    var ball: 球体实例，类型为 $BallEntity
+    var physics: 物理引擎，类型为 $engine.physics.PhysicsEngine
+    var data: 数据数组，类型为 $numpy.ndarray
+    
+    func process():
+        位置 = $BallEntity.get_position()
+        物理处理 = $engine.physics.PhysicsEngine.apply_force(self.ball)
+"""
+    
+    symbols_tree = {
+        "src": {
+            "engine": {
+                "physics": {
+                    "PhysicsEngine": {"apply_force": {}}
+                }
+            },
+            "ball": {
+                "ball_entity": {
+                    "BallEntity": {"get_position": {}}
+                }
+            }
+        }
+    }
+    
+    symbols_metadata = {
+        "src.engine": {"type": "folder", "visibility": "public"},
+        "src.engine.physics": {"type": "file", "visibility": "public"},
+        "src.engine.physics.PhysicsEngine": {"type": "class", "visibility": "public"},
+        "src.engine.physics.PhysicsEngine.apply_force": {"type": "func", "visibility": "public"},
+        "src.ball.ball_entity.BallEntity": {"type": "class", "visibility": "public"},
+        "src.ball.ball_entity.BallEntity.get_position": {"type": "func", "visibility": "public"}
+    }
+    
+    proj_root_dict = {
+        "ExternalLibraryDependencies": {"numpy": "数值计算库"},
+        "src": {
+            "engine": {"physics": "物理引擎文件"},
+            "ball": {"ball_entity": "球体实体文件"}
+        }
+    }
+    
+    return run_test(
+        test_name="7.5 多层级混合引入",
+        ibc_content=ibc_content,
+        symbols_tree=symbols_tree,
+        symbols_metadata=symbols_metadata,
+        proj_root_dict=proj_root_dict,
+        dependent_relation={"src/test": ["src/engine", "src/ball/ball_entity"]},
+        expected_issues=0
+    )
+
+
+def test_module_wrong_level_reference():
+    """测试7.6: 错误层级引用检测"""
+    # 引入的是文件夹级别，但尝试直接引用该文件夹下不存在的符号
+    ibc_content = """module src.ball: 球体模块文件夹
+
+description: 测试错误层级引用
+class TestClass():
+    var entity: 类型为 $ball.NonExistentClass
+"""
+    
+    symbols_tree = {
+        "src": {
+            "ball": {
+                "ball_entity": {
+                    "BallEntity": {}
+                }
+            }
+        }
+    }
+    
+    symbols_metadata = {
+        "src.ball": {"type": "folder", "visibility": "public"},
+        "src.ball.ball_entity": {"type": "file", "visibility": "public"},
+        "src.ball.ball_entity.BallEntity": {"type": "class", "visibility": "public"}
+    }
+    
+    proj_root_dict = {
+        "src": {
+            "ball": {"ball_entity": "球体实体文件"}
+        }
+    }
+    
+    return run_test(
+        test_name="7.6 错误层级引用检测",
+        ibc_content=ibc_content,
+        symbols_tree=symbols_tree,
+        symbols_metadata=symbols_metadata,
+        proj_root_dict=proj_root_dict,
+        dependent_relation={"src/test": ["src/ball"]},
+        expected_issues=1,
+        expected_issue_keywords=["NonExistentClass"]
+    )
+
+
+# ===========================
+# 8. 边界条件测试
+# ===========================
+
+def test_mixed_references():
+    """测试8.1: 混合引用（外部+本地+self）"""
     ibc_content = """module numpy: 数值计算库
 module src.ball.ball_entity: 球体实体模块
 
@@ -671,9 +1025,13 @@ description: 测试类
 class TestClass():
     var data: 数组，类型为 $numpy.ndarray
     var ball: 球体实例，类型为 $ball_entity.BallEntity
+    var local_cache: 本地缓存
     
-    func process_ball(球体参数: 球体对象，类型为 $ball_entity.BallEntity):
-        处理球体逻辑
+    func process_ball(球体参数: 球体对象):
+        数据 = self.data
+        球体 = self.ball
+        缓存 = self.local_cache
+        处理 $TestClass.local_cache
 """
     
     symbols_tree = {
@@ -691,51 +1049,31 @@ class TestClass():
     }
     
     proj_root_dict = {
-        "ExternalLibraryDependencies": {
-            "numpy": "数值计算库"
-        },
+        "ExternalLibraryDependencies": {"numpy": "数值计算库"},
         "src": {
-            "ball": {
-                "ball_entity": "球体实体文件"
-            }
+            "ball": {"ball_entity": "球体实体文件"}
         }
     }
     
-    dependent_relation = {"src/test": ["src/ball/ball_entity"]}
-    
-    issue_recorder = IbcIssueRecorder()
-    ast_dict, _, _ = analyze_ibc_content(ibc_content, issue_recorder)
-    
-    if not ast_dict:
-        print(f"{Colors.FAIL}AST解析失败{Colors.ENDC}")
-        return False
-    
-    resolver = SymbolRefResolver(
-        ast_dict=ast_dict,
+    return run_test(
+        test_name="8.1 混合引用",
+        ibc_content=ibc_content,
         symbols_tree=symbols_tree,
         symbols_metadata=symbols_metadata,
-        ibc_issue_recorder=issue_recorder,
         proj_root_dict=proj_root_dict,
-        dependent_relation=dependent_relation,
-        current_file_path="src/test"
+        dependent_relation={"src/test": ["src/ball/ball_entity"]},
+        expected_issues=0
     )
-    
-    resolver.resolve_all_references()
-    
-    if issue_recorder.has_issues():
-        print(f"{Colors.FAIL}测试失败: 混合引用不应该报错{Colors.ENDC}")
-        for issue in issue_recorder.get_issues():
-            print(f"  - {issue.message}")
-        return False
-    
-    print(f"{Colors.OKGREEN}✓ 测试通过{Colors.ENDC}")
-    return True
 
+
+# ===========================
+# 运行所有测试
+# ===========================
 
 def run_all_tests():
     """运行所有测试"""
     print(f"\n{Colors.OKBLUE}{'='*70}{Colors.ENDC}")
-    print(f"{Colors.OKBLUE}局部符号和符号引用解析器综合测试{Colors.ENDC}")
+    print(f"{Colors.OKBLUE}符号引用解析器综合测试{Colors.ENDC}")
     print(f"{Colors.OKBLUE}{'='*70}{Colors.ENDC}\n")
     
     test_results = []
@@ -753,28 +1091,57 @@ def run_all_tests():
         print(f"{Colors.OKBLUE}# 2. 外部符号引用测试（$引用）{Colors.ENDC}")
         print(f"{Colors.OKBLUE}{'#'*70}{Colors.ENDC}")
         test_results.append(("2.1 多模块引用", test_external_reference_multi_modules()))
-        test_results.append(("2.2 模块未找到和无效格式", test_module_not_found_and_invalid_format()))
-        test_results.append(("2.3 外部库引用和无导入", test_external_library_reference()))
+        test_results.append(("2.2 模块未找到检测", test_module_not_found()))
+        test_results.append(("2.3 外部库引用", test_external_library_reference()))
+        test_results.append(("2.4 无导入引用检测", test_no_import_reference()))
         
         # 3. self引用验证测试
         print(f"\n{Colors.OKBLUE}{'#'*70}{Colors.ENDC}")
         print(f"{Colors.OKBLUE}# 3. self引用验证测试{Colors.ENDC}")
         print(f"{Colors.OKBLUE}{'#'*70}{Colors.ENDC}")
-        test_results.append(("3.1 self引用（正确/错误）", test_self_reference_valid_and_invalid()))
-        test_results.append(("3.2 作用域可见性", test_scope_visibility()))
+        test_results.append(("3.1 有效self引用", test_self_reference_valid()))
+        test_results.append(("3.2 无效self引用", test_self_reference_invalid()))
+        test_results.append(("3.3 跨方法作用域可见性", test_scope_visibility_across_methods()))
         
         # 4. 本地符号的$引用测试
         print(f"\n{Colors.OKBLUE}{'#'*70}{Colors.ENDC}")
         print(f"{Colors.OKBLUE}# 4. 本地符号的$引用测试{Colors.ENDC}")
         print(f"{Colors.OKBLUE}{'#'*70}{Colors.ENDC}")
         test_results.append(("4.1 本地符号$引用", test_local_symbol_dollar_reference()))
-        test_results.append(("4.2 包含本地符号前后对比", test_local_symbol_reference_before_after()))
+        test_results.append(("4.2 本地符号前后对比", test_local_symbol_reference_before_after()))
         
-        # 5. 边界条件测试
+        # 5. 符号自引用测试
         print(f"\n{Colors.OKBLUE}{'#'*70}{Colors.ENDC}")
-        print(f"{Colors.OKBLUE}# 5. 边界条件和错误处理测试{Colors.ENDC}")
+        print(f"{Colors.OKBLUE}# 5. 符号自引用测试{Colors.ENDC}")
         print(f"{Colors.OKBLUE}{'#'*70}{Colors.ENDC}")
-        test_results.append(("5.1 混合引用", test_mixed_external_internal_and_params()))
+        test_results.append(("5.1 函数递归$引用", test_recursive_function_with_dollar_reference()))
+        test_results.append(("5.2 类方法self递归", test_class_method_self_recursive()))
+        test_results.append(("5.3 类$引用自身成员", test_class_self_reference_with_dollar()))
+        test_results.append(("5.4 局部变量$引用", test_local_var_dollar_reference()))
+        test_results.append(("5.5 单符号歧义性", test_single_symbol_ambiguity()))
+        
+        # 6. 作用域隔离测试
+        print(f"\n{Colors.OKBLUE}{'#'*70}{Colors.ENDC}")
+        print(f"{Colors.OKBLUE}# 6. 作用域隔离测试{Colors.ENDC}")
+        print(f"{Colors.OKBLUE}{'#'*70}{Colors.ENDC}")
+        test_results.append(("6.1 同类内访问private成员", test_private_member_access_same_class()))
+        
+        # 7. Module层次引用测试
+        print(f"\n{Colors.OKBLUE}{'#'*70}{Colors.ENDC}")
+        print(f"{Colors.OKBLUE}# 7. Module层次引用测试{Colors.ENDC}")
+        print(f"{Colors.OKBLUE}{'#'*70}{Colors.ENDC}")
+        test_results.append(("7.1 文件夹级别module引入", test_module_folder_level_import()))
+        test_results.append(("7.2 深层文件夹结构", test_module_deep_folder_import()))
+        test_results.append(("7.3 类级别module引入", test_module_class_level_import()))
+        test_results.append(("7.4 函数级别module引入", test_module_function_level_import()))
+        test_results.append(("7.5 多层级混合引入", test_module_multi_level_mixed()))
+        test_results.append(("7.6 错误层级引用检测", test_module_wrong_level_reference()))
+        
+        # 8. 边界条件测试
+        print(f"\n{Colors.OKBLUE}{'#'*70}{Colors.ENDC}")
+        print(f"{Colors.OKBLUE}# 8. 边界条件测试{Colors.ENDC}")
+        print(f"{Colors.OKBLUE}{'#'*70}{Colors.ENDC}")
+        test_results.append(("8.1 混合引用", test_mixed_references()))
         
         # 测试汇总
         print(f"\n{Colors.OKBLUE}{'='*70}{Colors.ENDC}")
