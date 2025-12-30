@@ -18,84 +18,96 @@
     "symbols_metadata": {
       "HeptagonShape": {
         "type": "class",
+        "description": "旋转七边形几何模型, 提供边界检测和几何计算功能",
         "visibility": "public",
-        "description": "旋转七边形几何模型, 提供边界检测和几何计算功能"
+        "__is_local__": false
       },
       "HeptagonShape.center": {
         "type": "var",
-        "visibility": "public",
         "description": "七边形中心坐标, 类型为 numpy.ndarray",
-        "scope": "field"
+        "visibility": "public",
+        "scope": "field",
+        "__is_local__": false
       },
       "HeptagonShape.radius": {
         "type": "var",
-        "visibility": "public",
         "description": "外接圆半径",
-        "scope": "field"
+        "visibility": "public",
+        "scope": "field",
+        "__is_local__": false
       },
       "HeptagonShape.angle": {
         "type": "var",
-        "visibility": "public",
         "description": "当前旋转角度",
-        "scope": "field"
+        "visibility": "public",
+        "scope": "field",
+        "__is_local__": false
       },
       "HeptagonShape.rotation_speed": {
         "type": "var",
-        "visibility": "public",
         "description": "每秒旋转角度, 固定为 72 度每秒(360度/5秒)",
-        "scope": "field"
+        "visibility": "public",
+        "scope": "field",
+        "__is_local__": false
       },
       "HeptagonShape.num_sides": {
         "type": "var",
-        "visibility": "public",
         "description": "边数, 固定为7",
-        "scope": "field"
+        "visibility": "public",
+        "scope": "field",
+        "__is_local__": false
       },
       "HeptagonShape.__init__": {
         "type": "func",
-        "visibility": "public",
         "description": "初始化七边形参数",
+        "visibility": "public",
         "parameters": {
           "中心坐标": "二维坐标点, 类型为 numpy.ndarray",
           "半径": "正数, 表示外接圆半径"
-        }
+        },
+        "__is_local__": false
       },
       "HeptagonShape.update_rotation": {
         "type": "func",
-        "visibility": "public",
         "description": "根据时间更新旋转角度",
+        "visibility": "public",
         "parameters": {
           "时间间隔": "浮点数, 表示两次更新之间的时间差"
-        }
+        },
+        "__is_local__": false
       },
       "HeptagonShape.get_vertices": {
         "type": "func",
+        "description": "计算并返回当前旋转角度下的七边形顶点坐标",
         "visibility": "public",
-        "description": "计算并返回当前旋转角度下的七边形顶点坐标"
+        "__is_local__": false
       },
       "HeptagonShape.is_point_inside": {
         "type": "func",
-        "visibility": "public",
         "description": "判断一个点是否位于七边形内部",
+        "visibility": "public",
         "parameters": {
           "测试点": "二维坐标点, 类型为 numpy.ndarray"
-        }
+        },
+        "__is_local__": false
       },
       "HeptagonShape.get_wall_normal": {
         "type": "func",
-        "visibility": "public",
         "description": "获取指定墙面的法向量用于碰撞响应计算",
+        "visibility": "public",
         "parameters": {
           "墙面索引": "整数, 表示第几个墙面"
-        }
+        },
+        "__is_local__": false
       },
       "HeptagonShape.distance_to_boundary": {
         "type": "func",
-        "visibility": "public",
         "description": "计算点到最近边界的距离",
+        "visibility": "public",
         "parameters": {
           "测试点": "二维坐标点, 类型为 numpy.ndarray"
-        }
+        },
+        "__is_local__": false
       }
     }
   }

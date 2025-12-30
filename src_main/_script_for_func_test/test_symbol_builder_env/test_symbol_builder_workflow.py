@@ -145,7 +145,20 @@ class SymbolBuilderWorkflowTest:
             
             # 获取元数据
             node_metadata = metadata.get(current_path, {})
-            node_type = node_metadata.get('type', 'unknown')
+            
+            # 处理SymbolMetadata对象和字典两种情况
+            if hasattr(node_metadata, 'to_dict'):
+                # SymbolMetadata对象，转换为字典
+                node_dict = node_metadata.to_dict()
+                node_type = node_dict.get('type', 'unknown')
+            elif isinstance(node_metadata, dict):
+                # 已经是字典
+                node_dict = node_metadata
+                node_type = node_dict.get('type', 'unknown')
+            else:
+                # 空或其他类型
+                node_dict = {}
+                node_type = 'unknown'
             
             if isinstance(value, dict):
                 if node_type == 'folder':
@@ -160,7 +173,7 @@ class SymbolBuilderWorkflowTest:
                         
                 elif node_type == 'file':
                     # 文件节点
-                    desc = node_metadata.get('description', '')
+                    desc = node_dict.get('description', '')
                     line = f"{indent}{key}/"
                     if desc:
                         line += f"  # {desc}"
@@ -174,9 +187,9 @@ class SymbolBuilderWorkflowTest:
                         
                 else:
                     # 符号节点（class, func, var）
-                    visibility = node_metadata.get('visibility', 'public')
-                    description = node_metadata.get('description', '')
-                    normalized_name = node_metadata.get('normalized_name', '')
+                    visibility = node_dict.get('visibility', 'public')
+                    description = node_dict.get('description', '')
+                    normalized_name = node_dict.get('normalized_name', '')
                     
                     line = f"{indent}{key} ({node_type}, {visibility})"
                     if normalized_name:
@@ -186,10 +199,10 @@ class SymbolBuilderWorkflowTest:
                     lines.append(line)
                     
                     # 如果是函数，显示参数
-                    if 'parameters' in node_metadata and node_metadata['parameters']:
+                    if 'parameters' in node_dict and node_dict['parameters']:
                         params_str = ", ".join(
                             f"{p_name}: {p_desc}" if p_desc else p_name
-                            for p_name, p_desc in node_metadata['parameters'].items()
+                            for p_name, p_desc in node_dict['parameters'].items()
                         )
                         lines.append(f"{indent}  参数: ({params_str})")
                     

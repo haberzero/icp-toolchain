@@ -10,24 +10,28 @@
     "symbols_metadata": {
       "TestPhysics": {
         "type": "class",
+        "description": "简化的物理引擎, 用于测试符号引用",
         "visibility": "public",
-        "description": "简化的物理引擎, 用于测试符号引用"
+        "__is_local__": false
       },
       "TestPhysics.ball": {
         "type": "var",
-        "visibility": "public",
         "description": "球体实例, 类型为 ball_entity.BallEntity",
-        "scope": "field"
+        "visibility": "public",
+        "scope": "field",
+        "__is_local__": false
       },
       "TestPhysics.shape": {
         "type": "var",
-        "visibility": "public",
         "description": "七边形实例, 类型为 heptagon_shape.HeptagonShape",
-        "scope": "field"
+        "visibility": "public",
+        "scope": "field",
+        "__is_local__": false
       },
       "TestPhysics.check_collision": {
         "type": "func",
-        "visibility": "public"
+        "visibility": "public",
+        "__is_local__": false
       }
     }
   }

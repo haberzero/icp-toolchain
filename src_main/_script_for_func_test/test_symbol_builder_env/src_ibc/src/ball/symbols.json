@@ -24,117 +24,135 @@
     "symbols_metadata": {
       "BallEntity": {
         "type": "class",
+        "description": "球体实体类, 管理单个球体的状态信息",
         "visibility": "public",
-        "description": "球体实体类, 管理单个球体的状态信息"
+        "__is_local__": false
       },
       "BallEntity._position": {
         "type": "var",
-        "visibility": "public",
         "description": "球体当前位置, 类型为 numpy.ndarray",
-        "scope": "field"
+        "visibility": "public",
+        "scope": "field",
+        "__is_local__": false
       },
       "BallEntity._velocity": {
         "type": "var",
-        "visibility": "public",
         "description": "球体当前速度向量, 类型为 numpy.ndarray",
-        "scope": "field"
+        "visibility": "public",
+        "scope": "field",
+        "__is_local__": false
       },
       "BallEntity._rotation": {
         "type": "var",
-        "visibility": "public",
         "description": "球体当前旋转角度",
-        "scope": "field"
+        "visibility": "public",
+        "scope": "field",
+        "__is_local__": false
       },
       "BallEntity._angular_velocity": {
         "type": "var",
-        "visibility": "public",
         "description": "球体自旋角速度",
-        "scope": "field"
+        "visibility": "public",
+        "scope": "field",
+        "__is_local__": false
       },
       "BallEntity._color": {
         "type": "var",
-        "visibility": "public",
         "description": "球体填充颜色值",
-        "scope": "field"
+        "visibility": "public",
+        "scope": "field",
+        "__is_local__": false
       },
       "BallEntity._number": {
         "type": "var",
-        "visibility": "public",
         "description": "球体编号, 用于标识不同球体",
-        "scope": "field"
+        "visibility": "public",
+        "scope": "field",
+        "__is_local__": false
       },
       "BallEntity._radius": {
         "type": "var",
-        "visibility": "public",
         "description": "球体半径, 用于碰撞检测和绘制",
-        "scope": "field"
+        "visibility": "public",
+        "scope": "field",
+        "__is_local__": false
       },
       "BallEntity.__init__": {
         "type": "func",
-        "visibility": "public",
         "description": "初始化球体实例",
+        "visibility": "public",
         "parameters": {
           "初始位置": "球体初始坐标位置",
           "颜色值": "球体颜色值",
           "编号": "球体编号"
-        }
+        },
+        "__is_local__": false
       },
       "BallEntity.update_position": {
         "type": "func",
-        "visibility": "public",
         "description": "根据当前速度更新球体的位置坐标",
+        "visibility": "public",
         "parameters": {
           "时间步长": "时间间隔"
-        }
+        },
+        "__is_local__": false
       },
       "BallEntity.update_rotation": {
         "type": "func",
-        "visibility": "public",
         "description": "更新球体的旋转角度, 反映自旋状态",
+        "visibility": "public",
         "parameters": {
           "时间步长": "时间间隔"
-        }
+        },
+        "__is_local__": false
       },
       "BallEntity.get_color": {
         "type": "func",
+        "description": "返回球体的颜色值用于渲染",
         "visibility": "public",
-        "description": "返回球体的颜色值用于渲染"
+        "__is_local__": false
       },
       "BallEntity.get_number": {
         "type": "func",
+        "description": "返回球体上的编号用于显示",
         "visibility": "public",
-        "description": "返回球体上的编号用于显示"
+        "__is_local__": false
       },
       "BallEntity.get_radius": {
         "type": "func",
+        "description": "返回球体的半径用于碰撞检测",
         "visibility": "public",
-        "description": "返回球体的半径用于碰撞检测"
+        "__is_local__": false
       },
       "BallEntity.get_center": {
         "type": "func",
+        "description": "获取球体中心点坐标用于碰撞判断",
         "visibility": "public",
-        "description": "获取球体中心点坐标用于碰撞判断"
+        "__is_local__": false
       },
       "BallEntity.apply_force": {
         "type": "func",
-        "visibility": "public",
         "description": "应用力到球体上, 影响其速度变化",
+        "visibility": "public",
         "parameters": {
           "力向量": "力的方向和大小"
-        }
+        },
+        "__is_local__": false
       },
       "BallEntity.set_velocity": {
         "type": "func",
-        "visibility": "public",
         "description": "设置球体的速度向量",
+        "visibility": "public",
         "parameters": {
           "速度向量": "新的速度向量"
-        }
+        },
+        "__is_local__": false
       },
       "BallEntity.get_velocity": {
         "type": "func",
+        "description": "获取球体当前速度向量",
         "visibility": "public",
-        "description": "获取球体当前速度向量"
+        "__is_local__": false
       }
     }
   }

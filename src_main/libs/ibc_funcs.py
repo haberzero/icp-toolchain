@@ -10,8 +10,21 @@ from typedef.ibc_data_types import (
     SymbolMetadata, ClassMetadata, FunctionMetadata, VariableMetadata, FolderMetadata, FileMetadata
 )
 
+# 导入新的辅助类
+from libs.symbol_path_helper import SymbolPathHelper
+from libs.symbol_metadata_helper import SymbolMetadataHelper
+from libs.symbol_replacer import SymbolReplacer
+
 class IbcFuncs:
-    """IBC代码处理相关的静态工具函数集合"""
+    """IBC代码处理相关的静态工具函数集合
+    
+    本类作为facade模式，为保持向后兼容，委托给专门的辅助类：
+    - SymbolPathHelper: 处理符号路径相关逻辑
+    - SymbolMetadataHelper: 处理符号元数据操作
+    - SymbolReplacer: 处理符号替换逻辑
+    
+    推荐直接使用辅助类以获得更清晰的代码结构。
+    """
     
     # ==================== MD5计算 ====================
     
@@ -31,23 +44,21 @@ class IbcFuncs:
     def calculate_symbols_metadata_md5(symbols_metadata: Dict[str, SymbolMetadata]) -> str:
         """计算符号元数据的MD5校验值
         
+        委托给SymbolMetadataHelper.calculate_metadata_md5
+        
         Args:
             symbols_metadata: 符号元数据字典
             
         Returns:
             str: MD5校验值
         """
-        try:
-            # 将SymbolMetadata对象转换为字典，然后转换为JSON字符串(排序键以确保一致性)
-            metadata_dict = {path: meta.to_dict() for path, meta in symbols_metadata.items()}
-            metadata_json = json.dumps(metadata_dict, sort_keys=True, ensure_ascii=False)
-            return IbcFuncs.calculate_text_md5(metadata_json)
-        except Exception as e:
-            raise RuntimeError(f"计算符号元数据MD5时发生错误: {e}") from e
+        return SymbolMetadataHelper.calculate_metadata_md5(symbols_metadata)
     
     @staticmethod
     def count_symbols_in_metadata(symbols_metadata: Dict[str, SymbolMetadata]) -> int:
         """统计符号元数据中的符号数量(排除文件夹和文件节点)
+        
+        委托给SymbolMetadataHelper.count_symbols
         
         Args:
             symbols_metadata: 符号元数据字典
@@ -55,12 +66,7 @@ class IbcFuncs:
         Returns:
             int: 符号数量
         """
-        count = 0
-        for meta in symbols_metadata.values():
-            # 只统计实际符号(class, func, var),不统计folder和file
-            if isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata)):
-                count += 1
-        return count
+        return SymbolMetadataHelper.count_symbols(symbols_metadata)
     
     # ==================== 符号验证 ====================
     
@@ -84,7 +90,7 @@ class IbcFuncs:
     ) -> List[str]:
         """构建可用依赖符号列表
         
-        从 symbols_metadata 中提取符号信息，并将完整路径简化为相对路径。
+        委托给SymbolMetadataHelper.build_available_symbol_list
         
         Args:
             symbols_metadata: 符号元数据字典，键为完整的点分隔路径（如 src.ball.ball_entity.BallEntity）
@@ -92,74 +98,16 @@ class IbcFuncs:
             
         Returns:
             List[str]: 符号列表，每个元素格式为 "$filename.symbol ：功能描述"
-            
-        示例：
-            输入: {"src.ball.ball_entity.BallEntity": {"type": "class", "description": "球体实体类"}}
-            输出: ["$ball_entity.BallEntity ：球体实体类"]
         """
-        available_symbol_lines = []
-        
-        for symbol_path, meta in symbols_metadata.items():
-            # 跳过文件夹和文件节点，只处理具体符号
-            if not isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata)):
-                continue
-            
-            desc = meta.description
-            if not desc:
-                desc = "没有对外功能描述"
-            
-            # 简化符号路径
-            simplified_path = IbcFuncs._simplify_symbol_path(symbol_path, proj_root_dict)
-            available_symbol_lines.append(f"${simplified_path} ：{desc}")
-        
-        return available_symbol_lines
+        return SymbolMetadataHelper.build_available_symbol_list(symbols_metadata, proj_root_dict)
     
     @staticmethod
     def _simplify_symbol_path(full_symbol_path: str, proj_root_dict: Dict[str, Any]) -> str:
-        """简化符号路径，移除路径前缀，只保留从文件名开始的部分
+        """简化符号路径（内部方法，保留以保持兼容性）
         
-        例如：
-        - 输入：src.ball.ball_entity.BallEntity.get_position
-        - 输出：ball_entity.BallEntity.get_position
-        
-        处理逻辑：
-        1. 分割路径为各个部分
-        2. 找到文件名部分（在 proj_root_dict 中是叶子节点）
-        3. 返回从文件名开始到结尾的路径
-        
-        Args:
-            full_symbol_path: 完整的符号路径（点分隔）
-            proj_root_dict: 项目根目录字典
-            
-        Returns:
-            str: 简化后的符号路径
+        委托给SymbolPathHelper.simplify_symbol_path
         """
-        parts = full_symbol_path.split('.')
-        
-        # 遍历proj_root_dict，找到文件名位置
-        # 例如：src.ball.ball_entity -> ball_entity 是文件名
-        current_dict = proj_root_dict
-        file_name_index = -1
-        
-        for i, part in enumerate(parts):
-            if isinstance(current_dict, dict) and part in current_dict:
-                next_value = current_dict[part]
-                # 如果下一个值是字符串，说明当前part是文件名
-                if isinstance(next_value, str):
-                    file_name_index = i
-                    break
-                # 否则继续向下查找
-                current_dict = next_value
-            else:
-                # 无法继续匹配，说明已经到了符号部分
-                break
-        
-        # 如果找到了文件名，从文件名开始返回路径
-        if file_name_index >= 0:
-            return '.'.join(parts[file_name_index:])
-        
-        # 如果没找到文件名（不应该发生），返回原路径
-        return full_symbol_path
+        return SymbolPathHelper.simplify_symbol_path(full_symbol_path, proj_root_dict)
     
     # ==================== 符号元数据更新 ====================
     
@@ -170,8 +118,7 @@ class IbcFuncs:
     ) -> int:
         """批量更新符号元数据中的 normalized_name
         
-        这是一个通用的批量更新工具方法，用于更新符号的规范化名称。
-        由于 dataclass 是不可变的，需要创建新实例来更新字段。
+        委托给SymbolMetadataHelper.update_normalized_names
         
         Args:
             symbols_metadata: 符号元数据字典（会被原地修改）
@@ -179,58 +126,8 @@ class IbcFuncs:
             
         Returns:
             int: 成功更新的符号数量
-            
-        Example:
-            >>> symbols_metadata = {"file.MyClass": ClassMetadata(...)}
-            >>> normalized_mapping = {"file.MyClass": "MyNormalizedClass"}
-            >>> count = IbcFuncs.update_symbols_normalized_names(symbols_metadata, normalized_mapping)
-            >>> print(count)  # 1
         """
-        updated_count = 0
-        
-        for symbol_key, normalized_name in normalized_mapping.items():
-            # 按照完整路径精确匹配
-            if symbol_key not in symbols_metadata:
-                continue
-                
-            meta = symbols_metadata[symbol_key]
-            
-            # 只更新实际符号（ClassMetadata, FunctionMetadata, VariableMetadata）
-            # 跳过 FolderMetadata 和 FileMetadata
-            if isinstance(meta, ClassMetadata):
-                symbols_metadata[symbol_key] = ClassMetadata(
-                    type=meta.type,
-                    description=meta.description,
-                    visibility=meta.visibility,
-                    normalized_name=normalized_name,
-                    __is_local__=meta.__is_local__,
-                    __local_file__=meta.__local_file__
-                )
-                updated_count += 1
-            elif isinstance(meta, FunctionMetadata):
-                symbols_metadata[symbol_key] = FunctionMetadata(
-                    type=meta.type,
-                    description=meta.description,
-                    visibility=meta.visibility,
-                    parameters=meta.parameters,
-                    normalized_name=normalized_name,
-                    __is_local__=meta.__is_local__,
-                    __local_file__=meta.__local_file__
-                )
-                updated_count += 1
-            elif isinstance(meta, VariableMetadata):
-                symbols_metadata[symbol_key] = VariableMetadata(
-                    type=meta.type,
-                    description=meta.description,
-                    visibility=meta.visibility,
-                    scope=meta.scope,
-                    normalized_name=normalized_name,
-                    __is_local__=meta.__is_local__,
-                    __local_file__=meta.__local_file__
-                )
-                updated_count += 1
-        
-        return updated_count
+        return SymbolMetadataHelper.update_normalized_names(symbols_metadata, normalized_mapping)
     
     # ==================== 符号替换 ====================
     
@@ -243,8 +140,7 @@ class IbcFuncs:
     ) -> str:
         """将IBC代码内容中的所有符号替换为规范化后的名称
         
-        该方法遍历AST，找到所有定义的符号（类名、函数名、变量名、参数名）和
-        所有符号引用（$引用），然后用规范化后的名称替换原始文本中的相应位置。
+        委托给SymbolReplacer.replace_symbols_with_normalized_names
         
         Args:
             ibc_content: IBC代码原始内容
@@ -255,130 +151,25 @@ class IbcFuncs:
         Returns:
             str: 替换后的IBC代码内容
         """
-        # 收集所有需要替换的符号映射
-        # 格式: {原始名称: (规范化名称, 符号类型, 优先级)}
-        replacements = {}
-        
-        # 遍历AST收集符号
-        for uid, node in ast_dict.items():
-            if uid == 0:  # 跳过根节点
-                continue
-                
-            # 处理类节点
-            if isinstance(node, ClassNode) and node.identifier:
-                symbol_path = f"{current_file_name}.{node.identifier}"
-                normalized = IbcFuncs._get_normalized_name(symbol_path, symbols_metadata)
-                if normalized and normalized != node.identifier:
-                    # 类名的优先级最高（3），因为可能包含在其他标识符中
-                    replacements[node.identifier] = (normalized, 'class', 3)
-                
-                # 处理类的继承参数
-                for param_name in node.inh_params.keys():
-                    param_path = f"{current_file_name}.{node.identifier}.{param_name}"
-                    param_normalized = IbcFuncs._get_normalized_name(param_path, symbols_metadata)
-                    if param_normalized and param_normalized != param_name:
-                        replacements[param_name] = (param_normalized, 'param', 1)
-            
-            # 处理函数节点
-            elif isinstance(node, FunctionNode) and node.identifier:
-                # 获取父节点路径
-                parent_path = IbcFuncs._get_parent_symbol_path(node, ast_dict, current_file_name)
-                symbol_path = f"{parent_path}.{node.identifier}" if parent_path else f"{current_file_name}.{node.identifier}"
-                normalized = IbcFuncs._get_normalized_name(symbol_path, symbols_metadata)
-                if normalized and normalized != node.identifier:
-                    replacements[node.identifier] = (normalized, 'func', 2)
-                
-                # 处理函数参数
-                for param_name in node.params.keys():
-                    param_symbol_path = f"{symbol_path}.{param_name}"
-                    param_normalized = IbcFuncs._get_normalized_name(param_symbol_path, symbols_metadata)
-                    if param_normalized and param_normalized != param_name:
-                        replacements[param_name] = (param_normalized, 'param', 1)
-            
-            # 处理变量节点
-            elif isinstance(node, VariableNode) and node.identifier:
-                # 获取父节点路径
-                parent_path = IbcFuncs._get_parent_symbol_path(node, ast_dict, current_file_name)
-                symbol_path = f"{parent_path}.{node.identifier}" if parent_path else f"{current_file_name}.{node.identifier}"
-                normalized = IbcFuncs._get_normalized_name(symbol_path, symbols_metadata)
-                if normalized and normalized != node.identifier:
-                    replacements[node.identifier] = (normalized, 'var', 2)
-            
-            # 处理行为步骤中的符号引用
-            elif isinstance(node, BehaviorStepNode):
-                # symbol_refs中包含$引用，这些已经被解析并验证过
-                # 我们需要在文本中找到这些引用并替换为规范化名称
-                pass  # 符号引用的处理在后面统一进行
-        
-        # 从 symbols_metadata 中收集所有其他符号（特别是 behavior 中的局部变量）
-        for symbol_path, meta in symbols_metadata.items():
-            # 跳过文件夹和文件节点
-            if isinstance(meta, (FolderMetadata, FileMetadata)):
-                continue
-            
-            # 只处理有normalized_name的dataclass
-            if isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata)):
-                normalized_name = meta.normalized_name
-                if not normalized_name:
-                    continue
-                
-                # 提取原始名称（symbol_path 的最后一部分）
-                original_name = symbol_path.split('.')[-1]
-                
-                # 如果还没有被添加，就加入
-                if original_name not in replacements and normalized_name != original_name:
-                    # 优先级设为1，在普通符号之后替换
-                    replacements[original_name] = (normalized_name, meta.type, 1)
-        
-        # 执行替换
-        result = IbcFuncs._apply_symbol_replacements(ibc_content, replacements, symbols_metadata)
-        
-        return result
+        return SymbolReplacer.replace_symbols_with_normalized_names(
+            ibc_content, ast_dict, symbols_metadata, current_file_name
+        )
     
     @staticmethod
     def _get_normalized_name(symbol_path: str, symbols_metadata: Dict[str, SymbolMetadata]) -> Optional[str]:
-        """从symbols_metadata中获取规范化名称
+        """从symbols_metadata中获取规范化名称（内部方法，保留以保持兼容性）
         
-        Args:
-            symbol_path: 符号完整路径
-            symbols_metadata: 符号元数据
-            
-        Returns:
-            Optional[str]: 规范化名称，如果不存在则返回None
+        委托给SymbolMetadataHelper.get_normalized_name
         """
-        if symbol_path in symbols_metadata:
-            meta = symbols_metadata[symbol_path]
-            if isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata)):
-                return meta.normalized_name if meta.normalized_name else None
-        return None
+        return SymbolMetadataHelper.get_normalized_name(symbol_path, symbols_metadata)
     
     @staticmethod
     def _get_parent_symbol_path(node: IbcBaseAstNode, ast_dict: Dict[int, IbcBaseAstNode], file_name: str) -> str:
-        """获取节点的父符号路径
+        """获取节点的父符号路径（内部方法，保留以保持兼容性）
         
-        Args:
-            node: 当前节点
-            ast_dict: AST字典
-            file_name: 文件名
-            
-        Returns:
-            str: 父符号路径
+        委托给SymbolPathHelper.get_parent_symbol_path
         """
-        path_parts = [file_name]
-        current_uid = node.parent_uid
-        
-        while current_uid != 0:
-            if current_uid not in ast_dict:
-                break
-            parent = ast_dict[current_uid]
-            
-            # 只添加有identifier的节点
-            if hasattr(parent, 'identifier') and parent.identifier:
-                path_parts.insert(1, parent.identifier)
-            
-            current_uid = parent.parent_uid
-        
-        return '.'.join(path_parts)
+        return SymbolPathHelper.get_parent_symbol_path(node, ast_dict, file_name)
     
     @staticmethod
     def _apply_symbol_replacements(
@@ -386,42 +177,12 @@ class IbcFuncs:
         replacements: Dict[str, Tuple[str, str, int]],
         symbols_metadata: Dict[str, SymbolMetadata]
     ) -> str:
-        """应用符号替换到IBC内容
+        """应用符号替换到IBC内容（内部方法，已废弃）
         
-        策略：
-        1. 按照优先级和长度排序（先长后短，避免部分匹配）
-        2. 使用正则表达式进行精确的标识符边界匹配
-        3. 处理$符号引用
-        
-        Args:
-            content: 原始内容
-            replacements: 替换映射 {原始名称: (规范化名称, 类型, 优先级)}
-            symbols_metadata: 符号元数据（用于处理$引用）
-            
-        Returns:
-            str: 替换后的内容
+        该方法已被SymbolReplacer类接管，保留此方法仅为向后兼容
         """
-        result = content
-        
-        # 按优先级和长度排序（优先级高的先处理，同优先级的长的先处理）
-        sorted_replacements = sorted(
-            replacements.items(),
-            key=lambda x: (-x[1][2], -len(x[0]))  # 优先级降序，长度降序
-        )
-        
-        # 执行普通标识符替换
-        for original, (normalized, sym_type, _) in sorted_replacements:
-            # 使用正则表达式匹配完整的标识符（避免部分匹配）
-            # 标识符前后必须是非标识符字符
-            pattern = r'(?<![\w_])' + re.escape(original) + r'(?![\w_])'
-            result = re.sub(pattern, normalized, result)
-        
-        # 处理$符号引用
-        # $引用的格式: $module.symbol 或 $symbol
-        # 需要找到所有$引用，并替换其中的符号名称
-        result = IbcFuncs._replace_dollar_references(result, symbols_metadata, replacements)
-        
-        return result
+        # 委托给SymbolReplacer的内部方法
+        return SymbolReplacer._apply_symbol_replacements(content, replacements, symbols_metadata)
     
     @staticmethod
     def _replace_dollar_references(
@@ -429,35 +190,11 @@ class IbcFuncs:
         symbols_metadata: Dict[str, SymbolMetadata],
         replacements: Dict[str, Tuple[str, str, int]]
     ) -> str:
-        """替换$符号引用中的符号名称
+        """替换$符号引用中的符号名称（内部方法，已废弃）
         
-        Args:
-            content: 内容
-            symbols_metadata: 符号元数据
-            replacements: 已有的替换映射
-            
-        Returns:
-            str: 替换后的内容
+        该方法已被SymbolReplacer类接管，保留此方法仅为向后兼容
         """
-        # 匹配$引用：$后跟标识符和点分隔的路径
-        # 例如: $gravity.apply_gravity, $self.position, $friction.FrictionManager
-        pattern = r'\$([\w_]+(?:\.[\w_]+)*)'
-        
-        def replace_ref(match):
-            ref = match.group(1)  # 不含$的引用路径
-            parts = ref.split('.')
-            
-            # 替换路径中的每个部分
-            new_parts = []
-            for part in parts:
-                if part in replacements:
-                    new_parts.append(replacements[part][0])  # 使用规范化名称
-                else:
-                    new_parts.append(part)
-            
-            return '$' + '.'.join(new_parts)
-        
-        return re.sub(pattern, replace_ref, content)
+        return SymbolReplacer._replace_dollar_references(content, symbols_metadata, replacements)
     
 
     
