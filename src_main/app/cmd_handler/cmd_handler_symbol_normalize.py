@@ -5,6 +5,10 @@ from typing import Dict, Any, List
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
+from typedef.ibc_data_types import (
+    ClassMetadata, FunctionMetadata, VariableMetadata,
+    FolderMetadata, FileMetadata, SymbolMetadata
+)
 
 from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
 from data_store.app_data_store import get_instance as get_app_data_store
@@ -285,7 +289,7 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
                     # 递归传播
                     self._propagate_update_to_dependents(potential_dependent, need_update_flag_dict)
     
-    def _extract_symbols_from_metadata(self, symbols_metadata: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    def _extract_symbols_from_metadata(self, symbols_metadata: Dict[str, SymbolMetadata]) -> Dict[str, SymbolMetadata]:
         """从符号元数据中提取待规范化的符号
         
         Args:
@@ -296,14 +300,14 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         """
         symbols_to_normalize = {}
         for symbol_path, meta in symbols_metadata.items():
-            meta_type = meta.get("type", "unknown")
             # 过滤掉文件夹/文件节点
-            if meta_type in ("folder", "file"):
+            if isinstance(meta, (FolderMetadata, FileMetadata)):
                 continue
             # 过滤已经规范化的符号
-            if "normalized_name" in meta and meta["normalized_name"]:
-                continue
-            symbols_to_normalize[symbol_path] = meta
+            if isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata)):
+                if meta.normalized_name:
+                    continue
+                symbols_to_normalize[symbol_path] = meta
         return symbols_to_normalize
     
     def _normalize_single_file_symbols(self, icp_json_file_path: str) -> bool:
@@ -403,7 +407,7 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
     def _validate_normalized_symbols(
         self, 
         cleaned_response: str, 
-        symbols_to_normalize: Dict[str, Dict[str, Any]]
+        symbols_to_normalize: Dict[str, SymbolMetadata]
     ) -> bool:
         """验证AI返回的符号规范化结果
         
@@ -470,9 +474,12 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         self, 
         icp_json_file_path: str,
         cleaned_response: str,
-        symbols_to_normalize: Dict[str, Dict[str, Any]]
+        symbols_to_normalize: Dict[str, SymbolMetadata]
     ) -> None:
         """从AI返回结果中提取规范化数据，并保存到符号表
+        
+        使用 ibc_data_store.update_symbols_batch 方法批量更新符号，
+        这是推荐的方式，封装了完整的加载→更新→保存流程。
         
         Args:
             icp_json_file_path: 文件路径
@@ -481,32 +488,35 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         """
         result = json.loads(cleaned_response)
         
-        # 提取已验证的规范化结果
-        validated_result = {}
+        # 提取已验证的规范化结果，构建规范化映射
+        normalized_mapping = {}
         for symbol_path in symbols_to_normalize.keys():
             if symbol_path in result:
                 normalized_name = result[symbol_path]
                 # 再次验证以确保安全
                 if isinstance(normalized_name, str) and normalized_name and IbcFuncs.validate_identifier(normalized_name):
-                    validated_result[symbol_path] = normalized_name
+                    normalized_mapping[symbol_path] = normalized_name
         
-        # 加载符号表
+        # 使用 ibc_data_store 的批量更新方法（推荐方式）
+        # 封装了加载→批量更新→保存的完整流程，更简洁直观
         ibc_data_store = get_ibc_data_store()
         symbols_path = ibc_data_store.build_symbols_path(self.work_ibc_dir_path, icp_json_file_path)
         file_name = os.path.basename(icp_json_file_path)
-        symbols_tree, symbols_metadata = ibc_data_store.load_symbols(symbols_path, file_name)
         
-        # 更新符号元数据中的规范化名称
-        updated_count = self._update_symbol_metadata(symbols_metadata, validated_result)
+        updated_count = ibc_data_store.update_symbols_batch(
+            symbols_path=symbols_path,
+            file_name=file_name,
+            normalized_mapping=normalized_mapping
+        )
         
-        # 保存更新后的符号数据
-        ibc_data_store.save_symbols(symbols_path, file_name, symbols_tree, symbols_metadata)
-        print(f"    {Colors.OKGREEN}符号表已保存: {symbols_path}{Colors.ENDC}")
+        print(f"    {Colors.OKGREEN}符号表已更新: {symbols_path}{Colors.ENDC}")
+        print(f"    {Colors.OKGREEN}成功规范化 {updated_count} 个符号{Colors.ENDC}")
         
         # 保存规范化验证数据
-        self._save_normalize_verify_data(icp_json_file_path, symbols_metadata)
-        
-        print(f"    {Colors.OKGREEN}成功规范化 {updated_count} 个符号{Colors.ENDC}")
+        # 需要重新加载符号元数据以计算MD5
+        _, symbols_metadata = ibc_data_store.load_symbols(symbols_path, file_name)
+        if symbols_metadata:
+            self._save_normalize_verify_data(icp_json_file_path, symbols_metadata)
 
     def _build_user_prompt_for_symbol_normalizer(self, icp_json_file_path: str) -> str:
         """
@@ -572,7 +582,7 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             print(f"{Colors.WARNING}警告: 读取配置文件失败: {e}，使用默认语言python{Colors.ENDC}")
             return 'python'
     
-    def _format_symbols_for_prompt(self, symbols_to_normalize: Dict[str, Dict[str, Any]]) -> str:
+    def _format_symbols_for_prompt(self, symbols_to_normalize: Dict[str, SymbolMetadata]) -> str:
         """格式化符号列表用于提示词
         
         Args:
@@ -583,37 +593,11 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         """
         lines = []
         for symbol_path, meta in symbols_to_normalize.items():
-            meta_type = meta.get("type", "unknown")
-            description = meta.get("description") or "无描述"
-            lines.append(f"- {symbol_path} ({meta_type}, 描述: {description})")
+            description = meta.description or "无描述"
+            lines.append(f"- {symbol_path} ({meta.type}, 描述: {description})")
         return '\n'.join(lines)
     
-    def _update_symbol_metadata(
-        self, 
-        symbols_metadata: Dict[str, Dict[str, Any]], 
-        normalized_symbols: Dict[str, str]
-    ) -> int:
-        """根据规范化结果更新符号元数据
-        
-        Args:
-            symbols_metadata: 符号元数据字典
-            normalized_symbols: 规范化符号字典 {符号路径: 规范化名称}
-            
-        Returns:
-            成功更新的符号数量
-        """
-        updated_count = 0
-        
-        for symbol_key, normalized_name in normalized_symbols.items():
-            # 按照完整路径精确匹配
-            if symbol_key in symbols_metadata:
-                symbols_metadata[symbol_key]["normalized_name"] = normalized_name
-                symbols_metadata[symbol_key]["normalization_status"] = "completed"
-                updated_count += 1
-        
-        return updated_count
-
-    def _save_normalize_verify_data(self, icp_json_file_path: str, symbols_metadata: Dict[str, Dict[str, Any]]) -> None:
+    def _save_normalize_verify_data(self, icp_json_file_path: str, symbols_metadata: Dict[str, SymbolMetadata]) -> None:
         """保存符号规范化的验证数据到验证文件
         
         Args:

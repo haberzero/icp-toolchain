@@ -1,7 +1,7 @@
 from enum import Enum
 import enum
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, field, fields
+from typing import List, Dict, Any, Optional, Union
+from dataclasses import dataclass, field, fields, asdict
 
 
 # ====== Lexer 模块 数据类型定义 ======
@@ -181,3 +181,94 @@ class BehaviorStepNode(IbcBaseAstNode):
 
     def __repr__(self):
         return f"BehaviorStepNode(uid={self.uid})"
+
+
+# ====== 符号元数据 数据类型定义 ======
+
+@dataclass
+class SymbolMetadataBase:
+    """符号元数据基类"""
+    type: str  # 符号类型: folder/file/class/func/var
+    description: str = ""  # 描述信息
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典格式，用于JSON序列化"""
+        result = asdict(self)
+        # 移除空字符串和空字典
+        return {k: v for k, v in result.items() if v not in ("", {}, False) or k in ("type", "__is_local__")}
+
+
+@dataclass
+class FolderMetadata(SymbolMetadataBase):
+    """文件夹元数据"""
+    type: str = "folder"
+
+
+@dataclass
+class FileMetadata(SymbolMetadataBase):
+    """文件元数据"""
+    type: str = "file"
+
+
+@dataclass
+class ClassMetadata(SymbolMetadataBase):
+    """类符号元数据"""
+    type: str = "class"
+    visibility: str = "public"  # 可见性: public/protected/private
+    normalized_name: str = ""  # 规范化后的名称
+    __is_local__: bool = False  # 是否是本地符号（由VisibleSymbolBuilder添加）
+    __local_file__: str = ""  # 本地符号所在文件（由VisibleSymbolBuilder添加）
+
+
+@dataclass
+class FunctionMetadata(SymbolMetadataBase):
+    """函数符号元数据"""
+    type: str = "func"
+    visibility: str = "public"  # 可见性: public/protected/private
+    parameters: Dict[str, str] = field(default_factory=dict)  # 参数列表 {参数名: 参数描述}
+    normalized_name: str = ""  # 规范化后的名称
+    __is_local__: bool = False  # 是否是本地符号
+    __local_file__: str = ""  # 本地符号所在文件
+
+
+@dataclass
+class VariableMetadata(SymbolMetadataBase):
+    """变量符号元数据"""
+    type: str = "var"
+    visibility: str = "public"  # 可见性: public/protected/private
+    scope: str = "unknown"  # 作用域: global/field/local/unknown
+    normalized_name: str = ""  # 规范化后的名称
+    __is_local__: bool = False  # 是否是本地符号
+    __local_file__: str = ""  # 本地符号所在文件
+
+
+# 联合类型：所有符号元数据类型
+SymbolMetadata = Union[FolderMetadata, FileMetadata, ClassMetadata, FunctionMetadata, VariableMetadata]
+
+
+def create_symbol_metadata(data: Dict[str, Any]) -> SymbolMetadata:
+    """从字典创建符号元数据对象
+    
+    Args:
+        data: 符号元数据字典
+        
+    Returns:
+        对应类型的符号元数据对象
+        
+    Raises:
+        ValueError: 如果类型字段无效
+    """
+    symbol_type = data.get("type", "")
+    
+    if symbol_type == "folder":
+        return FolderMetadata(**{k: v for k, v in data.items() if k in FolderMetadata.__dataclass_fields__})
+    elif symbol_type == "file":
+        return FileMetadata(**{k: v for k, v in data.items() if k in FileMetadata.__dataclass_fields__})
+    elif symbol_type == "class":
+        return ClassMetadata(**{k: v for k, v in data.items() if k in ClassMetadata.__dataclass_fields__})
+    elif symbol_type == "func":
+        return FunctionMetadata(**{k: v for k, v in data.items() if k in FunctionMetadata.__dataclass_fields__})
+    elif symbol_type == "var":
+        return VariableMetadata(**{k: v for k, v in data.items() if k in VariableMetadata.__dataclass_fields__})
+    else:
+        raise ValueError(f"未知的符号类型: {symbol_type}")

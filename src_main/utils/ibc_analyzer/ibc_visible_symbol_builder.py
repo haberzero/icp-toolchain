@@ -9,16 +9,14 @@ import os
 import json
 from typing import Dict, List, Any, Optional, Set, Tuple
 from libs.dir_json_funcs import DirJsonFuncs
+from typedef.ibc_data_types import (
+    SymbolMetadata, FolderMetadata, FileMetadata, ClassMetadata, 
+    FunctionMetadata, VariableMetadata
+)
 
 
 class VisibleSymbolBuilder:
-    """可见符号表构建器（基于符号树+元数据）
-    
-    新设计说明：
-    - 不再依赖 SymbolNode/平铺符号表
-    - 输入为依赖文件级别的 (symbols_tree, symbols_metadata)
-    - 输出保持不变：合并后的可见符号树 symbols_tree 和 symbols_metadata
-    """
+    """可见符号表构建器（基于符号树+元数据）"""
     
     def __init__(self, proj_root_dict: Dict):
         """初始化可见符号表构建器
@@ -34,11 +32,11 @@ class VisibleSymbolBuilder:
     def build_visible_symbol_tree(
         self, 
         current_file_path: str,
-        dependency_symbol_tables: Dict[str, Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]],
+        dependency_symbol_tables: Dict[str, Tuple[Dict[str, Any], Dict[str, SymbolMetadata]]],
         include_local_symbols: bool = False,
         local_symbols_tree: Optional[Dict[str, Any]] = None,
-        local_symbols_metadata: Optional[Dict[str, Dict[str, Any]]] = None
-    ) -> Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]:
+        local_symbols_metadata: Optional[Dict[str, SymbolMetadata]] = None
+    ) -> Tuple[Dict[str, Any], Dict[str, SymbolMetadata]]:
         """构建当前文件的可见符号树
         
         Args:
@@ -54,7 +52,7 @@ class VisibleSymbolBuilder:
         
         # 合并后的可见符号树和元数据
         symbols_tree: Dict[str, Any] = {}
-        symbols_metadata: Dict[str, Dict[str, Any]] = {}
+        symbols_metadata: Dict[str, SymbolMetadata] = {}
         
         if not dependency_symbol_tables:
             print(f"  当前文件无可用依赖符号")
@@ -96,10 +94,10 @@ class VisibleSymbolBuilder:
     def _insert_file_symbols_into_tree(
         self,
         tree: Dict[str, Any],
-        metadata: Dict[str, Dict[str, Any]],
+        metadata: Dict[str, SymbolMetadata],
         file_path: str,
         file_symbols_tree: Dict[str, Any],
-        file_symbols_metadata: Dict[str, Dict[str, Any]],
+        file_symbols_metadata: Dict[str, SymbolMetadata],
     ) -> None:
         """将单个文件的符号树和元数据插入到总符号树中
             
@@ -118,7 +116,7 @@ class VisibleSymbolBuilder:
             path_key = '.'.join(current_path_parts)
             if part not in current_node:
                 current_node[part] = {}
-                metadata[path_key] = {"type": "folder"}
+                metadata[path_key] = FolderMetadata(type="folder")
             current_node = current_node[part]
             
         # 文件节点
@@ -132,9 +130,7 @@ class VisibleSymbolBuilder:
             
         # 文件元数据
         file_desc = self._get_file_description(file_path)
-        file_metadata = {"type": "file"}
-        if file_desc:
-            file_metadata["description"] = file_desc
+        file_metadata = FileMetadata(type="file", description=file_desc)
         metadata[file_path_key] = file_metadata
             
         # 将文件内部的符号树挂载到 file_node 下
@@ -147,10 +143,9 @@ class VisibleSymbolBuilder:
         for relative_path, meta in file_symbols_metadata.items():
             full_path = f"{file_path_key}.{relative_path}" if relative_path else file_path_key
             # 过滤掉 private 符号，仅保留非 private 的符号元数据
-            visibility = meta.get("visibility", "public")
-            scope = meta.get("scope", "")
-            if visibility == "private" or scope == "local":
-                continue
+            if isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata)):
+                if meta.visibility == "private" or (isinstance(meta, VariableMetadata) and meta.scope == "local"):
+                    continue
             metadata[full_path] = meta
         
     @staticmethod
@@ -167,9 +162,9 @@ class VisibleSymbolBuilder:
     def _merge_local_symbols(
         self,
         symbols_tree: Dict[str, Any],
-        symbols_metadata: Dict[str, Dict[str, Any]],
+        symbols_metadata: Dict[str, SymbolMetadata],
         local_symbols_tree: Dict[str, Any],
-        local_symbols_metadata: Dict[str, Dict[str, Any]],
+        local_symbols_metadata: Dict[str, SymbolMetadata],
         current_file_path: str
     ) -> None:
         """将当前文件的本地符号合并到可见符号树中
@@ -202,15 +197,43 @@ class VisibleSymbolBuilder:
         # 本地符号的元数据key不带文件路径前缀，直接使用相对路径
         for relative_path, meta in local_symbols_metadata.items():
             # 添加特殊标记表示这是本地符号
-            meta_copy = meta.copy()
-            meta_copy['__is_local__'] = True
-            meta_copy['__local_file__'] = current_file_path
+            if isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata)):
+                # 修改本地符号的标记
+                if isinstance(meta, ClassMetadata):
+                    meta = ClassMetadata(
+                        type=meta.type,
+                        description=meta.description,
+                        visibility=meta.visibility,
+                        normalized_name=meta.normalized_name,
+                        __is_local__=True,
+                        __local_file__=current_file_path
+                    )
+                elif isinstance(meta, FunctionMetadata):
+                    meta = FunctionMetadata(
+                        type=meta.type,
+                        description=meta.description,
+                        visibility=meta.visibility,
+                        parameters=meta.parameters,
+                        normalized_name=meta.normalized_name,
+                        __is_local__=True,
+                        __local_file__=current_file_path
+                    )
+                elif isinstance(meta, VariableMetadata):
+                    meta = VariableMetadata(
+                        type=meta.type,
+                        description=meta.description,
+                        visibility=meta.visibility,
+                        scope=meta.scope,
+                        normalized_name=meta.normalized_name,
+                        __is_local__=True,
+                        __local_file__=current_file_path
+                    )
             
             # 检查是否与依赖符号重名
             if relative_path in symbols_metadata:
                 print(f"      警告: 本地符号元数据 '{relative_path}' 与依赖符号重名，本地符号优先")
             
-            symbols_metadata[relative_path] = meta_copy
+            symbols_metadata[relative_path] = meta
             local_symbol_count += 1
         
         print(f"    本地符号合并完成，共合并 {local_symbol_count} 个符号")

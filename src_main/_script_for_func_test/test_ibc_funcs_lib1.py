@@ -14,6 +14,41 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
 from libs.ibc_funcs import IbcFuncs
+from typedef.ibc_data_types import ClassMetadata, FunctionMetadata, VariableMetadata, FolderMetadata, FileMetadata
+
+
+def create_test_meta(meta_type: str, **kwargs):
+    """创建测试用的元数据对象（兼容旧测试）"""
+    if meta_type == "class":
+        return ClassMetadata(
+            type="class",
+            visibility=kwargs.get("visibility", "public"),
+            description=kwargs.get("description", ""),
+            normalized_name=kwargs.get("normalized_name", "")
+        )
+    elif meta_type == "func":
+        return FunctionMetadata(
+            type="func",
+            visibility=kwargs.get("visibility", "public"),
+            description=kwargs.get("description", ""),
+            parameters=kwargs.get("parameters", {}),
+            normalized_name=kwargs.get("normalized_name", "")
+        )
+    elif meta_type == "var":
+        return VariableMetadata(
+            type="var",
+            visibility=kwargs.get("visibility", "public"),
+            description=kwargs.get("description", ""),
+            scope=kwargs.get("scope", "unknown"),
+            normalized_name=kwargs.get("normalized_name", "")
+        )
+    elif meta_type == "folder":
+        return FolderMetadata(type="folder")
+    elif meta_type == "file":
+        return FileMetadata(type="file")
+    else:
+        # 对于unknown等非标准类型，返回None以保持兼容性
+        return None
 
 
 def test_md5_calculation():
@@ -76,26 +111,15 @@ def test_symbols_metadata_md5():
     try:
         # 测试简单元数据
         metadata1 = {
-            "module.ClassA": {
-                "type": "class",
-                "normalized_name": "ClassA"
-            }
+            "module.ClassA": create_test_meta("class", normalized_name="ClassA")
         }
         md5_1 = IbcFuncs.calculate_symbols_metadata_md5(metadata1)
         assert len(md5_1) == 32, "MD5长度应为32"
         
         # 测试复杂元数据
         metadata2 = {
-            "module.ClassA": {
-                "type": "class",
-                "normalized_name": "ClassA",
-                "description": "测试类"
-            },
-            "module.ClassA.func1": {
-                "type": "func",
-                "normalized_name": "func1",
-                "parameters": {"param1": "参数1"}
-            }
+            "module.ClassA": create_test_meta("class", normalized_name="ClassA", description="测试类"),
+            "module.ClassA.func1": create_test_meta("func", normalized_name="func1", parameters={"param1": "参数1"})
         }
         md5_2 = IbcFuncs.calculate_symbols_metadata_md5(metadata2)
         assert len(md5_2) == 32, "MD5长度应为32"
@@ -113,25 +137,21 @@ def test_symbols_metadata_md5():
         assert len(md5_3) == 32, "空元数据也应产生有效MD5"
         
         # 测试键顺序不影响MD5(因为使用了sort_keys)
-        metadata4a = {"b": {"x": 1}, "a": {"y": 2}}
-        metadata4b = {"a": {"y": 2}, "b": {"x": 1}}
+        metadata4a = {
+            "b": create_test_meta("class", normalized_name="B"),
+            "a": create_test_meta("class", normalized_name="A")
+        }
+        metadata4b = {
+            "a": create_test_meta("class", normalized_name="A"),
+            "b": create_test_meta("class", normalized_name="B")
+        }
         md5_4a = IbcFuncs.calculate_symbols_metadata_md5(metadata4a)
         md5_4b = IbcFuncs.calculate_symbols_metadata_md5(metadata4b)
         assert md5_4a == md5_4b, "键顺序不应影响MD5值"
         
-        # 测试嵌套字典顺序
-        metadata5a = {"a": {"nested": {"z": 1, "y": 2}}}
-        metadata5b = {"a": {"nested": {"y": 2, "z": 1}}}
-        md5_5a = IbcFuncs.calculate_symbols_metadata_md5(metadata5a)
-        md5_5b = IbcFuncs.calculate_symbols_metadata_md5(metadata5b)
-        assert md5_5a == md5_5b, "嵌套字典键顺序不应影响MD5值"
-        
         # 测试包含特殊字符的元数据
         metadata6 = {
-            "module.特殊字符": {
-                "type": "class",
-                "description": "包含特殊!@#$%字符"
-            }
+            "module.特殊字符": create_test_meta("class", description="包含特殊!@#$%字符")
         }
         md5_6 = IbcFuncs.calculate_symbols_metadata_md5(metadata6)
         assert len(md5_6) == 32, "包含特殊字符的元数据应正常计算MD5"
@@ -158,66 +178,68 @@ def test_count_symbols():
         
         # 测试只有文件夹和文件的元数据
         metadata2 = {
-            "src": {"type": "folder"},
-            "src.main": {"type": "file"}
+            "src": create_test_meta("folder"),
+            "src.main": create_test_meta("file")
         }
         count2 = IbcFuncs.count_symbols_in_metadata(metadata2)
         assert count2 == 0, f"只有folder/file节点时符号数应为0，实际为{count2}"
         
         # 测试包含类、函数、变量的元数据
         metadata3 = {
-            "src": {"type": "folder"},
-            "src.main": {"type": "file"},
-            "src.main.ClassA": {"type": "class"},
-            "src.main.ClassA.func1": {"type": "func"},
-            "src.main.ClassA.func1.param1": {"type": "var"},
-            "src.main.var1": {"type": "var"}
+            "src": create_test_meta("folder"),
+            "src.main": create_test_meta("file"),
+            "src.main.ClassA": create_test_meta("class"),
+            "src.main.ClassA.func1": create_test_meta("func"),
+            "src.main.ClassA.func1.param1": create_test_meta("var"),
+            "src.main.var1": create_test_meta("var")
         }
         count3 = IbcFuncs.count_symbols_in_metadata(metadata3)
         assert count3 == 4, f"符号数应为4(1 class + 1 func + 2 var)，实际为{count3}"
         
         # 测试混合类型
         metadata4 = {
-            "a.ClassA": {"type": "class"},
-            "a.ClassB": {"type": "class"},
-            "a.func1": {"type": "func"},
-            "a.func2": {"type": "func"},
-            "a.var1": {"type": "var"},
-            "b": {"type": "folder"},
-            "c": {"type": "file"},
-            "d.unknown": {"type": "unknown"}  # 非标准类型不统计
+            "a.ClassA": create_test_meta("class"),
+            "a.ClassB": create_test_meta("class"),
+            "a.func1": create_test_meta("func"),
+            "a.func2": create_test_meta("func"),
+            "a.var1": create_test_meta("var"),
+            "b": create_test_meta("folder"),
+            "c": create_test_meta("file"),
+            "d.unknown": None  # 非标准类型不统计
         }
+        # 过滤掉None值
+        metadata4 = {k: v for k, v in metadata4.items() if v is not None}
         count4 = IbcFuncs.count_symbols_in_metadata(metadata4)
         assert count4 == 5, f"符号数应为5(2 class + 2 func + 1 var)，实际为{count4}"
         
         # 测试大量符号
         metadata5 = {}
         for i in range(100):
-            metadata5[f"module.class{i}"] = {"type": "class"}
+            metadata5[f"module.class{i}"] = create_test_meta("class")
         count5 = IbcFuncs.count_symbols_in_metadata(metadata5)
         assert count5 == 100, f"符号数应为100，实际为{count5}"
         
         # 测试只有class类型
         metadata6 = {
-            "a.ClassA": {"type": "class"},
-            "b.ClassB": {"type": "class"}
+            "a.ClassA": create_test_meta("class"),
+            "b.ClassB": create_test_meta("class")
         }
         count6 = IbcFuncs.count_symbols_in_metadata(metadata6)
         assert count6 == 2, f"只有class时符号数应为2，实际为{count6}"
         
         # 测试只有func类型
         metadata7 = {
-            "a.func1": {"type": "func"},
-            "b.func2": {"type": "func"},
-            "c.func3": {"type": "func"}
+            "a.func1": create_test_meta("func"),
+            "b.func2": create_test_meta("func"),
+            "c.func3": create_test_meta("func")
         }
         count7 = IbcFuncs.count_symbols_in_metadata(metadata7)
         assert count7 == 3, f"只有func时符号数应为3，实际为{count7}"
         
         # 测试只有var类型
         metadata8 = {
-            "a.var1": {"type": "var"},
-            "b.var2": {"type": "var"}
+            "a.var1": create_test_meta("var"),
+            "b.var2": create_test_meta("var")
         }
         count8 = IbcFuncs.count_symbols_in_metadata(metadata8)
         assert count8 == 2, f"只有var时符号数应为2，实际为{count8}"
@@ -393,25 +415,22 @@ def test_build_available_symbol_list():
         
         # 构造符号元数据
         symbols_metadata = {
-            "src": {"type": "folder"},
-            "src.ball": {"type": "folder"},
-            "src.ball.ball_entity": {"type": "file"},
-            "src.ball.ball_entity.BallEntity": {
-                "type": "class",
-                "description": "球体实体类"
-            },
-            "src.ball.ball_entity.BallEntity.get_position": {
-                "type": "func",
-                "description": "获取球体位置"
-            },
-            "src.ball.ball_entity.BallEntity.velocity": {
-                "type": "var",
-                "description": "球体速度"
-            },
-            "src.ball.ball_entity.create_ball": {
-                "type": "func"
-                # 无description
-            }
+            "src": create_test_meta("folder"),
+            "src.ball": create_test_meta("folder"),
+            "src.ball.ball_entity": create_test_meta("file"),
+            "src.ball.ball_entity.BallEntity": create_test_meta(
+                "class",
+                description="球体实体类"
+            ),
+            "src.ball.ball_entity.BallEntity.get_position": create_test_meta(
+                "func",
+                description="获取球体位置"
+            ),
+            "src.ball.ball_entity.BallEntity.velocity": create_test_meta(
+                "var",
+                description="球体速度"
+            ),
+            "src.ball.ball_entity.create_ball": create_test_meta("func")
         }
         
         # 构建可用符号列表
@@ -446,6 +465,93 @@ def test_build_available_symbol_list():
         return False
 
 
+def test_update_symbols_normalized_names():
+    """测试批量更新符号规范化名称功能"""
+    print("\n测试 update_symbols_normalized_names 功能...")
+    
+    try:
+        # 创建测试元数据
+        symbols_metadata = {
+            "file.类名": ClassMetadata(
+                type="class",
+                description="测试类",
+                visibility="public"
+            ),
+            "file.类名.方法名": FunctionMetadata(
+                type="func",
+                description="测试方法",
+                visibility="public",
+                parameters={"param1": "string"}
+            ),
+            "file.变量名": VariableMetadata(
+                type="var",
+                description="测试变量",
+                visibility="public",
+                scope="global"
+            ),
+            "folder1": FolderMetadata(type="folder"),
+            "file1": FileMetadata(type="file")
+        }
+        
+        # 构建规范化映射
+        normalized_mapping = {
+            "file.类名": "MyClass",
+            "file.类名.方法名": "my_method",
+            "file.变量名": "my_variable"
+        }
+        
+        # 执行批量更新
+        updated_count = IbcFuncs.update_symbols_normalized_names(symbols_metadata, normalized_mapping)
+        
+        # 验证更新数量
+        assert updated_count == 3, f"应该更新 3 个符号，实际更新 {updated_count}"
+        
+        # 验证类元数据更新
+        class_meta = symbols_metadata["file.类名"]
+        assert isinstance(class_meta, ClassMetadata), "应该保持 ClassMetadata 类型"
+        assert class_meta.normalized_name == "MyClass", f"类名应该更新为 MyClass，实际为 {class_meta.normalized_name}"
+        assert class_meta.description == "测试类", "其他字段应该保持不变"
+        
+        # 验证函数元数据更新
+        func_meta = symbols_metadata["file.类名.方法名"]
+        assert isinstance(func_meta, FunctionMetadata), "应该保持 FunctionMetadata 类型"
+        assert func_meta.normalized_name == "my_method", f"方法名应该更新为 my_method，实际为 {func_meta.normalized_name}"
+        assert func_meta.parameters == {"param1": "string"}, "参数应该保持不变"
+        
+        # 验证变量元数据更新
+        var_meta = symbols_metadata["file.变量名"]
+        assert isinstance(var_meta, VariableMetadata), "应该保持 VariableMetadata 类型"
+        assert var_meta.normalized_name == "my_variable", f"变量名应该更新为 my_variable，实际为 {var_meta.normalized_name}"
+        assert var_meta.scope == "global", "作用域应该保持不变"
+        
+        # 验证文件夹和文件节点未被修改
+        assert isinstance(symbols_metadata["folder1"], FolderMetadata), "FolderMetadata 不应被修改"
+        assert isinstance(symbols_metadata["file1"], FileMetadata), "FileMetadata 不应被修改"
+        
+        # 测试部分更新
+        symbols_metadata2 = {
+            "file.symbol1": ClassMetadata(type="class"),
+            "file.symbol2": FunctionMetadata(type="func")
+        }
+        normalized_mapping2 = {"file.symbol1": "Symbol1"}
+        updated_count2 = IbcFuncs.update_symbols_normalized_names(symbols_metadata2, normalized_mapping2)
+        assert updated_count2 == 1, f"应该只更新 1 个符号，实际更新 {updated_count2}"
+        
+        # 测试空映射
+        symbols_metadata3 = {"file.test": ClassMetadata(type="class")}
+        updated_count3 = IbcFuncs.update_symbols_normalized_names(symbols_metadata3, {})
+        assert updated_count3 == 0, "空映射应该不更新任何符号"
+        
+        print("  ✓ 批量更新符号规范化名称功能测试通过")
+        return True
+        
+    except Exception as e:
+        print(f"  ✖ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def main():
     """运行所有测试"""
     print("\n" + "=" * 60)
@@ -466,6 +572,7 @@ def main():
         
         test_results.append(("符号路径简化功能", test_simplify_symbol_path()))
         
+        test_results.append(("批量更新符号规范化名称", test_update_symbols_normalized_names()))
         test_results.append(("可用符号列表构建", test_build_available_symbol_list()))
         
         print("\n" + "=" * 60)

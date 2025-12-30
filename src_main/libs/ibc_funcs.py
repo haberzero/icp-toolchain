@@ -6,7 +6,8 @@ from typing import List, Dict, Optional, Union, Set, Any, Tuple
 
 from typedef.exception_types import SymbolNotFoundError
 from typedef.ibc_data_types import (
-    IbcBaseAstNode, AstNodeType, ClassNode, FunctionNode, VariableNode, BehaviorStepNode
+    IbcBaseAstNode, AstNodeType, ClassNode, FunctionNode, VariableNode, BehaviorStepNode,
+    SymbolMetadata, ClassMetadata, FunctionMetadata, VariableMetadata, FolderMetadata, FileMetadata
 )
 
 class IbcFuncs:
@@ -27,7 +28,7 @@ class IbcFuncs:
             raise RuntimeError(f"计算文本MD5时发生未知错误") from e
     
     @staticmethod
-    def calculate_symbols_metadata_md5(symbols_metadata: Dict[str, Dict[str, Any]]) -> str:
+    def calculate_symbols_metadata_md5(symbols_metadata: Dict[str, SymbolMetadata]) -> str:
         """计算符号元数据的MD5校验值
         
         Args:
@@ -37,14 +38,15 @@ class IbcFuncs:
             str: MD5校验值
         """
         try:
-            # 将字典转换为JSON字符串(排序键以确保一致性)
-            metadata_json = json.dumps(symbols_metadata, sort_keys=True, ensure_ascii=False)
+            # 将SymbolMetadata对象转换为字典，然后转换为JSON字符串(排序键以确保一致性)
+            metadata_dict = {path: meta.to_dict() for path, meta in symbols_metadata.items()}
+            metadata_json = json.dumps(metadata_dict, sort_keys=True, ensure_ascii=False)
             return IbcFuncs.calculate_text_md5(metadata_json)
         except Exception as e:
             raise RuntimeError(f"计算符号元数据MD5时发生错误: {e}") from e
     
     @staticmethod
-    def count_symbols_in_metadata(symbols_metadata: Dict[str, Dict[str, Any]]) -> int:
+    def count_symbols_in_metadata(symbols_metadata: Dict[str, SymbolMetadata]) -> int:
         """统计符号元数据中的符号数量(排除文件夹和文件节点)
         
         Args:
@@ -55,9 +57,8 @@ class IbcFuncs:
         """
         count = 0
         for meta in symbols_metadata.values():
-            meta_type = meta.get("type", "")
             # 只统计实际符号(class, func, var),不统计folder和file
-            if meta_type in ("class", "func", "var"):
+            if isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata)):
                 count += 1
         return count
     
@@ -78,7 +79,7 @@ class IbcFuncs:
     
     @staticmethod
     def build_available_symbol_list(
-        symbols_metadata: Dict[str, Dict[str, Any]],
+        symbols_metadata: Dict[str, SymbolMetadata],
         proj_root_dict: Dict[str, Any]
     ) -> List[str]:
         """构建可用依赖符号列表
@@ -99,12 +100,11 @@ class IbcFuncs:
         available_symbol_lines = []
         
         for symbol_path, meta in symbols_metadata.items():
-            meta_type = meta.get("type")
             # 跳过文件夹和文件节点，只处理具体符号
-            if meta_type in ("folder", "file"):
+            if not isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata)):
                 continue
             
-            desc = meta.get("description")
+            desc = meta.description
             if not desc:
                 desc = "没有对外功能描述"
             
@@ -161,13 +161,84 @@ class IbcFuncs:
         # 如果没找到文件名（不应该发生），返回原路径
         return full_symbol_path
     
+    # ==================== 符号元数据更新 ====================
+    
+    @staticmethod
+    def update_symbols_normalized_names(
+        symbols_metadata: Dict[str, SymbolMetadata],
+        normalized_mapping: Dict[str, str]
+    ) -> int:
+        """批量更新符号元数据中的 normalized_name
+        
+        这是一个通用的批量更新工具方法，用于更新符号的规范化名称。
+        由于 dataclass 是不可变的，需要创建新实例来更新字段。
+        
+        Args:
+            symbols_metadata: 符号元数据字典（会被原地修改）
+            normalized_mapping: 规范化映射 {符号路径: 规范化名称}
+            
+        Returns:
+            int: 成功更新的符号数量
+            
+        Example:
+            >>> symbols_metadata = {"file.MyClass": ClassMetadata(...)}
+            >>> normalized_mapping = {"file.MyClass": "MyNormalizedClass"}
+            >>> count = IbcFuncs.update_symbols_normalized_names(symbols_metadata, normalized_mapping)
+            >>> print(count)  # 1
+        """
+        updated_count = 0
+        
+        for symbol_key, normalized_name in normalized_mapping.items():
+            # 按照完整路径精确匹配
+            if symbol_key not in symbols_metadata:
+                continue
+                
+            meta = symbols_metadata[symbol_key]
+            
+            # 只更新实际符号（ClassMetadata, FunctionMetadata, VariableMetadata）
+            # 跳过 FolderMetadata 和 FileMetadata
+            if isinstance(meta, ClassMetadata):
+                symbols_metadata[symbol_key] = ClassMetadata(
+                    type=meta.type,
+                    description=meta.description,
+                    visibility=meta.visibility,
+                    normalized_name=normalized_name,
+                    __is_local__=meta.__is_local__,
+                    __local_file__=meta.__local_file__
+                )
+                updated_count += 1
+            elif isinstance(meta, FunctionMetadata):
+                symbols_metadata[symbol_key] = FunctionMetadata(
+                    type=meta.type,
+                    description=meta.description,
+                    visibility=meta.visibility,
+                    parameters=meta.parameters,
+                    normalized_name=normalized_name,
+                    __is_local__=meta.__is_local__,
+                    __local_file__=meta.__local_file__
+                )
+                updated_count += 1
+            elif isinstance(meta, VariableMetadata):
+                symbols_metadata[symbol_key] = VariableMetadata(
+                    type=meta.type,
+                    description=meta.description,
+                    visibility=meta.visibility,
+                    scope=meta.scope,
+                    normalized_name=normalized_name,
+                    __is_local__=meta.__is_local__,
+                    __local_file__=meta.__local_file__
+                )
+                updated_count += 1
+        
+        return updated_count
+    
     # ==================== 符号替换 ====================
     
     @staticmethod
     def replace_symbols_with_normalized_names(
         ibc_content: str,
         ast_dict: Dict[int, IbcBaseAstNode],
-        symbols_metadata: Dict[str, Dict[str, Any]],
+        symbols_metadata: Dict[str, SymbolMetadata],
         current_file_name: str
     ) -> str:
         """将IBC代码内容中的所有符号替换为规范化后的名称
@@ -242,20 +313,22 @@ class IbcFuncs:
         # 从 symbols_metadata 中收集所有其他符号（特别是 behavior 中的局部变量）
         for symbol_path, meta in symbols_metadata.items():
             # 跳过文件夹和文件节点
-            if meta.get('type') in ('folder', 'file'):
+            if isinstance(meta, (FolderMetadata, FileMetadata)):
                 continue
             
-            normalized_name = meta.get('normalized_name')
-            if not normalized_name:
-                continue
-            
-            # 提取原始名称（symbol_path 的最后一部分）
-            original_name = symbol_path.split('.')[-1]
-            
-            # 如果还没有被添加，就加入
-            if original_name not in replacements and normalized_name != original_name:
-                # 优先级设为1，在普通符号之后替换
-                replacements[original_name] = (normalized_name, meta.get('type', 'unknown'), 1)
+            # 只处理有normalized_name的dataclass
+            if isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata)):
+                normalized_name = meta.normalized_name
+                if not normalized_name:
+                    continue
+                
+                # 提取原始名称（symbol_path 的最后一部分）
+                original_name = symbol_path.split('.')[-1]
+                
+                # 如果还没有被添加，就加入
+                if original_name not in replacements and normalized_name != original_name:
+                    # 优先级设为1，在普通符号之后替换
+                    replacements[original_name] = (normalized_name, meta.type, 1)
         
         # 执行替换
         result = IbcFuncs._apply_symbol_replacements(ibc_content, replacements, symbols_metadata)
@@ -263,7 +336,7 @@ class IbcFuncs:
         return result
     
     @staticmethod
-    def _get_normalized_name(symbol_path: str, symbols_metadata: Dict[str, Dict[str, Any]]) -> Optional[str]:
+    def _get_normalized_name(symbol_path: str, symbols_metadata: Dict[str, SymbolMetadata]) -> Optional[str]:
         """从symbols_metadata中获取规范化名称
         
         Args:
@@ -275,7 +348,8 @@ class IbcFuncs:
         """
         if symbol_path in symbols_metadata:
             meta = symbols_metadata[symbol_path]
-            return meta.get('normalized_name')
+            if isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata)):
+                return meta.normalized_name if meta.normalized_name else None
         return None
     
     @staticmethod
@@ -310,7 +384,7 @@ class IbcFuncs:
     def _apply_symbol_replacements(
         content: str,
         replacements: Dict[str, Tuple[str, str, int]],
-        symbols_metadata: Dict[str, Dict[str, Any]]
+        symbols_metadata: Dict[str, SymbolMetadata]
     ) -> str:
         """应用符号替换到IBC内容
         
@@ -352,7 +426,7 @@ class IbcFuncs:
     @staticmethod
     def _replace_dollar_references(
         content: str,
-        symbols_metadata: Dict[str, Dict[str, Any]],
+        symbols_metadata: Dict[str, SymbolMetadata],
         replacements: Dict[str, Tuple[str, str, int]]
     ) -> str:
         """替换$符号引用中的符号名称

@@ -18,6 +18,7 @@ from utils.ibc_analyzer.ibc_parser_uid_generator import IbcParserUidGenerator
 
 
 # TODO: 目前设计模式不完善，后处理也许应该整合到整个状态处理逻辑里，不应该零散分布。
+# 仍存在较多vibe内容，但基本都review过
 class ParserMainState(Enum):
     """Parser主循环状态枚举"""
     PASS_THROUGH_MODE = "PASS_THROUGH_MODE"  # token透传模式

@@ -6,7 +6,7 @@ IBC符号提取模块
 from typing import Dict, Optional, Any, Tuple
 from typedef.ibc_data_types import (
     IbcBaseAstNode, ClassNode, FunctionNode, VariableNode, ModuleNode, BehaviorStepNode,
-    VisibilityTypes
+    VisibilityTypes, SymbolMetadata, ClassMetadata, FunctionMetadata, VariableMetadata
 )
 
 
@@ -26,16 +26,16 @@ class IbcSymbolProcessor:
         """
         self.ast_dict = ast_dict
     
-    def build_symbol_tree(self) -> Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]:
+    def build_symbol_tree(self) -> Tuple[Dict[str, Any], Dict[str, SymbolMetadata]]:
         """从 AST 构建单文件符号树及其元数据
         
         返回值：
             Tuple[Dict, Dict]:
                 - symbols_tree: 符号树，纯层次结构，所有节点都是 dict
-                - symbols_metadata: 符号元数据，键为文件内的点分隔路径，如 "ClassName.methodName.varName"
+                - symbols_metadata: 符号元数据，键为文件内的点分隔路径，值为SymbolMetadata对象
         """
         symbols_tree: Dict[str, Any] = {}
-        symbols_metadata: Dict[str, Dict[str, Any]] = {}
+        symbols_metadata: Dict[str, SymbolMetadata] = {}
         
         # 从虚拟根节点(uid=0)开始遍历，如果不存在则直接返回空结构
         root_node = self.ast_dict.get(0)
@@ -52,7 +52,7 @@ class IbcSymbolProcessor:
         uid: int,
         parent_node: Dict[str, Any],
         parent_path: str,
-        metadata: Dict[str, Dict[str, Any]],
+        metadata: Dict[str, SymbolMetadata],
     ) -> None:
         """递归遍历 AST，构建符号树和元数据
         
@@ -78,37 +78,31 @@ class IbcSymbolProcessor:
             if not name:
                 return
             
-            # 在符号树中创建/获取当前节点
-            symbol_node = parent_node.setdefault(name, {})
+            # 构建基础元数据对象
             current_path = name if not parent_path else f"{parent_path}.{name}"
             
-            # 构建基础元数据
             if isinstance(node, ClassNode):
-                symbol_type = "class"
+                meta = ClassMetadata(
+                    type="class",
+                    visibility=getattr(node, "visibility", VisibilityTypes.PUBLIC).value,
+                    description=getattr(node, "external_desc", "")
+                )
             elif isinstance(node, FunctionNode):
-                symbol_type = "func"
-            else:
-                symbol_type = "var"
-            
-            meta: Dict[str, Any] = {
-                "type": symbol_type,
-                "visibility": getattr(node, "visibility", VisibilityTypes.PUBLIC).value,
-            }
-            
-            # 描述信息
-            desc = getattr(node, "external_desc", "")
-            if not desc and isinstance(node, VariableNode):
+                desc = getattr(node, "external_desc", "")
+                params = getattr(node, "params", None) or {}
+                meta = FunctionMetadata(
+                    type="func",
+                    visibility=getattr(node, "visibility", VisibilityTypes.PUBLIC).value,
+                    description=desc,
+                    parameters=params
+                )
+            else:  # VariableNode
                 # 变量没有external_desc时，退而使用content作为描述
-                desc = getattr(node, "content", "")
-            if desc:
-                meta["description"] = desc
-            
-            # 函数参数
-            if isinstance(node, FunctionNode) and getattr(node, "params", None):
-                meta["parameters"] = node.params
-            
-            # 变量作用域（用于后续可见性过滤）
-            if isinstance(node, VariableNode):
+                desc = getattr(node, "external_desc", "")
+                if not desc:
+                    desc = getattr(node, "content", "")
+                
+                # 推断变量作用域
                 scope = "unknown"
                 parent_ast = self.ast_dict.get(node.parent_uid)
                 if isinstance(parent_ast, FunctionNode):
@@ -117,9 +111,18 @@ class IbcSymbolProcessor:
                     scope = "field"
                 elif isinstance(parent_ast, ModuleNode):
                     scope = "global"
-                meta["scope"] = scope
+                
+                meta = VariableMetadata(
+                    type="var",
+                    visibility=getattr(node, "visibility", VisibilityTypes.PUBLIC).value,
+                    description=desc,
+                    scope=scope
+                )
             
             metadata[current_path] = meta
+            
+            # 在符号树中创建/获取当前节点
+            symbol_node = parent_node.setdefault(name, {})
             
             # 如果是类或函数，继续向下处理其子节点
             if isinstance(node, (ClassNode, FunctionNode)):

@@ -1,5 +1,8 @@
 from typing import Dict, List, Optional, Any, Tuple
-from typedef.ibc_data_types import IbcKeywords, IbcTokenType, Token, IbcBaseAstNode, AstNodeType
+from typedef.ibc_data_types import (
+    IbcKeywords, IbcTokenType, Token, IbcBaseAstNode, AstNodeType,
+    SymbolMetadata
+)
 
 from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
@@ -13,7 +16,7 @@ from typedef.exception_types import IbcAnalyzerError
 def analyze_ibc_content(
     text: str, 
     ibc_issue_recorder: Optional[IbcIssueRecorder] = None
-) -> Tuple[Dict, Dict, Dict]:
+) -> Tuple[Dict, Dict, Dict[str, SymbolMetadata]]:
     """分析IBC代码，返回AST字典以及符号树/符号元数据
     
     Args:
@@ -21,10 +24,10 @@ def analyze_ibc_content(
         ibc_issue_recorder: 可选的问题记录器，用于记录分析过程中的错误信息
         
     Returns:
-        Tuple[Dict, Dict, Dict]: 
+        Tuple[Dict, Dict, Dict[str, SymbolMetadata]]: 
             - Dict: AST字典
             - Dict: 符号树（单文件内部的层次结构）
-            - Dict: 符号元数据（以点分隔路径为键）
+            - Dict[str, SymbolMetadata]: 符号元数据（以点分隔路径为键）
             
     Raises:
         IbcAnalyzerError: 当IBC代码存在语法错误时，会记录到issue_recorder并不再抛出

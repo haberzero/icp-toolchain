@@ -22,11 +22,54 @@ from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 from utils.ibc_analyzer.ibc_symbol_ref_resolver import SymbolRefResolver
 from utils.issue_recorder import IbcIssueRecorder
 from typedef.cmd_data_types import Colors
+from typedef.ibc_data_types import ClassMetadata, FunctionMetadata, VariableMetadata
 
 
 # ===========================
 # 测试辅助函数
 # ===========================
+
+def create_test_metadata(meta_type: str, **kwargs):
+    """创建测试用的符号元数据对象
+    
+    Args:
+        meta_type: 类型 - 'class', 'function', 'variable'
+        **kwargs: 元数据属性
+    
+    Returns:
+        SymbolMetadata对象
+    """
+    if meta_type == "class":
+        return ClassMetadata(
+            type="class",
+            visibility=kwargs.get("visibility", "public"),
+            description=kwargs.get("description", ""),
+            normalized_name=kwargs.get("normalized_name", ""),
+            __is_local__=kwargs.get("__is_local__", False),
+            __local_file__=kwargs.get("__local_file__", "")
+        )
+    elif meta_type == "function":
+        return FunctionMetadata(
+            type="func",
+            visibility=kwargs.get("visibility", "public"),
+            description=kwargs.get("description", ""),
+            parameters=kwargs.get("parameters", {}),
+            normalized_name=kwargs.get("normalized_name", ""),
+            __is_local__=kwargs.get("__is_local__", False),
+            __local_file__=kwargs.get("__local_file__", "")
+        )
+    elif meta_type == "variable":
+        return VariableMetadata(
+            type="var",
+            visibility=kwargs.get("visibility", "public"),
+            description=kwargs.get("description", ""),
+            scope=kwargs.get("scope", "unknown"),
+            normalized_name=kwargs.get("normalized_name", ""),
+            __is_local__=kwargs.get("__is_local__", False),
+            __local_file__=kwargs.get("__local_file__", "")
+        )
+    else:
+        raise ValueError(f"不支持的类型: {meta_type}")
 
 def run_test(
     test_name: str,
@@ -165,7 +208,7 @@ def test_local_symbol_merge_and_empty():
     dependency_symbol_tables = {
         "src/dep_module": (
             {"DepClass": {}},
-            {"DepClass": {"type": "class", "visibility": "public", "description": "依赖类", "normalized_name": "DepClass"}}
+            {"DepClass": create_test_metadata("class", visibility="public", description="依赖类", normalized_name="DepClass")}
         )
     }
     
@@ -175,9 +218,9 @@ def test_local_symbol_merge_and_empty():
         "local_func": {}
     }
     local_symbols_metadata = {
-        "LocalClass": {"type": "class", "visibility": "public", "description": "本地类", "normalized_name": "LocalClass"},
-        "LocalClass.local_method": {"type": "function", "visibility": "public", "description": "本地方法", "normalized_name": "local_method"},
-        "local_func": {"type": "function", "visibility": "public", "description": "本地函数", "normalized_name": "local_func"}
+        "LocalClass": create_test_metadata("class", visibility="public", description="本地类", normalized_name="LocalClass"),
+        "LocalClass.local_method": create_test_metadata("function", visibility="public", description="本地方法", normalized_name="local_method"),
+        "local_func": create_test_metadata("function", visibility="public", description="本地函数", normalized_name="local_func")
     }
     
     symbols_tree, symbols_metadata = builder.build_visible_symbol_tree(
@@ -190,8 +233,8 @@ def test_local_symbol_merge_and_empty():
     
     assert "LocalClass" in symbols_tree, "本地类应该在符号树中"
     assert "local_func" in symbols_tree, "本地函数应该在符号树中"
-    assert symbols_metadata["LocalClass"]["__is_local__"] == True, "本地符号应该有 __is_local__ 标记"
-    assert symbols_metadata["LocalClass"]["__local_file__"] == "src/test", "本地符号应该有文件路径标记"
+    assert symbols_metadata["LocalClass"].__is_local__ == True, "本地符号应该有 __is_local__ 标记"
+    assert symbols_metadata["LocalClass"].__local_file__ == "src/test", "本地符号应该有文件路径标记"
     
     # 场景2: 空本地符号表
     symbols_tree2, _ = builder.build_visible_symbol_tree(
@@ -219,13 +262,13 @@ def test_local_symbol_priority():
     dependency_symbol_tables = {
         "src/dep_module": (
             {"SharedName": {}},
-            {"SharedName": {"type": "class", "visibility": "public", "description": "依赖模块的类", "normalized_name": "SharedNameFromDep"}}
+            {"SharedName": create_test_metadata("class", visibility="public", description="依赖模块的类", normalized_name="SharedNameFromDep")}
         )
     }
     
     local_symbols_tree = {"SharedName": {}}
     local_symbols_metadata = {
-        "SharedName": {"type": "class", "visibility": "public", "description": "本地模块的类", "normalized_name": "SharedNameLocal"}
+        "SharedName": create_test_metadata("class", visibility="public", description="本地模块的类", normalized_name="SharedNameLocal")
     }
     
     symbols_tree, symbols_metadata = builder.build_visible_symbol_tree(
@@ -237,8 +280,8 @@ def test_local_symbol_priority():
     )
     
     assert "SharedName" in symbols_metadata, "SharedName 应该存在"
-    assert symbols_metadata["SharedName"]["__is_local__"] == True, "SharedName 应该是本地符号"
-    assert symbols_metadata["SharedName"]["normalized_name"] == "SharedNameLocal", "应该使用本地符号的规范化名称"
+    assert symbols_metadata["SharedName"].__is_local__ == True, "SharedName 应该是本地符号"
+    assert symbols_metadata["SharedName"].normalized_name == "SharedNameLocal", "应该使用本地符号的规范化名称"
     
     print(f"{Colors.OKGREEN}✓ 测试通过{Colors.ENDC}")
     return True
@@ -275,8 +318,8 @@ class TestClass():
     }
     
     symbols_metadata = {
-        "src.ball.ball_entity.BallEntity": {"type": "class", "visibility": "public"},
-        "src.shape.shape_base.ShapeBase": {"type": "class", "visibility": "public"}
+        "src.ball.ball_entity.BallEntity": create_test_metadata("class", visibility="public"),
+        "src.shape.shape_base.ShapeBase": create_test_metadata("class", visibility="public")
     }
     
     proj_root_dict = {
@@ -723,10 +766,10 @@ class TestClass():
     symbols_metadata = {
         "src.ball": {"type": "folder", "visibility": "public"},
         "src.ball.ball_entity": {"type": "file", "visibility": "public"},
-        "src.ball.ball_entity.BallEntity": {"type": "class", "visibility": "public"},
-        "src.ball.ball_entity.BallEntity.get_position": {"type": "func", "visibility": "public"},
+        "src.ball.ball_entity.BallEntity": create_test_metadata("class", visibility="public"),
+        "src.ball.ball_entity.BallEntity.get_position": create_test_metadata("function", visibility="public"),
         "src.ball.ball_physics": {"type": "file", "visibility": "public"},
-        "src.ball.ball_physics.BallPhysics": {"type": "class", "visibility": "public"}
+        "src.ball.ball_physics.BallPhysics": create_test_metadata("class", visibility="public")
     }
     
     proj_root_dict = {
@@ -779,10 +822,10 @@ class TestClass():
     symbols_metadata = {
         "src.engine.physics": {"type": "folder", "visibility": "public"},
         "src.engine.physics.core": {"type": "file", "visibility": "public"},
-        "src.engine.physics.core.PhysicsCore": {"type": "class", "visibility": "public"},
+        "src.engine.physics.core.PhysicsCore": create_test_metadata("class", visibility="public"),
         "src.engine.physics.collision": {"type": "folder", "visibility": "public"},
         "src.engine.physics.collision.detector": {"type": "file", "visibility": "public"},
-        "src.engine.physics.collision.detector.CollisionDetector": {"type": "class", "visibility": "public"}
+        "src.engine.physics.collision.detector.CollisionDetector": create_test_metadata("class", visibility="public")
     }
     
     proj_root_dict = {
@@ -837,9 +880,9 @@ class TestClass():
     
     symbols_metadata = {
         "src.ball.ball_entity": {"type": "file", "visibility": "public"},
-        "src.ball.ball_entity.BallEntity": {"type": "class", "visibility": "public"},
-        "src.ball.ball_entity.BallEntity.get_position": {"type": "func", "visibility": "public"},
-        "src.ball.ball_entity.BallEntity.set_position": {"type": "func", "visibility": "public"}
+        "src.ball.ball_entity.BallEntity": create_test_metadata("class", visibility="public"),
+        "src.ball.ball_entity.BallEntity.get_position": create_test_metadata("function", visibility="public"),
+        "src.ball.ball_entity.BallEntity.set_position": create_test_metadata("function", visibility="public")
     }
     
     proj_root_dict = {
@@ -885,8 +928,8 @@ class TestClass():
     
     symbols_metadata = {
         "src.utils.math_helper": {"type": "file", "visibility": "public"},
-        "src.utils.math_helper.calculate_distance": {"type": "func", "visibility": "public"},
-        "src.utils.math_helper.calculate_angle": {"type": "func", "visibility": "public"}
+        "src.utils.math_helper.calculate_distance": create_test_metadata("function", visibility="public"),
+        "src.utils.math_helper.calculate_angle": create_test_metadata("function", visibility="public")
     }
     
     proj_root_dict = {
@@ -943,10 +986,10 @@ class TestClass():
     symbols_metadata = {
         "src.engine": {"type": "folder", "visibility": "public"},
         "src.engine.physics": {"type": "file", "visibility": "public"},
-        "src.engine.physics.PhysicsEngine": {"type": "class", "visibility": "public"},
-        "src.engine.physics.PhysicsEngine.apply_force": {"type": "func", "visibility": "public"},
-        "src.ball.ball_entity.BallEntity": {"type": "class", "visibility": "public"},
-        "src.ball.ball_entity.BallEntity.get_position": {"type": "func", "visibility": "public"}
+        "src.engine.physics.PhysicsEngine": create_test_metadata("class", visibility="public"),
+        "src.engine.physics.PhysicsEngine.apply_force": create_test_metadata("function", visibility="public"),
+        "src.ball.ball_entity.BallEntity": create_test_metadata("class", visibility="public"),
+        "src.ball.ball_entity.BallEntity.get_position": create_test_metadata("function", visibility="public")
     }
     
     proj_root_dict = {
@@ -991,7 +1034,7 @@ class TestClass():
     symbols_metadata = {
         "src.ball": {"type": "folder", "visibility": "public"},
         "src.ball.ball_entity": {"type": "file", "visibility": "public"},
-        "src.ball.ball_entity.BallEntity": {"type": "class", "visibility": "public"}
+        "src.ball.ball_entity.BallEntity": create_test_metadata("class", visibility="public")
     }
     
     proj_root_dict = {
@@ -1045,7 +1088,7 @@ class TestClass():
     }
     
     symbols_metadata = {
-        "src.ball.ball_entity.BallEntity": {"type": "class", "visibility": "public"}
+        "src.ball.ball_entity.BallEntity": create_test_metadata("class", visibility="public")
     }
     
     proj_root_dict = {
@@ -1062,6 +1105,56 @@ class TestClass():
         symbols_metadata=symbols_metadata,
         proj_root_dict=proj_root_dict,
         dependent_relation={"src/test": ["src/ball/ball_entity"]},
+        expected_issues=0
+    )
+
+
+def test_cross_file_dependency_workflow():
+    """测试8.2: 跨文件依赖工作流（BallEntity -> GameManager）"""
+    ibc_content = """
+class GameManager():
+    var ball: $ball.BallEntity类型的球体对象
+    
+    func update():
+        使用$ball.BallEntity.get_position获取位置
+        调用$ball.BallEntity.set_velocity设置速度
+"""
+    
+    # 模拟 ball 模块的符号（从另一个文件加载）
+    symbols_tree = {
+        "ball": {
+            "BallEntity": {
+                "position": None,
+                "velocity": None,
+                "get_position": None,
+                "set_velocity": None
+            }
+        }
+    }
+    symbols_metadata = {
+        "ball.BallEntity": create_test_metadata("class", description="球体实体"),
+        "ball.BallEntity.position": create_test_metadata("variable", scope="field", description="球体位置"),
+        "ball.BallEntity.velocity": create_test_metadata("variable", scope="field", description="球体速度"),
+        "ball.BallEntity.get_position": create_test_metadata("function", description="获取位置"),
+        "ball.BallEntity.set_velocity": create_test_metadata("function", parameters={"速度值": ""}, description="设置速度")
+    }
+    
+    proj_root_dict = {
+        "src": {
+            "ball": "球体模块",
+            "game": "游戏模块"
+        }
+    }
+    dependent_relation = {"src/game": ["src/ball"]}
+    
+    return run_test(
+        test_name="8.2 跨文件依赖工作流（BallEntity -> GameManager）",
+        ibc_content=ibc_content,
+        symbols_tree=symbols_tree,
+        symbols_metadata=symbols_metadata,
+        proj_root_dict=proj_root_dict,
+        dependent_relation=dependent_relation,
+        current_file_path="src/game",
         expected_issues=0
     )
 
@@ -1142,6 +1235,7 @@ def run_all_tests():
         print(f"{Colors.OKBLUE}# 8. 边界条件测试{Colors.ENDC}")
         print(f"{Colors.OKBLUE}{'#'*70}{Colors.ENDC}")
         test_results.append(("8.1 混合引用", test_mixed_references()))
+        test_results.append(("8.2 跨文件依赖工作流", test_cross_file_dependency_workflow()))
         
         # 测试汇总
         print(f"\n{Colors.OKBLUE}{'='*70}{Colors.ENDC}")

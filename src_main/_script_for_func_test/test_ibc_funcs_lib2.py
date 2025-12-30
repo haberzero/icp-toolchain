@@ -15,6 +15,9 @@ sys.path.insert(0, project_root)
 from libs.ibc_funcs import IbcFuncs
 from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
+from typedef.ibc_data_types import (
+    ClassMetadata, FunctionMetadata, VariableMetadata
+)
 
 
 def test_simple_symbol_replacement():
@@ -34,24 +37,24 @@ def test_simple_symbol_replacement():
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
         
-        # 构造符号元数据
+        # 构造符号元数据（使用dataclass）
         symbols_metadata = {
-            "test.calculate_sum": {
-                "type": "func",
-                "normalized_name": "calculate_sum"
-            },
-            "test.calculate_sum.数值1": {
-                "type": "param",
-                "normalized_name": "num1"
-            },
-            "test.calculate_sum.数值2": {
-                "type": "param",
-                "normalized_name": "num2"
-            },
-            "test.calculate_sum.结果": {
-                "type": "var",
-                "normalized_name": "result"
-            }
+            "test.calculate_sum": FunctionMetadata(
+                type="func",
+                normalized_name="calculate_sum"
+            ),
+            "test.calculate_sum.数值1": VariableMetadata(
+                type="var",
+                normalized_name="num1"
+            ),
+            "test.calculate_sum.数值2": VariableMetadata(
+                type="var",
+                normalized_name="num2"
+            ),
+            "test.calculate_sum.结果": VariableMetadata(
+                type="var",
+                normalized_name="result"
+            )
         }
         
         # 执行替换
@@ -100,28 +103,30 @@ def test_class_symbol_replacement():
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
         
-        # 符号元数据
+        # 符号元数据（使用dataclass）
         symbols_metadata = {
-            "test.用户管理器": {
-                "type": "class",
-                "normalized_name": "UserManager"
-            },
-            "test.用户管理器.用户列表": {
-                "type": "var",
-                "normalized_name": "user_list"
-            },
-            "test.用户管理器.添加用户": {
-                "type": "func",
-                "normalized_name": "add_user"
-            },
-            "test.用户管理器.添加用户.用户名": {
-                "type": "param",
-                "normalized_name": "username"
-            },
-            "test.用户管理器.添加用户.用户对象": {
-                "type": "var",
-                "normalized_name": "user_obj"
-            }
+            "test.用户管理器": ClassMetadata(
+                type="class",
+                normalized_name="UserManager"
+            ),
+            "test.用户管理器.用户列表": VariableMetadata(
+                type="var",
+                scope="field",
+                normalized_name="user_list"
+            ),
+            "test.用户管理器.添加用户": FunctionMetadata(
+                type="func",
+                normalized_name="add_user"
+            ),
+            "test.用户管理器.添加用户.用户名": VariableMetadata(
+                type="var",
+                normalized_name="username"
+            ),
+            "test.用户管理器.添加用户.用户对象": VariableMetadata(
+                type="var",
+                scope="local",
+                normalized_name="user_obj"
+            )
         }
         
         # 执行替换
@@ -169,24 +174,27 @@ func 处理数据():
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
         
-        # 符号元数据
+        # 符号元数据（使用dataclass）
         symbols_metadata = {
-            "test.处理数据": {
-                "type": "func",
-                "normalized_name": "process_data"
-            },
-            "test.处理数据.日志器": {
-                "type": "var",
-                "normalized_name": "logger_instance"
-            },
-            "test.处理数据.结果": {
-                "type": "var",
-                "normalized_name": "result"
-            },
-            "test.处理数据.数据": {
-                "type": "var",
-                "normalized_name": "data"
-            }
+            "test.处理数据": FunctionMetadata(
+                type="func",
+                normalized_name="process_data"
+            ),
+            "test.处理数据.日志器": VariableMetadata(
+                type="var",
+                scope="local",
+                normalized_name="logger_instance"
+            ),
+            "test.处理数据.结果": VariableMetadata(
+                type="var",
+                scope="local",
+                normalized_name="result"
+            ),
+            "test.处理数据.数据": VariableMetadata(
+                type="var",
+                scope="local",
+                normalized_name="data"
+            )
         }
         
         # 执行替换
@@ -237,28 +245,30 @@ def test_nested_scope_replacement():
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
         
-        # 符号元数据
+        # 符号元数据（使用dataclass）
         symbols_metadata = {
-            "test.外部类": {
-                "type": "class",
-                "normalized_name": "OuterClass"
-            },
-            "test.外部类.外部变量": {
-                "type": "var",
-                "normalized_name": "outer_var"
-            },
-            "test.外部类.外部方法": {
-                "type": "func",
-                "normalized_name": "outer_method"
-            },
-            "test.外部类.外部方法.外部参数": {
-                "type": "param",
-                "normalized_name": "outer_param"
-            },
-            "test.外部类.外部方法.内部变量": {
-                "type": "var",
-                "normalized_name": "inner_var"
-            }
+            "test.外部类": ClassMetadata(
+                type="class",
+                normalized_name="OuterClass"
+            ),
+            "test.外部类.外部变量": VariableMetadata(
+                type="var",
+                scope="field",
+                normalized_name="outer_var"
+            ),
+            "test.外部类.外部方法": FunctionMetadata(
+                type="func",
+                normalized_name="outer_method"
+            ),
+            "test.外部类.外部方法.外部参数": VariableMetadata(
+                type="var",
+                normalized_name="outer_param"
+            ),
+            "test.外部类.外部方法.内部变量": VariableMetadata(
+                type="var",
+                scope="local",
+                normalized_name="inner_var"
+            )
         }
         
         # 执行替换
@@ -305,14 +315,14 @@ def test_multiple_params_replacement():
         ast_dict = parser.parse()
         
         symbols_metadata = {
-            "test.计算": {"type": "func", "normalized_name": "calculate"},
-            "test.计算.第一参数": {"type": "param", "normalized_name": "param1"},
-            "test.计算.第二参数": {"type": "param", "normalized_name": "param2"},
-            "test.计算.第三参数": {"type": "param", "normalized_name": "param3"},
-            "test.计算.第四参数": {"type": "param", "normalized_name": "param4"},
-            "test.计算.临时1": {"type": "var", "normalized_name": "temp1"},
-            "test.计算.临时2": {"type": "var", "normalized_name": "temp2"},
-            "test.计算.最终结果": {"type": "var", "normalized_name": "final_result"}
+            "test.计算": FunctionMetadata(type="func", normalized_name="calculate"),
+            "test.计算.第一参数": VariableMetadata(type="var", normalized_name="param1"),
+            "test.计算.第二参数": VariableMetadata(type="var", normalized_name="param2"),
+            "test.计算.第三参数": VariableMetadata(type="var", normalized_name="param3"),
+            "test.计算.第四参数": VariableMetadata(type="var", normalized_name="param4"),
+            "test.计算.临时1": VariableMetadata(type="var", scope="local", normalized_name="temp1"),
+            "test.计算.临时2": VariableMetadata(type="var", scope="local", normalized_name="temp2"),
+            "test.计算.最终结果": VariableMetadata(type="var", scope="local", normalized_name="final_result")
         }
         
         result = IbcFuncs.replace_symbols_with_normalized_names(
@@ -384,12 +394,12 @@ def test_boundary_case_partial_metadata():
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
         
-        # 只提供部分符号的元数据
+        # 只提供部分符号的元数据（使用dataclass）
         symbols_metadata = {
-            "test.calculate.参数1": {
-                "type": "param",
-                "normalized_name": "param1"
-            }
+            "test.calculate.参数1": VariableMetadata(
+                type="var",
+                normalized_name="param1"
+            )
             # 其他符号没有元数据
         }
         
@@ -426,10 +436,10 @@ def test_boundary_case_same_name():
         parser = IbcParser(tokens)
         ast_dict = parser.parse()
         
-        # 规范化名称与原名称相同
+        # 规范化名称与原名称相同（使用dataclass）
         symbols_metadata = {
-            "test.test": {"type": "func", "normalized_name": "test"},
-            "test.test.param": {"type": "param", "normalized_name": "param"}
+            "test.test": FunctionMetadata(type="func", normalized_name="test"),
+            "test.test.param": VariableMetadata(type="var", normalized_name="param")
         }
         
         # 执行替换
@@ -469,11 +479,11 @@ def test_similar_names_replacement():
         ast_dict = parser.parse()
         
         symbols_metadata = {
-            "test.process": {"type": "func", "normalized_name": "process"},
-            "test.process.数据": {"type": "var", "normalized_name": "data"},
-            "test.process.数据集": {"type": "var", "normalized_name": "dataset"},
-            "test.process.大数据": {"type": "var", "normalized_name": "bigdata"},
-            "test.process.结果": {"type": "var", "normalized_name": "result"}
+            "test.process": FunctionMetadata(type="func", normalized_name="process"),
+            "test.process.数据": VariableMetadata(type="var", scope="local", normalized_name="data"),
+            "test.process.数据集": VariableMetadata(type="var", scope="local", normalized_name="dataset"),
+            "test.process.大数据": VariableMetadata(type="var", scope="local", normalized_name="bigdata"),
+            "test.process.结果": VariableMetadata(type="var", scope="local", normalized_name="result")
         }
         
         result = IbcFuncs.replace_symbols_with_normalized_names(
@@ -516,12 +526,12 @@ def test_symbol_in_expression():
         ast_dict = parser.parse()
         
         symbols_metadata = {
-            "test.计算面积": {"type": "func", "normalized_name": "calc_area"},
-            "test.计算面积.长度": {"type": "param", "normalized_name": "length"},
-            "test.计算面积.宽度": {"type": "param", "normalized_name": "width"},
-            "test.计算面积.面积": {"type": "var", "normalized_name": "area"},
-            "test.计算面积.周长": {"type": "var", "normalized_name": "perimeter"},
-            "test.计算面积.对角线": {"type": "var", "normalized_name": "diagonal"}
+            "test.计算面积": FunctionMetadata(type="func", normalized_name="calc_area"),
+            "test.计算面积.长度": VariableMetadata(type="var", normalized_name="length"),
+            "test.计算面积.宽度": VariableMetadata(type="var", normalized_name="width"),
+            "test.计算面积.面积": VariableMetadata(type="var", scope="local", normalized_name="area"),
+            "test.计算面积.周长": VariableMetadata(type="var", scope="local", normalized_name="perimeter"),
+            "test.计算面积.对角线": VariableMetadata(type="var", scope="local", normalized_name="diagonal")
         }
         
         result = IbcFuncs.replace_symbols_with_normalized_names(
@@ -561,10 +571,10 @@ def test_symbol_in_method_call():
         ast_dict = parser.parse()
         
         symbols_metadata = {
-            "test.处理": {"type": "func", "normalized_name": "process"},
-            "test.处理.列表项": {"type": "var", "normalized_name": "list_item"},
-            "test.处理.元素": {"type": "var", "normalized_name": "element"},
-            "test.处理.长度值": {"type": "var", "normalized_name": "length_value"}
+            "test.处理": FunctionMetadata(type="func", normalized_name="process"),
+            "test.处理.列表项": VariableMetadata(type="var", scope="local", normalized_name="list_item"),
+            "test.处理.元素": VariableMetadata(type="var", scope="local", normalized_name="element"),
+            "test.处理.长度值": VariableMetadata(type="var", scope="local", normalized_name="length_value")
         }
         
         result = IbcFuncs.replace_symbols_with_normalized_names(
@@ -602,9 +612,9 @@ def test_special_chars_in_context():
         ast_dict = parser.parse()
         
         symbols_metadata = {
-            "test.格式化": {"type": "func", "normalized_name": "format_text"},
-            "test.格式化.文本": {"type": "param", "normalized_name": "text"},
-            "test.格式化.结果": {"type": "var", "normalized_name": "result"}
+            "test.格式化": FunctionMetadata(type="func", normalized_name="format_text"),
+            "test.格式化.文本": VariableMetadata(type="var", normalized_name="text"),
+            "test.格式化.结果": VariableMetadata(type="var", scope="local", normalized_name="result")
         }
         
         result = IbcFuncs.replace_symbols_with_normalized_names(
@@ -640,9 +650,9 @@ def test_inheritance_params_replacement():
         ast_dict = parser.parse()
         
         symbols_metadata = {
-            "test.子类": {"type": "class", "normalized_name": "ChildClass"},
-            "test.子类.父类": {"type": "param", "normalized_name": "ParentClass"},
-            "test.子类.子变量": {"type": "var", "normalized_name": "child_var"}
+            "test.子类": ClassMetadata(type="class", normalized_name="ChildClass"),
+            "test.子类.父类": VariableMetadata(type="var", normalized_name="ParentClass"),
+            "test.子类.子变量": VariableMetadata(type="var", scope="field", normalized_name="child_var")
         }
         
         result = IbcFuncs.replace_symbols_with_normalized_names(
@@ -680,9 +690,9 @@ def test_comment_preservation():
         ast_dict = parser.parse()
         
         symbols_metadata = {
-            "test.处理数据": {"type": "func", "normalized_name": "process_data"},
-            "test.处理数据.输入数据": {"type": "param", "normalized_name": "input_data"},
-            "test.处理数据.结果": {"type": "var", "normalized_name": "result"}
+            "test.处理数据": FunctionMetadata(type="func", normalized_name="process_data"),
+            "test.处理数据.输入数据": VariableMetadata(type="var", normalized_name="input_data"),
+            "test.处理数据.结果": VariableMetadata(type="var", scope="local", normalized_name="result")
         }
         
         result = IbcFuncs.replace_symbols_with_normalized_names(

@@ -5,9 +5,13 @@ from typing import Dict, Any, List, Tuple
 from typedef.ibc_data_types import (
     IbcBaseAstNode, AstNodeType, ModuleNode, ClassNode, 
     FunctionNode, VariableNode, BehaviorStepNode,
-    VisibilityTypes
+    VisibilityTypes, SymbolMetadata, create_symbol_metadata,
+    ClassMetadata, FunctionMetadata, VariableMetadata
 )
 from typedef.cmd_data_types import Colors
+
+from libs.ibc_funcs import IbcFuncs
+
 
 
 class IbcDataStore:
@@ -332,7 +336,7 @@ class IbcDataStore:
         symbols_path: str,
         file_name: str,
         symbols_tree: Dict[str, Any],
-        symbols_metadata: Dict[str, Dict[str, Any]],
+        symbols_metadata: Dict[str, SymbolMetadata],
     ) -> None:
         """保存符号信息（目录级存储，自动合并）
             
@@ -349,10 +353,13 @@ class IbcDataStore:
         """
         # 加载目录级符号数据
         dir_symbols = self._load_dir_symbols(symbols_path)
+        
+        # 将SymbolMetadata对象转换为字典以便JSON序列化
+        symbols_metadata_dict = {path: meta.to_dict() for path, meta in symbols_metadata.items()}
             
         dir_symbols[file_name] = {
             "symbols_tree": symbols_tree,
-            "symbols_metadata": symbols_metadata,
+            "symbols_metadata": symbols_metadata_dict,
         }
             
         # 保存回文件
@@ -363,7 +370,7 @@ class IbcDataStore:
         except Exception as e:
             raise IOError(f"保存符号表失败 [{symbols_path}]: {e}") from e
         
-    def load_symbols(self, symbols_path: str, file_name: str) -> Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]:
+    def load_symbols(self, symbols_path: str, file_name: str) -> Tuple[Dict[str, Any], Dict[str, SymbolMetadata]]:
         """加载单个文件的符号树和元数据，文件不存在或无数据时返回空结构"""
         dir_symbols = self._load_dir_symbols(symbols_path)
         file_symbol_data = dir_symbols.get(file_name, {})
@@ -372,7 +379,17 @@ class IbcDataStore:
             return {}, {}
             
         symbols_tree = file_symbol_data.get("symbols_tree", {})
-        symbols_metadata = file_symbol_data.get("symbols_metadata", {})
+        symbols_metadata_dict = file_symbol_data.get("symbols_metadata", {})
+        
+        # 将字典转换为SymbolMetadata对象
+        symbols_metadata: Dict[str, SymbolMetadata] = {}
+        for path, meta_dict in symbols_metadata_dict.items():
+            try:
+                symbols_metadata[path] = create_symbol_metadata(meta_dict)
+            except ValueError as e:
+                # 如果无法识别符号类型，跳过该符号
+                print(f"警告: 无法加载符号 {path}: {e}")
+                continue
 
         return symbols_tree, symbols_metadata
         
@@ -381,7 +398,7 @@ class IbcDataStore:
         ibc_root: str,
         dependent_relation: Dict[str, List[str]],
         current_file_path: str
-    ) -> Dict[str, Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]]:
+    ) -> Dict[str, Tuple[Dict[str, Any], Dict[str, SymbolMetadata]]]:
         """根据依赖关系为单个文件批量加载依赖符号数据
             
         返回值为 {依赖文件路径: (symbols_tree, symbols_metadata)} 的映射。
@@ -390,7 +407,7 @@ class IbcDataStore:
         if not dependencies:
             return {}
     
-        result: Dict[str, Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]] = {}
+        result: Dict[str, Tuple[Dict[str, Any], Dict[str, SymbolMetadata]]] = {}
     
         for dep_file_path in dependencies:
             symbols_path = self.build_symbols_path(ibc_root, dep_file_path)
@@ -446,14 +463,20 @@ class IbcDataStore:
         symbol_path: str,
         normalized_name: str
     ) -> None:
-        """更新符号的规范化信息
+        """更新单个符号的规范化信息
+            
+        该方法封装了加载→更新→保存的完整流程，适用于单个符号的更新场景。
+        对于批量更新，建议使用 update_symbols_batch 方法。
             
         Args:
             symbols_path: 目录级符号文件路径
             file_name: 文件名（不含扩展名）
             symbol_path: 符号在文件内部的点分隔路径（例如 "ClassName.methodName"）
             normalized_name: 规范化后的名称
-        """
+            
+        Raises:
+            ValueError: 符号数据不存在或符号路径无效
+        """        
         # 加载符号数据
         symbols_tree, symbols_metadata = self.load_symbols(symbols_path, file_name)
         if not symbols_metadata:
@@ -461,11 +484,65 @@ class IbcDataStore:
             
         if symbol_path not in symbols_metadata:
             raise ValueError(f"符号不存在: {symbol_path}，文件: {file_name}")
-            
-        symbols_metadata[symbol_path]["normalized_name"] = normalized_name
+        
+        # 使用 IbcFuncs 统一的更新方法
+        normalized_mapping = {symbol_path: normalized_name}
+        updated_count = IbcFuncs.update_symbols_normalized_names(symbols_metadata, normalized_mapping)
+        
+        if updated_count == 0:
+            raise ValueError(f"符号更新失败: {symbol_path}，可能不是有效的符号类型")
             
         # 保存更新后的符号数据
         self.save_symbols(symbols_path, file_name, symbols_tree, symbols_metadata)
+    
+    def update_symbols_batch(
+        self,
+        symbols_path: str,
+        file_name: str,
+        normalized_mapping: Dict[str, str]
+    ) -> int:
+        """批量更新符号的规范化信息
+        
+        该方法封装了加载→批量更新→保存的完整流程，适用于批量更新场景。
+        相比直接调用 IbcFuncs.update_symbols_normalized_names + save_symbols，
+        该方法更简洁，适合不需要自己管理符号树的场景。
+        
+        Args:
+            symbols_path: 目录级符号文件路径
+            file_name: 文件名（不含扩展名）
+            normalized_mapping: 规范化映射 {符号路径: 规范化名称}
+            
+        Returns:
+            int: 成功更新的符号数量
+            
+        Example:
+            >>> ibc_data_store = get_ibc_data_store()
+            >>> normalized_mapping = {
+            ...     "file.MyClass": "NormalizedClass",
+            ...     "file.my_func": "normalized_func"
+            ... }
+            >>> count = ibc_data_store.update_symbols_batch(
+            ...     symbols_path="path/to/symbols.json",
+            ...     file_name="file",
+            ...     normalized_mapping=normalized_mapping
+            ... )
+            >>> print(f"更新了 {count} 个符号")
+        """
+        from libs.ibc_funcs import IbcFuncs
+        
+        # 加载符号数据
+        symbols_tree, symbols_metadata = self.load_symbols(symbols_path, file_name)
+        if not symbols_metadata:
+            return 0
+        
+        # 使用 IbcFuncs 工具方法批量更新
+        updated_count = IbcFuncs.update_symbols_normalized_names(symbols_metadata, normalized_mapping)
+        
+        if updated_count > 0:
+            # 保存更新后的符号数据
+            self.save_symbols(symbols_path, file_name, symbols_tree, symbols_metadata)
+        
+        return updated_count
     
     def _load_dir_symbols(self, symbols_path: str) -> Dict[str, Any]:
         """内部方法：加载目录级符号表，文件不存在时返回空字典"""

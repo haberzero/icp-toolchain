@@ -1,0 +1,35 @@
+{
+  "manager": {
+    "symbols_tree": {
+      "UserManager": {
+        "登录": {},
+        "用户列表": {}
+      }
+    },
+    "symbols_metadata": {
+      "UserManager": {
+        "type": "class",
+        "description": "用户管理类",
+        "visibility": "public",
+        "__is_local__": false
+      },
+      "UserManager.登录": {
+        "type": "func",
+        "description": "用户登录",
+        "visibility": "public",
+        "parameters": {
+          "用户名": "登录用户名",
+          "密码": "用户密码"
+        },
+        "__is_local__": false
+      },
+      "UserManager.用户列表": {
+        "type": "var",
+        "description": "用户列表",
+        "visibility": "private",
+        "scope": "field",
+        "__is_local__": false
+      }
+    }
+  }
+}
