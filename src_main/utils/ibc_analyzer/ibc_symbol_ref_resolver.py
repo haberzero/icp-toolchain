@@ -264,6 +264,9 @@ class SymbolRefResolver:
         """解析AST中的所有符号引用并验证"""
         for uid, node in self.ast_dict.items():
             self._resolve_node_references(node)
+        
+        # 验证类的构造函数
+        self._validate_class_constructors()
     
     def _resolve_node_references(self, node: IbcBaseAstNode) -> None:
         """解析单个节点中的符号引用"""
@@ -845,3 +848,85 @@ class SymbolRefResolver:
         
         # 如果引用的是嵌套路径（如self.ball.get_position），只验证第一层
         # 更深层的验证需要类型推导，暂时跳过
+    
+    def _validate_class_constructors(self) -> None:
+        """验证类的构造函数并提取参数到metadata
+        
+        对每个类节点：
+        1. 检查是否同时存在与类同名的构造函数和__init__函数，如果是则记录issue（这会导致后续无法区分哪个是真正的构造函数）
+        2. 提取构造函数参数并更新到symbols_metadata中的ClassMetadata.init_parameters
+        3. 如果没有构造函数，则填入空字典
+        """
+        for uid, node in self.ast_dict.items():
+            if not isinstance(node, ClassNode):
+                continue
+            
+            class_name = node.identifier
+            line_num = node.line_number
+            
+            # 查找构造函数
+            constructor_func = None
+            init_func = None
+            
+            for child_uid in node.children_uids:
+                child_node = self.ast_dict.get(child_uid)
+                if not isinstance(child_node, FunctionNode):
+                    continue
+                
+                func_name = child_node.identifier
+                if func_name == class_name:
+                    constructor_func = child_node
+                elif func_name == "__init__":
+                    init_func = child_node
+            
+            # 验证：不应同时存在同名构造函数和__init__
+            # 这是唯一需要严格检查的情况，因为会导致后续代码解析无法区分到底哪个才是构造函数
+            if constructor_func and init_func:
+                error_msg = f"类 '{class_name}' 同时定义了构造函数 '{class_name}()' 和 '__init__()', 请只保留一个。推荐使用与类同名的构造函数 '{class_name}()'"
+                self.ibc_issue_recorder.record_issue(
+                    message=error_msg,
+                    line_num=line_num,
+                    line_content=f"class {class_name}():"
+                )
+                continue
+            
+            # 选择目标构造函数（优先选择同名函数）
+            target_func = constructor_func if constructor_func else init_func
+            
+            # 获取类的符号路径并更新metadata
+            class_path = self._get_symbol_path_for_node(node)
+            if class_path and class_path in self.symbols_metadata:
+                class_meta = self.symbols_metadata[class_path]
+                if isinstance(class_meta, ClassMetadata):
+                    if target_func and target_func.params:
+                        # 更新构造函数参数
+                        class_meta.init_parameters = target_func.params.copy()
+                    else:
+                        # 没有构造函数或构造函数没有参数，填入空字典
+                        class_meta.init_parameters = {}
+    
+    def _get_symbol_path_for_node(self, node: IbcBaseAstNode) -> str:
+        """获取节点的符号路径
+        
+        递归向上追溯，构建点分隔路径
+        
+        Args:
+            node: AST节点
+            
+        Returns:
+            str: 符号路径，如 "ClassName" 或 "OuterClass.InnerClass"
+        """
+        path_parts = []
+        current_node = node
+        
+        while current_node and current_node.uid != 0:
+            if isinstance(current_node, (ClassNode, FunctionNode, VariableNode)):
+                identifier = getattr(current_node, "identifier", "")
+                if identifier:
+                    path_parts.insert(0, identifier)
+            
+            # 向上追溯
+            parent_uid = current_node.parent_uid
+            current_node = self.ast_dict.get(parent_uid)
+        
+        return ".".join(path_parts)

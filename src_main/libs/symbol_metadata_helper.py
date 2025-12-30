@@ -116,6 +116,7 @@ class SymbolMetadataHelper:
                     description=meta.description,
                     visibility=meta.visibility,
                     normalized_name=normalized_name,
+                    init_parameters=meta.init_parameters,
                     __is_local__=meta.__is_local__,
                     __local_file__=meta.__local_file__
                 )
@@ -153,17 +154,18 @@ class SymbolMetadataHelper:
         """构建可用依赖符号列表
         
         从 symbols_metadata 中提取符号信息，并将完整路径简化为相对路径。
+        对于函数和类，会在描述后附加参数信息。
         
         Args:
             symbols_metadata: 符号元数据字典，键为完整的点分隔路径（如 src.ball.ball_entity.BallEntity）
             proj_root_dict: 项目根目录字典，用于确定文件名位置
             
         Returns:
-            List[str]: 符号列表，每个元素格式为 "$filename.symbol ：功能描述"
+            List[str]: 符号列表，每个元素格式为 "$filename.symbol(<params>) ：功能描述"
             
         示例：
-            输入: {"src.ball.ball_entity.BallEntity": {"type": "class", "description": "球体实体类"}}
-            输出: ["$ball_entity.BallEntity ：球体实体类"]
+            输入: {"src.ball.ball_entity.BallEntity": {"type": "class", "description": "球体实体类", "init_parameters": {"x": "横坐标", "y": "纵坐标"}}}
+            输出: ["$ball_entity.BallEntity(x, y) ：球体实体类"]
         """
         from libs.symbol_path_helper import SymbolPathHelper
         
@@ -180,7 +182,19 @@ class SymbolMetadataHelper:
             
             # 简化符号路径
             simplified_path = SymbolPathHelper.simplify_symbol_path(symbol_path, proj_root_dict)
-            available_symbol_lines.append(f"${simplified_path} ：{desc}")
+            
+            # 构建参数信息
+            param_str = ""
+            if isinstance(meta, FunctionMetadata) and meta.parameters:
+                # 函数的参数列表
+                param_names = list(meta.parameters.keys())
+                param_str = f"({', '.join(param_names)})"
+            elif isinstance(meta, ClassMetadata) and meta.init_parameters:
+                # 类的构造函数参数
+                param_names = list(meta.init_parameters.keys())
+                param_str = f"({', '.join(param_names)})"
+            
+            available_symbol_lines.append(f"${simplified_path}{param_str} ：{desc}")
         
         return available_symbol_lines
     

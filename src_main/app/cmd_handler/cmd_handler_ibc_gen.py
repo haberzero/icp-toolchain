@@ -592,8 +592,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 self.ibc_issue_recorder.record_issue(error_msg, 0, "")
             return False
         
-        # 执行符号引用验证
-        print(f"    {Colors.OKBLUE}正在验证符号引用...{Colors.ENDC}")
+        # 执行符号引用验证（包括类构造函数验证）
+        print(f"    {Colors.OKBLUE}正在验证符号引用和类构造函数...{Colors.ENDC}")
         self._validate_symbol_references(
             ast_dict=ast_dict,
             current_file_path=current_file_path,

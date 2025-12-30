@@ -205,6 +205,7 @@ class VisibleSymbolBuilder:
                         description=meta.description,
                         visibility=meta.visibility,
                         normalized_name=meta.normalized_name,
+                        init_parameters=meta.init_parameters,
                         __is_local__=True,
                         __local_file__=current_file_path
                     )

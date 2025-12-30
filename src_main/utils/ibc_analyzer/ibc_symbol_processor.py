@@ -4,6 +4,7 @@
 - 从AST中提取符号信息,构建符号树和符号元数据
 - 只处理类、函数、变量节点,忽略Module和BehaviorStep节点
 - 自动推断变量作用域(global/field/local)
+- 注意：构造函数参数提取和ClassMetadata.init_parameters的更新由SymbolRefResolver负责
 
 使用示例:
     processor = IbcSymbolProcessor(ast_dict)
@@ -21,7 +22,8 @@ class IbcSymbolProcessor:
 
     新设计：
     - 不再返回以符号名为 key 的平铺符号表
-    - 直接从 AST 构建层次化的符号树(symbols_tree)和符号元数据(symbols_metadata)
+    - 直接从AST构建层次化的符号树(symbols_tree)和符号元数据(symbols_metadata)
+    - 构造函数相关的参数提取和metadata更新交由SymbolRefResolver负责
     """
     
     def __init__(self, ast_dict: Dict[int, IbcBaseAstNode]):

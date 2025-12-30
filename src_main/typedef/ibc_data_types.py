@@ -216,6 +216,7 @@ class ClassMetadata(SymbolMetadataBase):
     type: str = "class"
     visibility: str = "public"  # 可见性: public/protected/private
     normalized_name: str = ""  # 规范化后的名称
+    init_parameters: Dict[str, str] = field(default_factory=dict)  # 构造函数参数列表 {参数名: 参数描述}
     __is_local__: bool = False  # 是否是本地符号（由VisibleSymbolBuilder添加）
     __local_file__: str = ""  # 本地符号所在文件（由VisibleSymbolBuilder添加）
 
