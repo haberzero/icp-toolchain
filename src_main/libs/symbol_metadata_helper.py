@@ -155,17 +155,18 @@ class SymbolMetadataHelper:
         
         从 symbols_metadata 中提取符号信息，并将完整路径简化为相对路径。
         对于函数和类，会在描述后附加参数信息。
+        每个符号前都会标注其类型（class/func/var）。
         
         Args:
             symbols_metadata: 符号元数据字典，键为完整的点分隔路径（如 src.ball.ball_entity.BallEntity）
             proj_root_dict: 项目根目录字典，用于确定文件名位置
             
         Returns:
-            List[str]: 符号列表，每个元素格式为 "$filename.symbol(<params>) ：功能描述"
+            List[str]: 符号列表，每个元素格式为 "[类型] $filename.symbol(<params>) ：功能描述"
             
         示例：
             输入: {"src.ball.ball_entity.BallEntity": {"type": "class", "description": "球体实体类", "init_parameters": {"x": "横坐标", "y": "纵坐标"}}}
-            输出: ["$ball_entity.BallEntity(x, y) ：球体实体类"]
+            输出: ["[class] $ball_entity.BallEntity(x, y) ：球体实体类"]
         """
         from libs.symbol_path_helper import SymbolPathHelper
         
@@ -183,6 +184,15 @@ class SymbolMetadataHelper:
             # 简化符号路径
             simplified_path = SymbolPathHelper.simplify_symbol_path(symbol_path, proj_root_dict)
             
+            # 确定符号类型标签
+            type_label = ""
+            if isinstance(meta, ClassMetadata):
+                type_label = "[class]"
+            elif isinstance(meta, FunctionMetadata):
+                type_label = "[func]"
+            elif isinstance(meta, VariableMetadata):
+                type_label = "[var]"
+            
             # 构建参数信息
             param_str = ""
             if isinstance(meta, FunctionMetadata) and meta.parameters:
@@ -194,7 +204,7 @@ class SymbolMetadataHelper:
                 param_names = list(meta.init_parameters.keys())
                 param_str = f"({', '.join(param_names)})"
             
-            available_symbol_lines.append(f"${simplified_path}{param_str} ：{desc}")
+            available_symbol_lines.append(f"{type_label} ${simplified_path}{param_str} ：{desc}")
         
         return available_symbol_lines
     
