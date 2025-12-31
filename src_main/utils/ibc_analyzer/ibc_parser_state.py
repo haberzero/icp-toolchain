@@ -1061,6 +1061,13 @@ class BehaviorStepState(BaseState):
                 self.pass_in_token_flag = True
                 self.backslash_continuation_started = True
                 self.has_entered_continuation = True
+            elif content_stripped and content_stripped[-1] in "+-*/%<>!&|":
+                # 行末是运算符，进入逗号延续行模式（使用与逗号相同的处理逻辑）
+                self.sub_state = BehaviorStepSubState.EXPECTING_COMMA_CONTINUATION
+                self.pass_in_token_flag = True
+                self.local_indent_level = 0
+                self.content += " "  # 添加空格以便后续内容连接
+                self.has_entered_continuation = True
             else:
                 # 普通行结束
                 self.content = content_stripped
@@ -1088,17 +1095,17 @@ class BehaviorStepState(BaseState):
             
             # 检查行末字符
             if content_stripped and content_stripped[-1] == ":":
-                # 逗号延续行也允许以冒号结尾，设置new_block_flag并直接弹出
+                # 逗号延续行也允许以冒号结尾，设置 new_block_flag 并直接弹出
                 self.new_block_flag = True
                 self.content = content_stripped
                 self._create_behavior_node()
                 self.pass_in_token_flag = False
                 self.pop_flag = True
-            elif content_stripped and content_stripped[-1] == ",":
-                # 行末是逗号，保持延续行模式
+            elif content_stripped and (content_stripped[-1] == "," or content_stripped[-1] in "+-*/%<>!&|"):
+                # 行末是逗号或运算符，保持延续行模式
                 self.content += " "  # 添加空格以便后续内容连接
             else:
-                # 行末不是逗号也不是冒号，直接弹出
+                # 行末不是逗号也不是冒号也不是运算符，直接弹出
                 self.content = content_stripped
                 self._create_behavior_node()
                 self.pass_in_token_flag = False

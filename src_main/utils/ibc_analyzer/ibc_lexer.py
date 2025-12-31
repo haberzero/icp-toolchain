@@ -98,11 +98,11 @@ class IbcLexer:
     
     def _tokenize_line_with_refs(self, content_line: str) -> None:
         """处理包含符号引用的行使用$作为起始标记，后续连续的非保留符号作为引用内容，包含 . 符号 
-        同时支持识别self.开头的引用（不需要$前缀）
+        同时支持识别 self.开头的引用（不需要$前缀）
         """
         i = 0
         n = len(content_line)
-        special_chars = '(){}[],:\\=$'  # 特殊符号集合
+        special_chars = '(){}[],:\\=$+-*/%<>!&|'  # 特殊符号集合
         while i < n:
             char = content_line[i]
             if char == '$':
@@ -120,17 +120,17 @@ class IbcLexer:
                 # 不消耗分隔符（包括$），继续由常规文本分词处理
             else:
                 start = i
-                # 查找self.开头的引用
+                # 查找 self.开头的引用
                 if content_line[i:i+5] == 'self.' and (i == 0 or content_line[i-1].isspace() or content_line[i-1] in special_chars):
-                    # 找到self.开头，提取完整的self.xxx.yyy引用
+                    # 找到 self.开头，提取完整的 self.xxx.yyy 引用
                     i += 5  # 跳过'self.'
                     start_ref = i
-                    # 收集self后面的内容，包括.号
+                    # 收集 self 后面的内容，包括.号
                     while i < n and (content_line[i] not in special_chars) and (not content_line[i].isspace()):
                         i += 1
                     ref_content = content_line[start_ref:i]
                     if ref_content.strip():
-                        # 生成SELF_REF_IDENTIFIER token，内容不包括'self.'前缀，只包拫xxx.yyy部分
+                        # 生成 SELF_REF_IDENTIFIER token，内容不包括'self.'前缀，只包含xxx.yyy部分
                         self.tokens.append(Token(IbcTokenType.SELF_REF_IDENTIFIER, ref_content, self.line_num))
                     else:
                         print(f"Warning: Line {self.line_num}: Empty reference after 'self.', will be removed")
@@ -146,12 +146,12 @@ class IbcLexer:
                         self._tokenize_text_part(text_part)
     
     def _tokenize_text_part(self, text: str):
-        r"""对文本部分进行分词：识别 ( ) { } [ ] , : \ = $ 等特殊符号
+        r"""对文本部分进行分词：识别 ( ) { } [ ] , : \ = $ + - * / % < > ! & | 等特殊符号
         其余所有连续非特殊字符（包括数字、字母、符号、空格等）视为 IDENTIFIER 即普通文本
         """
         i = 0
         n = len(text)
-        special_chars = '(){}[],:\\=$'  # 特殊符号集合
+        special_chars = '(){}[],:\\=$+-*/%<>!&|'  # 特殊符号集合
         
         while i < n:
             char = text[i]
@@ -184,6 +184,36 @@ class IbcLexer:
                 i += 1
             elif char == '\\':
                 self.tokens.append(Token(IbcTokenType.BACKSLASH, '\\', self.line_num))
+                i += 1
+            elif char == '+':
+                self.tokens.append(Token(IbcTokenType.PLUS, '+', self.line_num))
+                i += 1
+            elif char == '-':
+                self.tokens.append(Token(IbcTokenType.MINUS, '-', self.line_num))
+                i += 1
+            elif char == '*':
+                self.tokens.append(Token(IbcTokenType.MULTIPLY, '*', self.line_num))
+                i += 1
+            elif char == '/':
+                self.tokens.append(Token(IbcTokenType.DIVIDE, '/', self.line_num))
+                i += 1
+            elif char == '%':
+                self.tokens.append(Token(IbcTokenType.MODULO, '%', self.line_num))
+                i += 1
+            elif char == '<':
+                self.tokens.append(Token(IbcTokenType.LESS, '<', self.line_num))
+                i += 1
+            elif char == '>':
+                self.tokens.append(Token(IbcTokenType.GREATER, '>', self.line_num))
+                i += 1
+            elif char == '!':
+                self.tokens.append(Token(IbcTokenType.EXCLAMATION, '!', self.line_num))
+                i += 1
+            elif char == '&':
+                self.tokens.append(Token(IbcTokenType.AMPERSAND, '&', self.line_num))
+                i += 1
+            elif char == '|':
+                self.tokens.append(Token(IbcTokenType.PIPE, '|', self.line_num))
                 i += 1
             elif char == '$':
                 # 在文本分词中遇到$，这是一个严重的逻辑错误

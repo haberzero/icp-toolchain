@@ -19,6 +19,18 @@ class IbcTokenType(Enum):
     COLON = "COLON"  # 冒号 :
     EQUAL = "EQUAL"  # 等号 =
     BACKSLASH = "BACKSLASH"  # 反斜杠 \
+    # 运算符
+    PLUS = "PLUS"  # 加号 +
+    MINUS = "MINUS"  # 减号 -
+    MULTIPLY = "MULTIPLY"  # 乘号 *
+    DIVIDE = "DIVIDE"  # 除号 /
+    MODULO = "MODULO"  # 取模 %
+    LESS = "LESS"  # 小于 <
+    GREATER = "GREATER"  # 大于 >
+    EXCLAMATION = "EXCLAMATION"  # 感叹号 !
+    AMPERSAND = "AMPERSAND"  # 与符号 &
+    PIPE = "PIPE"  # 或符号 |
+    # 其他
     REF_IDENTIFIER = "REF_IDENTIFIER"  # 符号引用
     SELF_REF_IDENTIFIER = "SELF_REF_IDENTIFIER"  # self引用（self.xxx格式）
     INDENT = "INDENT"  # 缩进

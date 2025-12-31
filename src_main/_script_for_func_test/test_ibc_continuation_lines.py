@@ -1,6 +1,6 @@
 """
 延续行逻辑完整测试脚本
-包含反斜杠延续行和逗号延续行的各种测试场景
+包含反斜杠延续行、逗号延续行、运算符延续行的各种测试场景
 """
 
 import sys
@@ -9,7 +9,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
-from typedef.ibc_data_types import BehaviorStepNode
+from typedef.ibc_data_types import BehaviorStepNode, IbcTokenType
 
 
 def print_ast_tree(ast_nodes, uid=0, indent=0):
@@ -427,6 +427,277 @@ func 嵌套处理():
 
 
 # ============================================================
+# 运算符延续行测试
+# ============================================================
+
+def test_operator_plus_continuation():
+    """测试加号运算符延续行"""
+    print("\n测试加号运算符延续行...")
+    
+    code = """\
+func 计算总和():
+    总和 = 变量A +
+        变量B +
+        变量C
+    
+    返回 总和"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        
+        # 检查是否正确识别运算符token
+        plus_tokens = [t for t in tokens if t.type == IbcTokenType.PLUS]
+        assert len(plus_tokens) == 2, f"应该识别2个加号token，实际识别{len(plus_tokens)}个"
+        
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        
+        # 验证内容合并正确
+        assert "变量A" in behavior1.content
+        assert "变量B" in behavior1.content
+        assert "变量C" in behavior1.content
+        assert "+" in behavior1.content
+        
+        print("  ✓ 成功解析加号运算符延续行")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_operator_multiply_continuation():
+    """测试乘号运算符延续行"""
+    print("\n测试乘号运算符延续行...")
+    
+    code = """\
+func 计算乘积():
+    结果 = 第一个数 *
+        第二个数 *
+        第三个数
+    
+    返回 结果"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        
+        # 检查是否正确识别乘号token
+        multiply_tokens = [t for t in tokens if t.type == IbcTokenType.MULTIPLY]
+        assert len(multiply_tokens) == 2, f"应该识别2个乘号token，实际识别{len(multiply_tokens)}个"
+        
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        
+        # 验证内容合并正确
+        assert "第一个数" in behavior1.content
+        assert "第二个数" in behavior1.content
+        assert "第三个数" in behavior1.content
+        assert "*" in behavior1.content
+        
+        print("  ✓ 成功解析乘号运算符延续行")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_operator_comparison_continuation():
+    """测试比较运算符延续行与冒号结合"""
+    print("\n测试比较运算符延续行与冒号结合...")
+    
+    code = """\
+func 判断条件():
+    如果 值A >
+            最小值 并且 值A <
+            最大值:
+        执行操作
+    
+    完成"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        
+        # 检查是否正确识别比较运算符token
+        greater_tokens = [t for t in tokens if t.type == IbcTokenType.GREATER]
+        less_tokens = [t for t in tokens if t.type == IbcTokenType.LESS]
+        assert len(greater_tokens) == 1, "应该识别1个大于号token"
+        assert len(less_tokens) == 1, "应该识别1个小于号token"
+        
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        if_behavior = ast_nodes[func_node.children_uids[0]]
+        
+        # 验证内容合并正确
+        assert "值A" in if_behavior.content
+        assert "最小值" in if_behavior.content
+        assert "最大值" in if_behavior.content
+        assert ">" in if_behavior.content
+        assert "<" in if_behavior.content
+        
+        # 验证设置了new_block_flag
+        assert if_behavior.new_block_flag, "预期设置了new_block_flag"
+        
+        print("  ✓ 成功解析比较运算符延续行与冒号结合")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_operator_with_indent():
+    """测试运算符延续行带缩进"""
+    print("\n测试运算符延续行带缩进...")
+    
+    code = """\
+func 长表达式():
+    结果 = 第一项 +
+            第二项 +
+            第三项 -
+            第四项
+    
+    返回 结果"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        
+        # 验证所有项都被合并
+        assert "第一项" in behavior1.content
+        assert "第二项" in behavior1.content
+        assert "第三项" in behavior1.content
+        assert "第四项" in behavior1.content
+        
+        print("  ✓ 成功解析带缩进的运算符延续行")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_operator_modulo_and_divide():
+    """测试取模和除法运算符延续行"""
+    print("\n测试取模和除法运算符延续行...")
+    
+    code = """\
+func 数学运算():
+    商 = 被除数 /
+        除数
+    
+    余数 = 被除数 %
+        除数
+    
+    返回 商, 余数"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        
+        # 检查是否正确识别运算符token
+        divide_tokens = [t for t in tokens if t.type == IbcTokenType.DIVIDE]
+        modulo_tokens = [t for t in tokens if t.type == IbcTokenType.MODULO]
+        assert len(divide_tokens) == 1, "应该识别1个除号token"
+        assert len(modulo_tokens) == 1, "应该识别1个取模token"
+        
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        
+        # 第一个行为：商的计算
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        assert "被除数" in behavior1.content
+        assert "除数" in behavior1.content
+        assert "/" in behavior1.content
+        
+        # 第二个行为：余数的计算
+        behavior2 = ast_nodes[func_node.children_uids[1]]
+        assert "被除数" in behavior2.content
+        assert "除数" in behavior2.content
+        assert "%" in behavior2.content
+        
+        print("  ✓ 成功解析取模和除法运算符延续行")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_operator_logical_continuation():
+    """测试逻辑运算符延续行"""
+    print("\n测试逻辑运算符延续行...")
+    
+    code = """\
+func 复杂判断():
+    条件 = 标志A &
+        标志B |
+        标志C
+    
+    返回 条件"""
+    
+    try:
+        lexer = IbcLexer(code)
+        tokens = lexer.tokenize()
+        
+        # 检查是否正确识别逻辑运算符token
+        and_tokens = [t for t in tokens if t.type == IbcTokenType.AMPERSAND]
+        or_tokens = [t for t in tokens if t.type == IbcTokenType.PIPE]
+        assert len(and_tokens) == 1, "应该识别1个与运算符token"
+        assert len(or_tokens) == 1, "应该识别1个或运算符token"
+        
+        parser = IbcParser(tokens)
+        ast_nodes = parser.parse()
+        
+        root_node = ast_nodes[0]
+        func_node = ast_nodes[root_node.children_uids[0]]
+        behavior1 = ast_nodes[func_node.children_uids[0]]
+        
+        # 验证内容合并正确
+        assert "标志A" in behavior1.content
+        assert "标志B" in behavior1.content
+        assert "标志C" in behavior1.content
+        assert "&" in behavior1.content
+        assert "|" in behavior1.content
+        
+        print("  ✓ 成功解析逻辑运算符延续行")
+        return True
+    except Exception as e:
+        print(f"  ❌ 测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+# ============================================================
 # 主程序
 # ============================================================
 
@@ -449,6 +720,14 @@ if __name__ == "__main__":
     test_results.append(("逗号缩进冒号", test_comma_continuation_with_indent_and_colon()))
     test_results.append(("逗号普通结尾", test_comma_continuation_without_colon()))
     test_results.append(("嵌套延续冒号", test_nested_continuation_with_colon()))
+    
+    print("\n【运算符延续行测试】")
+    test_results.append(("加号延续行", test_operator_plus_continuation()))
+    test_results.append(("乘号延续行", test_operator_multiply_continuation()))
+    test_results.append(("比较运算符延续", test_operator_comparison_continuation()))
+    test_results.append(("运算符+缩进", test_operator_with_indent()))
+    test_results.append(("取模和除法", test_operator_modulo_and_divide()))
+    test_results.append(("逻辑运算符延续", test_operator_logical_continuation()))
     
     print("\n" + "=" * 60)
     print("测试结果汇总")
