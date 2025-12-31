@@ -486,7 +486,8 @@ class SymbolRefResolver:
         for import_scope in reversed(self.import_scopes):
             # 检查是否匹配别名
             if first_part == import_scope.alias:
-                # 外部库引用，默认有效
+                # 外部库引用，默认有效（无论是单部分还是多部分引用）
+                # 第三方库的符号不在我们的符号表中，直接跳过验证
                 if import_scope.is_external:
                     return True
                 

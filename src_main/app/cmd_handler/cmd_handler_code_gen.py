@@ -473,6 +473,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         # 构建符号使用说明
         local_symbols_usage_guide = self._build_local_symbols_usage_guide(icp_json_file_path)
         dependency_symbols_usage_guide = self._build_dependency_symbols_usage_guide(icp_json_file_path)
+        dependency_target_code = self._build_dependency_target_code(icp_json_file_path)
         
         # 读取提示词模板
         app_data_store = get_app_data_store()
@@ -494,6 +495,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         user_prompt_str = user_prompt_str.replace('IBC_CONTENT_PLACEHOLDER', normalized_ibc_content)
         user_prompt_str = user_prompt_str.replace('LOCAL_SYMBOLS_USAGE_GUIDE_PLACEHOLDER', local_symbols_usage_guide)
         user_prompt_str = user_prompt_str.replace('DEPENDENCY_SYMBOLS_USAGE_GUIDE_PLACEHOLDER', dependency_symbols_usage_guide)
+        user_prompt_str = user_prompt_str.replace('DEPENDENCY_TARGET_CODE_PLACEHOLDER', dependency_target_code)
         
         return user_prompt_str
 
@@ -616,6 +618,65 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             all_dependency_symbols,
             usage_guide_content=None  # 不使用单个文件的usage_guide
         )
+    
+    def _build_dependency_target_code(self, icp_json_file_path: str) -> str:
+        """构建依赖文件的目标代码内容
+        
+        读取当前文件依赖的其他文件已生成的目标代码，
+        使大模型能够看到具体的实现细节，从而正确调用依赖符号。
+        
+        Args:
+            icp_json_file_path: 文件路径
+            
+        Returns:
+            str: 依赖文件的目标代码内容，按文件组织
+        """
+        # 获取当前文件的依赖列表
+        dependencies = self.dependent_relation.get(icp_json_file_path, [])
+        
+        if not dependencies:
+            return "无外部依赖，不需要参考其他文件的代码。"
+        
+        result_lines = []
+        loaded_count = 0
+        
+        # 遍历每个依赖文件
+        for dep_file_path in dependencies:
+            target_code_path = self._build_target_code_path(dep_file_path)
+            
+            # 检查目标代码文件是否存在
+            if not os.path.exists(target_code_path):
+                result_lines.append(f"### {dep_file_path}")
+                result_lines.append(f"目标代码文件尚未生成，请根据符号使用说明进行调用。")
+                result_lines.append("")
+                continue
+            
+            # 读取目标代码内容
+            try:
+                with open(target_code_path, 'r', encoding='utf-8') as f:
+                    target_code_content = f.read()
+                
+                # 添加文件头和代码块
+                result_lines.append(f"### {dep_file_path}")
+                result_lines.append(f"文件路径：`{target_code_path}`")
+                result_lines.append("")
+                result_lines.append(f"```{self.target_language}")
+                result_lines.append(target_code_content)
+                result_lines.append("```")
+                result_lines.append("")
+                
+                loaded_count += 1
+                
+            except Exception as e:
+                result_lines.append(f"### {dep_file_path}")
+                result_lines.append(f"读取目标代码失败: {e}")
+                result_lines.append("")
+                print(f"    {Colors.WARNING}警告: 读取依赖文件 {dep_file_path} 的目标代码失败: {e}{Colors.ENDC}")
+        
+        if loaded_count == 0:
+            return "所有依赖文件的目标代码尚未生成，请根据符号使用说明进行调用。"
+        
+        return '\n'.join(result_lines)
 
     def _validate_generated_code(self, generated_code: str, file_path: str) -> bool:
         """验证生成的目标代码

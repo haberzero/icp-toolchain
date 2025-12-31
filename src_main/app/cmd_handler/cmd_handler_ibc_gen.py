@@ -217,10 +217,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             
             need_update_flag_dict[file_path] = need_update
             
-            # 更新one_file_req的MD5到统一的verify文件（使用update方法）
-            ibc_data_store.update_file_verify_data(self.work_data_dir_path, file_path, {
-                'one_file_req_verify_code': current_req_md5
-            })
+            # 注意: one_file_req的MD5更新移到了文件生成成功后(_create_single_ibc_file)
+            # 只有生成成功并验证通过后才更新,避免失败文件被跳过的问题
         
         # 第二阶段：依赖链传播更新
         # 按依赖顺序遍历（file_list已经是拓扑排序后的顺序）
@@ -362,11 +360,34 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 保存符号元数据到验证文件（符号数量和MD5）
         symbols_count = IbcFuncs.count_symbols_in_metadata(symbols_metadata)
         symbols_metadata_md5 = IbcFuncs.calculate_symbols_metadata_md5(symbols_metadata)
-        ibc_data_store.update_file_verify_data(self.work_data_dir_path, icp_json_file_path, {
+        
+        # 计算并保存IBC内容的MD5
+        ibc_content_md5 = IbcFuncs.calculate_text_md5(ibc_content)
+        
+        # 读取one_file_req的MD5(用于在生成成功后更新)
+        req_file = os.path.join(self.work_staging_dir_path, f"{icp_json_file_path}_one_file_req.txt")
+        try:
+            with open(req_file, 'r', encoding='utf-8') as f:
+                req_content = f.read()
+            current_req_md5 = IbcFuncs.calculate_text_md5(req_content)
+        except Exception as e:
+            print(f"    {Colors.WARNING}警告: 读取one_file_req失败，无法更新MD5: {e}{Colors.ENDC}")
+            current_req_md5 = None
+        
+        # 一次性更新所有验证数据
+        update_data = {
             'symbols_count': str(symbols_count),
-            'symbols_metadata_md5': symbols_metadata_md5
-        })
-        print(f"    {Colors.OKGREEN}符号元数据已保存: 符号数量={symbols_count}, MD5={symbols_metadata_md5[:8]}...{Colors.ENDC}")
+            'symbols_metadata_md5': symbols_metadata_md5,
+            'ibc_verify_code': ibc_content_md5  # 保存IBC内容的MD5
+        }
+        
+        # 只有成功读取到one_file_req的MD5时才更新(这是关键!)
+        if current_req_md5 is not None:
+            update_data['one_file_req_verify_code'] = current_req_md5
+        
+        ibc_data_store.update_file_verify_data(self.work_data_dir_path, icp_json_file_path, update_data)
+        
+        print(f"    {Colors.OKGREEN}验证数据已保存: 符号数={symbols_count}, MD5={symbols_metadata_md5[:8]}...{Colors.ENDC}")
         
         # IBC代码和符号表保存成功，返回成功
         return True
@@ -461,6 +482,18 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         behavior_content = self._extract_section_content(file_req_str, 'behavior')
         # import_content = self._extract_section_content(file_req_str, 'import')
         
+        # 读取提取的参数（前置检查已保证文件存在且格式正确）
+        extracted_params_file = os.path.join(self.work_data_dir_path, 'extracted_params.json')
+        try:
+            with open(extracted_params_file, 'r', encoding='utf-8') as f:
+                extracted_params_content = f.read()
+            extracted_params_json = json.loads(extracted_params_content)
+            extracted_params_text = self._format_extracted_params(extracted_params_json)
+        except Exception as e:
+            # 这里不应该发生，因为前置检查已经验证过
+            print(f"  {Colors.FAIL}错误: 读取提取参数失败: {e}{Colors.ENDC}")
+            return ""
+        
         # 读取用户提示词模板
         app_data_store = get_app_data_store()
         app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'intent_code_behavior_gen_user.md')
@@ -474,9 +507,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 填充占位符
         user_prompt_str = user_prompt_template_str
         # user_prompt_str = user_prompt_str.replace('USER_REQUIREMENTS_PLACEHOLDER', self.user_requirements_str)
-        user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_str)
-        user_prompt_str = user_prompt_str.replace('PROJECT_STRUCTURE_PLACEHOLDER', self.proj_root_dict_json_str)
-        user_prompt_str = user_prompt_str.replace('CURRENT_FILE_PATH_PLACEHOLDER', icp_json_file_path)
+        # user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_str)
+        # user_prompt_str = user_prompt_str.replace('PROJECT_STRUCTURE_PLACEHOLDER', self.proj_root_dict_json_str)
+        # user_prompt_str = user_prompt_str.replace('CURRENT_FILE_PATH_PLACEHOLDER', icp_json_file_path)
+        user_prompt_str = user_prompt_str.replace('EXTRACTED_PARAMS_PLACEHOLDER', extracted_params_text)
         user_prompt_str = user_prompt_str.replace('CLASS_CONTENT_PLACEHOLDER', class_content if class_content else '无')
         user_prompt_str = user_prompt_str.replace('FUNC_CONTENT_PLACEHOLDER', func_content if func_content else '无')
         user_prompt_str = user_prompt_str.replace('VAR_CONTENT_PLACEHOLDER', var_content if var_content else '无')
@@ -487,6 +521,53 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt_str = user_prompt_str.replace('AVAILABLE_SYMBOLS_PLACEHOLDER', available_symbols_text)
         
         return user_prompt_str
+
+    def _format_extracted_params(self, params_json: Dict[str, Any]) -> str:
+        """格式化提取的参数为可读性好的文本
+        
+        Args:
+            params_json: 提取的参数JSON对象
+            
+        Returns:
+            str: 格式化后的参数文本
+        """
+        if not params_json:
+            return "无可用参数"
+        
+        result_lines = []
+        
+        # 处理重要参数
+        if 'important_param' in params_json and params_json['important_param']:
+            result_lines.append("【重要参数】")
+            result_lines.append("")
+            for param_name, param_info in params_json['important_param'].items():
+                result_lines.append(f"- {param_name}:")
+                result_lines.append(f"  值: {param_info.get('value', 'N/A')}")
+                result_lines.append(f"  类型: {param_info.get('type', 'N/A')}")
+                result_lines.append(f"  单位: {param_info.get('unit', 'N/A')}")
+                result_lines.append(f"  说明: {param_info.get('description', 'N/A')}")
+                if 'constraints' in param_info and param_info['constraints']:
+                    result_lines.append(f"  约束: {', '.join(param_info['constraints'])}")
+                result_lines.append("")
+        
+        # 处理建议参数
+        if 'suggested_param' in params_json and params_json['suggested_param']:
+            result_lines.append("【建议参数】")
+            result_lines.append("")
+            for param_name, param_info in params_json['suggested_param'].items():
+                result_lines.append(f"- {param_name}:")
+                result_lines.append(f"  值: {param_info.get('value', 'N/A')}")
+                result_lines.append(f"  类型: {param_info.get('type', 'N/A')}")
+                result_lines.append(f"  单位: {param_info.get('unit', 'N/A')}")
+                result_lines.append(f"  说明: {param_info.get('description', 'N/A')}")
+                if 'constraints' in param_info and param_info['constraints']:
+                    result_lines.append(f"  约束: {', '.join(param_info['constraints'])}")
+                result_lines.append("")
+        
+        if not result_lines:
+            return "无可用参数"
+        
+        return "\n".join(result_lines)
 
     def _save_user_prompt_to_stage(self, icp_json_file_path: str, user_prompt: str, attempt: int) -> bool:
         """将用户提示词保存到stage文件夹以便查看
@@ -707,6 +788,24 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     def _check_cmd_requirement(self) -> bool:
         """验证命令的前置条件"""
         try:
+            # 检查提取参数文件是否存在
+            extracted_params_file = os.path.join(self.work_data_dir_path, 'extracted_params.json')
+            if not os.path.exists(extracted_params_file):
+                print(f"  {Colors.WARNING}警告: 提取参数文件不存在，请先执行参数提取命令(para_extract){Colors.ENDC}")
+                return False
+            
+            # 验证提取参数文件格式是否正确
+            try:
+                with open(extracted_params_file, 'r', encoding='utf-8') as f:
+                    extracted_params_content = f.read()
+                json.loads(extracted_params_content)  # 验证JSON格式
+            except json.JSONDecodeError as e:
+                print(f"  {Colors.FAIL}错误: 提取参数文件格式错误: {e}{Colors.ENDC}")
+                return False
+            except Exception as e:
+                print(f"  {Colors.FAIL}错误: 读取提取参数文件失败: {e}{Colors.ENDC}")
+                return False
+            
             # 检查依赖分析结果文件是否存在
             ibc_dir_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_depend.json')
             if not os.path.exists(ibc_dir_file):
