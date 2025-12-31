@@ -35,10 +35,10 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
 
         self.chat_handler = ICPChatHandler()
         self.role_one_file_req = "6_one_file_req_gen"
-        self.role_depend_refine = "6_depend_refine"  # 用于依赖关系再细化
+        # self.role_depend_refine = "6_depend_refine"  # 用于依赖关系再细化 # 暂时注释，再提炼逻辑存在缺陷
         self.sys_prompt = ""  # 系统提示词基础部分,在_init_ai_handlers中加载
         self.sys_prompt_retry_part = ""  # 系统提示词重试部分,在_init_ai_handlers中加载
-        self.sys_prompt_depend_refine = ""  # 依赖再提炼的系统提示词,在_init_ai_handlers中加载
+        # self.sys_prompt_depend_refine = ""  # 依赖再提炼的系统提示词,在_init_ai_handlers中加载 # 暂时注释
         
         self.user_prompt_base = ""  # 用户提示词基础部分
         self.user_prompt_retry_part = ""  # 用户提示词重试部分
@@ -77,13 +77,13 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
                 print(f"{Colors.FAIL}单文件需求描述生成失败，终止执行{Colors.ENDC}")
                 return
 
-        # 基于最新的单文件需求重新再提炼依赖关系
-        print(f"{Colors.OKBLUE}开始基于最新单文件需求再提炼依赖关系...{Colors.ENDC}")
-        success = self._refine_dependencies_based_on_one_file_reqs()
-        if not success:
-            print(f"{Colors.WARNING}警告: 依赖关系再提炼失败，但单文件需求已生成{Colors.ENDC}")
-        else:
-            print(f"{Colors.OKGREEN}依赖关系再提炼完成{Colors.ENDC}")
+        # 基于最新的单文件需求重新再提炼依赖关系 # 暂时注释，再提炼逻辑存在缺陷
+        # print(f"{Colors.OKBLUE}开始基于最新单文件需求再提炼依赖关系...{Colors.ENDC}")
+        # success = self._refine_dependencies_based_on_one_file_reqs()
+        # if not success:
+        #     print(f"{Colors.WARNING}警告: 依赖关系再提炼失败，但单文件需求已生成{Colors.ENDC}")
+        # else:
+        #     print(f"{Colors.OKGREEN}依赖关系再提炼完成{Colors.ENDC}")
 
         print(f"{Colors.OKGREEN}IBC目录结构创建命令执行完毕!{Colors.ENDC}")
 
@@ -427,232 +427,233 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         print(f"{Colors.OKGREEN}单文件需求描述验证通过{Colors.ENDC}")
         return True
 
-    def _refine_dependencies_based_on_one_file_reqs(self) -> bool:
-        """基于最新生成的单文件需求重新分析并再提炼依赖关系
-        
-        Returns:
-            bool: 是否成功再提炼依赖关系
-        """
-        # 重置issue recorder
-        self.issue_recorder.clear()
-        
-        # 构建依赖再提炼的用户提示词
-        user_prompt = self._build_user_prompt_for_depend_refine()
-        if not user_prompt:
-            print(f"{Colors.FAIL}错误: 构建依赖再提炼用户提示词失败{Colors.ENDC}")
-            return False
-        
-        max_attempts = 3
-        refined_json_dict = None
-        
-        for attempt in range(max_attempts):
-            print(f"{self.role_depend_refine}正在进行第 {attempt + 1} 次依赖再提炼尝试...")
-            
-            # 根据是否是重试来组合提示词
-            if attempt == 0:
-                current_sys_prompt = self.sys_prompt_depend_refine
-                current_user_prompt = user_prompt
-            else:
-                current_sys_prompt = self.sys_prompt_depend_refine + "\n\n" + self.sys_prompt_retry_part
-                retry_part = self._build_user_prompt_retry_part_for_depend()
-                current_user_prompt = user_prompt + "\n\n" + retry_part
-            
-            response_content, success = asyncio.run(self.chat_handler.get_role_response(
-                role_name=self.role_depend_refine,
-                sys_prompt=current_sys_prompt,
-                user_prompt=current_user_prompt
-            ))
-            
-            if not success:
-                print(f"{Colors.WARNING}警告: AI响应失败，将进行下一次尝试{Colors.ENDC}")
-                continue
-            
-            # 清理代码块标记
-            cleaned_json_str = ICPChatHandler.clean_code_block_markers(response_content)
-            
-            # 验证响应内容
-            is_valid = self._validate_refined_dependencies(cleaned_json_str)
-            if is_valid:
-                try:
-                    refined_json_dict = json.loads(cleaned_json_str)
-                    break
-                except json.JSONDecodeError as e:
-                    print(f"{Colors.FAIL}错误: 解析JSON失败: {e}{Colors.ENDC}")
-                    self.issue_recorder.record_issue(f"解析JSON失败: {e}")
-                    self.last_generated_content = cleaned_json_str
-                    continue
-            
-            # 验证失败，保存内容用于重试
-            self.last_generated_content = cleaned_json_str
-        
-        if attempt == max_attempts - 1 and not refined_json_dict:
-            print(f"{Colors.FAIL}错误: 达到最大尝试次数，依赖再提炼失败{Colors.ENDC}")
-            return False
-        
-        # 保存再提炼后的依赖关系
-        output_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_depend.json')
-        try:
-            with open(output_file, 'w', encoding='utf-8') as f:
-                json.dump(refined_json_dict, f, indent=2, ensure_ascii=False)
-            print(f"{Colors.OKGREEN}再提炼后的依赖关系已保存到: {output_file}{Colors.ENDC}")
-            return True
-        except Exception as e:
-            print(f"{Colors.FAIL}错误: 保存再提炼依赖关系失败: {e}{Colors.ENDC}")
-            return False
+    # 以下方法与依赖关系再提炼相关，暂时注释，因为再提炼逻辑存在缺陷
+    # def _refine_dependencies_based_on_one_file_reqs(self) -> bool:
+    #     """基于最新生成的单文件需求重新分析并再提炼依赖关系
+    #     
+    #     Returns:
+    #         bool: 是否成功再提炼依赖关系
+    #     """
+    #     # 重置issue recorder
+    #     self.issue_recorder.clear()
+    #     
+    #     # 构建依赖再提炼的用户提示词
+    #     user_prompt = self._build_user_prompt_for_depend_refine()
+    #     if not user_prompt:
+    #         print(f"{Colors.FAIL}错误: 构建依赖再提炼用户提示词失败{Colors.ENDC}")
+    #         return False
+    #     
+    #     max_attempts = 3
+    #     refined_json_dict = None
+    #     
+    #     for attempt in range(max_attempts):
+    #         print(f"{self.role_depend_refine}正在进行第 {attempt + 1} 次依赖再提炼尝试...")
+    #         
+    #         # 根据是否是重试来组合提示词
+    #         if attempt == 0:
+    #             current_sys_prompt = self.sys_prompt_depend_refine
+    #             current_user_prompt = user_prompt
+    #         else:
+    #             current_sys_prompt = self.sys_prompt_depend_refine + "\n\n" + self.sys_prompt_retry_part
+    #             retry_part = self._build_user_prompt_retry_part_for_depend()
+    #             current_user_prompt = user_prompt + "\n\n" + retry_part
+    #         
+    #         response_content, success = asyncio.run(self.chat_handler.get_role_response(
+    #             role_name=self.role_depend_refine,
+    #             sys_prompt=current_sys_prompt,
+    #             user_prompt=current_user_prompt
+    #         ))
+    #         
+    #         if not success:
+    #             print(f"{Colors.WARNING}警告: AI响应失败，将进行下一次尝试{Colors.ENDC}")
+    #             continue
+    #         
+    #         # 清理代码块标记
+    #         cleaned_json_str = ICPChatHandler.clean_code_block_markers(response_content)
+    #         
+    #         # 验证响应内容
+    #         is_valid = self._validate_refined_dependencies(cleaned_json_str)
+    #         if is_valid:
+    #             try:
+    #                 refined_json_dict = json.loads(cleaned_json_str)
+    #                 break
+    #             except json.JSONDecodeError as e:
+    #                 print(f"{Colors.FAIL}错误: 解析JSON失败: {e}{Colors.ENDC}")
+    #                 self.issue_recorder.record_issue(f"解析JSON失败: {e}")
+    #                 self.last_generated_content = cleaned_json_str
+    #                 continue
+    #         
+    #         # 验证失败，保存内容用于重试
+    #         self.last_generated_content = cleaned_json_str
+    #     
+    #     if attempt == max_attempts - 1 and not refined_json_dict:
+    #         print(f"{Colors.FAIL}错误: 达到最大尝试次数，依赖再提炼失败{Colors.ENDC}")
+    #         return False
+    #     
+    #     # 保存再提炼后的依赖关系
+    #     output_file = os.path.join(self.work_data_dir_path, 'icp_dir_content_with_depend.json')
+    #     try:
+    #         with open(output_file, 'w', encoding='utf-8') as f:
+    #             json.dump(refined_json_dict, f, indent=2, ensure_ascii=False)
+    #         print(f"{Colors.OKGREEN}再提炼后的依赖关系已保存到: {output_file}{Colors.ENDC}")
+    #         return True
+    #     except Exception as e:
+    #         print(f"{Colors.FAIL}错误: 保存再提炼依赖关系失败: {e}{Colors.ENDC}")
+    #         return False
     
-    def _build_user_prompt_for_depend_refine(self) -> str:
-        """构建依赖再提炼的用户提示词
-        
-        Returns:
-            str: 用户提示词，失败时返回空字符串
-        """
-        # 收集所有已生成的单文件需求描述
-        all_file_reqs = []
-        for file_path, file_content in self.accumulated_file_str_list:
-            cleaned_path = file_path.replace("_one_file_req.txt", "")
-            normed_path = os.path.normpath(cleaned_path)
-            
-            # import_content = self._extract_section_content(file_content, 'import')
-            behavior_content = self._extract_section_content(file_content, 'behavior')
-            
-            formatted = f"## 文件: {normed_path}\n\n"
-            if behavior_content:
-                formatted += f"文件的功能逻辑简述:\n{behavior_content}\n\n"
-            
-            all_file_reqs.append(formatted)
-        
-        all_file_reqs_text = "\n".join(all_file_reqs)
-        
-        # 读取依赖再提炼的用户提示词模板
-        app_data_store = get_app_data_store()
-        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'depend_refine_user.md')
-        
-        try:
-            with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
-                user_prompt_template_str = f.read()
-        except Exception as e:
-            print(f"{Colors.FAIL}错误: 读取依赖再提炼用户提示词模板失败: {e}{Colors.ENDC}")
-            return ""
-        
-        # 获取当前的JSON结构
-        current_json_str = json.dumps(self.final_dir_json_dict, indent=2, ensure_ascii=False)
-        
-        # 获取文件路径列表
-        file_paths = DirJsonFuncs.get_all_file_paths(self.final_dir_json_dict.get("proj_root_dict", {}))
-        file_paths_text = "\n".join(file_paths)
-        
-        # 填充占位符
-        user_prompt_str = user_prompt_template_str
-        # user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', self.implementation_plan_str)
-        user_prompt_str = user_prompt_str.replace('ALL_FILE_REQUIREMENTS_PLACEHOLDER', all_file_reqs_text)
-        user_prompt_str = user_prompt_str.replace('CURRENT_JSON_STRUCTURE_PLACEHOLDER', current_json_str)
-        user_prompt_str = user_prompt_str.replace('FILE_PATHS_PLACEHOLDER', file_paths_text)
-        
-        return user_prompt_str
+    # def _build_user_prompt_for_depend_refine(self) -> str:
+    #     """构建依赖再提炼的用户提示词
+    #     
+    #     Returns:
+    #         str: 用户提示词，失败时返回空字符串
+    #     """
+    #     # 收集所有已生成的单文件需求描述
+    #     all_file_reqs = []
+    #     for file_path, file_content in self.accumulated_file_str_list:
+    #         cleaned_path = file_path.replace("_one_file_req.txt", "")
+    #         normed_path = os.path.normpath(cleaned_path)
+    #         
+    #         # import_content = self._extract_section_content(file_content, 'import')
+    #         behavior_content = self._extract_section_content(file_content, 'behavior')
+    #         
+    #         formatted = f"## 文件: {normed_path}\n\n"
+    #         if behavior_content:
+    #             formatted += f"文件的功能逻辑简述:\n{behavior_content}\n\n"
+    #         
+    #         all_file_reqs.append(formatted)
+    #     
+    #     all_file_reqs_text = "\n".join(all_file_reqs)
+    #     
+    #     # 读取依赖再提炼的用户提示词模板
+    #     app_data_store = get_app_data_store()
+    #     app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'depend_refine_user.md')
+    #     
+    #     try:
+    #         with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
+    #             user_prompt_template_str = f.read()
+    #     except Exception as e:
+    #         print(f"{Colors.FAIL}错误: 读取依赖再提炼用户提示词模板失败: {e}{Colors.ENDC}")
+    #         return ""
+    #     
+    #     # 获取当前的JSON结构
+    #     current_json_str = json.dumps(self.final_dir_json_dict, indent=2, ensure_ascii=False)
+    #     
+    #     # 获取文件路径列表
+    #     file_paths = DirJsonFuncs.get_all_file_paths(self.final_dir_json_dict.get("proj_root_dict", {}))
+    #     file_paths_text = "\n".join(file_paths)
+    #     
+    #     # 填充占位符
+    #     user_prompt_str = user_prompt_template_str
+    #     # user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', self.implementation_plan_str)
+    #     user_prompt_str = user_prompt_str.replace('ALL_FILE_REQUIREMENTS_PLACEHOLDER', all_file_reqs_text)
+    #     user_prompt_str = user_prompt_str.replace('CURRENT_JSON_STRUCTURE_PLACEHOLDER', current_json_str)
+    #     user_prompt_str = user_prompt_str.replace('FILE_PATHS_PLACEHOLDER', file_paths_text)
+    #     
+    #     return user_prompt_str
     
 
-    def _build_user_prompt_retry_part_for_depend(self) -> str:
-        """构建依赖再提炼重试部分的用户提示词
-        
-        Returns:
-            str: 重试部分的用户提示词
-        """
-        if not self.issue_recorder.has_issues() or not self.last_generated_content:
-            return ""
-        
-        # 读取重试提示词模板
-        app_data_store = get_app_data_store()
-        retry_template_path = os.path.join(app_data_store.get_user_prompt_dir(), 'retry_prompt_template.md')
-        
-        try:
-            with open(retry_template_path, 'r', encoding='utf-8') as f:
-                retry_template = f.read()
-        except Exception as e:
-            print(f"{Colors.FAIL}错误: 读取重试模板失败: {e}{Colors.ENDC}")
-            return ""
-        
-        # 格式化上一次生成的内容（用json代码块包裹）
-        formatted_content = f"```json\n{self.last_generated_content}\n```"
-        
-        # 格式化问题列表
-        issues_list = "\n".join([f"- {issue.issue_content}" for issue in self.issue_recorder.get_issues()])
-        
-        # 替换占位符
-        retry_prompt = retry_template.replace('PREVIOUS_CONTENT_PLACEHOLDER', formatted_content)
-        retry_prompt = retry_prompt.replace('ISSUES_LIST_PLACEHOLDER', issues_list)
-        
-        return retry_prompt
+    # def _build_user_prompt_retry_part_for_depend(self) -> str:
+    #     """构建依赖再提炼重试部分的用户提示词
+    #     
+    #     Returns:
+    #         str: 重试部分的用户提示词
+    #     """
+    #     if not self.issue_recorder.has_issues() or not self.last_generated_content:
+    #         return ""
+    #     
+    #     # 读取重试提示词模板
+    #     app_data_store = get_app_data_store()
+    #     retry_template_path = os.path.join(app_data_store.get_user_prompt_dir(), 'retry_prompt_template.md')
+    #     
+    #     try:
+    #         with open(retry_template_path, 'r', encoding='utf-8') as f:
+    #             retry_template = f.read()
+    #     except Exception as e:
+    #         print(f"{Colors.FAIL}错误: 读取重试模板失败: {e}{Colors.ENDC}")
+    #         return ""
+    #     
+    #     # 格式化上一次生成的内容（用json代码块包裹）
+    #     formatted_content = f"```json\n{self.last_generated_content}\n```"
+    #     
+    #     # 格式化问题列表
+    #     issues_list = "\n".join([f"- {issue.issue_content}" for issue in self.issue_recorder.get_issues()])
+    #     
+    #     # 替换占位符
+    #     retry_prompt = retry_template.replace('PREVIOUS_CONTENT_PLACEHOLDER', formatted_content)
+    #     retry_prompt = retry_prompt.replace('ISSUES_LIST_PLACEHOLDER', issues_list)
+    #     
+    #     return retry_prompt
     
-    def _validate_refined_dependencies(self, cleaned_json_str: str) -> bool:
-        """验证再提炼后的依赖关系是否符合要求
-        
-        Args:
-            cleaned_json_str: 清理后的JSON字符串
-            
-        Returns:
-            bool: 是否有效
-        """
-        # 清空上一次验证的问题记录
-        self.issue_recorder.clear()
-        
-        # 验证是否为有效的JSON
-        try:
-            new_json_dict = json.loads(cleaned_json_str)
-        except json.JSONDecodeError as e:
-            error_msg = f"AI返回的内容不是有效的JSON格式: {e}"
-            print(f"{Colors.FAIL}错误: {error_msg}{Colors.ENDC}")
-            self.issue_recorder.record_issue(error_msg)
-            return False
-        
-        # 检查新JSON内容是否包含必需的根节点
-        if "proj_root_dict" not in new_json_dict or "dependent_relation" not in new_json_dict:
-            error_msg = "生成的JSON结构不符合要求，缺少必需的根节点 proj_root_dict 或 dependent_relation"
-            print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
-            self.issue_recorder.record_issue(error_msg)
-            return False
-        
-        # 检查proj_root_dict结构是否与原始结构一致
-        structure_errors = DirJsonFuncs.compare_structure(
-            self.final_dir_json_dict["proj_root_dict"], 
-            new_json_dict["proj_root_dict"]
-        )
-        if structure_errors:
-            error_msg = "proj_root_dict结构与原始结构不一致，具体问题如下：\n" + "\n".join(f"  - {err}" for err in structure_errors)
-            print(f"{Colors.WARNING}警告: proj_root_dict结构与原始结构不一致{Colors.ENDC}")
-            self.issue_recorder.record_issue(error_msg)
-            return False
-        
-        # 检查是否有proj_root_dict中的文件在dependent_relation中缺失
-        missing_files = DirJsonFuncs.find_missing_files_in_dependent_relation(new_json_dict)
-        if missing_files:
-            error_msg = "dependent_relation 中缺少以下文件的依赖关系条目，请为每个文件添加对应条目（即使该文件没有依赖其他文件，也需要添加空列表 []）：\n" + "\n".join(f"  - {file}" for file in missing_files)
-            print(f"{Colors.WARNING}警告: dependent_relation 中缺少 {len(missing_files)} 个文件的条目{Colors.ENDC}")
-            self.issue_recorder.record_issue(error_msg)
-            return False
-        
-        # 检查dependent_relation中的依赖路径是否都存在于proj_root_dict中
-        path_errors = DirJsonFuncs.check_dependent_paths_existence(
-            new_json_dict["dependent_relation"], 
-            new_json_dict["proj_root_dict"]
-        )
-        if path_errors:
-            error_msg = "dependent_relation 中存在 proj_root_dict 下不存在的路径，具体问题如下：\n" + "\n".join(f"  - {err}" for err in path_errors)
-            print(f"{Colors.WARNING}警告: dependent_relation 出现了 proj_root_dict 下不存在的路径{Colors.ENDC}")
-            self.issue_recorder.record_issue(error_msg)
-            return False
-        
-        # 检测循环依赖
-        dependent_relation = new_json_dict.get("dependent_relation", {})
-        circular_dependencies = DirJsonFuncs.detect_circular_dependencies(dependent_relation)
-        
-        if circular_dependencies:
-            error_msg = "检测到循环依赖，具体循环路径如下：\n" + "\n".join(f"  - {cycle}" for cycle in circular_dependencies)
-            print(f"{Colors.WARNING}警告: 检测到循环依赖{Colors.ENDC}")
-            self.issue_recorder.record_issue(error_msg)
-            return False
-        
-        print(f"{Colors.OKGREEN}依赖关系验证通过{Colors.ENDC}")
-        return True
+    # def _validate_refined_dependencies(self, cleaned_json_str: str) -> bool:
+    #     """验证再提炼后的依赖关系是否符合要求
+    #     
+    #     Args:
+    #         cleaned_json_str: 清理后的JSON字符串
+    #         
+    #     Returns:
+    #         bool: 是否有效
+    #     """
+    #     # 清空上一次验证的问题记录
+    #     self.issue_recorder.clear()
+    #     
+    #     # 验证是否为有效的JSON
+    #     try:
+    #         new_json_dict = json.loads(cleaned_json_str)
+    #     except json.JSONDecodeError as e:
+    #         error_msg = f"AI返回的内容不是有效的JSON格式: {e}"
+    #         print(f"{Colors.FAIL}错误: {error_msg}{Colors.ENDC}")
+    #         self.issue_recorder.record_issue(error_msg)
+    #         return False
+    #     
+    #     # 检查新JSON内容是否包含必需的根节点
+    #     if "proj_root_dict" not in new_json_dict or "dependent_relation" not in new_json_dict:
+    #         error_msg = "生成的JSON结构不符合要求，缺少必需的根节点 proj_root_dict 或 dependent_relation"
+    #         print(f"{Colors.WARNING}警告: {error_msg}{Colors.ENDC}")
+    #         self.issue_recorder.record_issue(error_msg)
+    #         return False
+    #     
+    #     # 检查proj_root_dict结构是否与原始结构一致
+    #     structure_errors = DirJsonFuncs.compare_structure(
+    #         self.final_dir_json_dict["proj_root_dict"], 
+    #         new_json_dict["proj_root_dict"]
+    #     )
+    #     if structure_errors:
+    #         error_msg = "proj_root_dict结构与原始结构不一致，具体问题如下：\n" + "\n".join(f"  - {err}" for err in structure_errors)
+    #         print(f"{Colors.WARNING}警告: proj_root_dict结构与原始结构不一致{Colors.ENDC}")
+    #         self.issue_recorder.record_issue(error_msg)
+    #         return False
+    #     
+    #     # 检查是否有proj_root_dict中的文件在dependent_relation中缺失
+    #     missing_files = DirJsonFuncs.find_missing_files_in_dependent_relation(new_json_dict)
+    #     if missing_files:
+    #         error_msg = "dependent_relation 中缺少以下文件的依赖关系条目，请为每个文件添加对应条目（即使该文件没有依赖其他文件，也需要添加空列表 []）：\n" + "\n".join(f"  - {file}" for file in missing_files)
+    #         print(f"{Colors.WARNING}警告: dependent_relation 中缺少 {len(missing_files)} 个文件的条目{Colors.ENDC}")
+    #         self.issue_recorder.record_issue(error_msg)
+    #         return False
+    #     
+    #     # 检查dependent_relation中的依赖路径是否都存在于proj_root_dict中
+    #     path_errors = DirJsonFuncs.check_dependent_paths_existence(
+    #         new_json_dict["dependent_relation"], 
+    #         new_json_dict["proj_root_dict"]
+    #     )
+    #     if path_errors:
+    #         error_msg = "dependent_relation 中存在 proj_root_dict 下不存在的路径，具体问题如下：\n" + "\n".join(f"  - {err}" for err in path_errors)
+    #         print(f"{Colors.WARNING}警告: dependent_relation 出现了 proj_root_dict 下不存在的路径{Colors.ENDC}")
+    #         self.issue_recorder.record_issue(error_msg)
+    #         return False
+    #     
+    #     # 检测循环依赖
+    #     dependent_relation = new_json_dict.get("dependent_relation", {})
+    #     circular_dependencies = DirJsonFuncs.detect_circular_dependencies(dependent_relation)
+    #     
+    #     if circular_dependencies:
+    #         error_msg = "检测到循环依赖，具体循环路径如下：\n" + "\n".join(f"  - {cycle}" for cycle in circular_dependencies)
+    #         print(f"{Colors.WARNING}警告: 检测到循环依赖{Colors.ENDC}")
+    #         self.issue_recorder.record_issue(error_msg)
+    #         return False
+    #     
+    #     print(f"{Colors.OKGREEN}依赖关系验证通过{Colors.ENDC}")
+    #     return True
 
     def _check_section_exists(self, content: str, section_name: str) -> bool:
         """检查指定的section关键字是否存在于内容中
@@ -765,10 +766,10 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         except Exception as e:
             print(f"错误: 读取系统提示词重试部分失败: {e}")
         
-        # 加载依赖再提炼的系统提示词（复用依赖分析器的提示词）
-        depend_refine_sys_prompt_path = os.path.join(app_prompt_dir_path, self.role_depend_refine + ".md")
-        try:
-            with open(depend_refine_sys_prompt_path, 'r', encoding='utf-8') as f:
-                self.sys_prompt_depend_refine = f.read()
-        except Exception as e:
-            print(f"错误: 读取依赖再提炼系统提示词失败: {e}")
+        # 加载依赖再提炼的系统提示词（复用依赖分析器的提示词） # 暂时注释，再提炼逻辑存在缺陷
+        # depend_refine_sys_prompt_path = os.path.join(app_prompt_dir_path, self.role_depend_refine + ".md")
+        # try:
+        #     with open(depend_refine_sys_prompt_path, 'r', encoding='utf-8') as f:
+        #         self.sys_prompt_depend_refine = f.read()
+        # except Exception as e:
+        #     print(f"错误: 读取依赖再提炼系统提示词失败: {e}")
