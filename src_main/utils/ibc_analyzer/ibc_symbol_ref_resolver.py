@@ -728,9 +728,15 @@ class SymbolRefResolver:
         else:
             suggestion = "未找到相似的符号"
         
+        # 构建可引用的module列表（来自依赖关系和外部库）
+        available_modules = self._build_available_modules_hint()
+        
         # 确定错误类型
         if len(parts) == 1:
             message = f"符号引用错误：符号'{ref}'未找到。{suggestion}"
+            # 如果有可用的module，提示用户是否遗漏了module引用
+            if available_modules:
+                message += f"\n\n提示：是否遗漏了module引用？你可引用的内容包括：\n{available_modules}"
         else:
             # 检查第一部分是否是有效的模块别名
             is_module = any(s.alias == first_part for s in self.import_scopes)
@@ -738,12 +744,59 @@ class SymbolRefResolver:
                 message = f"符号引用错误：在模块'{first_part}'中未找到符号'{'.'.join(parts[1:])}'。{suggestion}"
             else:
                 message = f"符号引用错误：'{first_part}'不是有效的模块或本地符号。{suggestion}"
+                # 如果有可用的module，提示用户是否遗漏了module引用
+                if available_modules:
+                    message += f"\n\n提示：是否遗漏了module引用？你可引用的内容包括：\n{available_modules}"
         
         self.ibc_issue_recorder.record_issue(
             message=message,
             line_num=context.line_num,
             line_content=""
         )
+    
+    def _build_available_modules_hint(self) -> str:
+        """构建可引用module的提示信息
+        
+        包括：
+        1. 来自依赖关系的内部模块
+        2. 来自 ExternalLibraryDependencies 的外部库
+        
+        Returns:
+            str: 格式化的可用module列表，如果为空则返回空字符串
+        """
+        hint_lines = []
+        
+        # 1. 来自依赖关系表的内部模块
+        dependencies = self.dependent_relation.get(self.current_file_path, [])
+        if dependencies:
+            hint_lines.append("【内部模块依赖】")
+            for dep_path in dependencies:
+                # 将路径从 "src/ball/ball_entity" 转换为 "ball.ball_entity"
+                module_path = dep_path.replace('/', '.')
+                hint_lines.append(f"  - module {module_path}")
+        
+        # 2. 来自ExternalLibraryDependencies的外部库
+        if self.external_libraries:
+            if hint_lines:  # 如果已经有内部模块，添加空行分隔
+                hint_lines.append("")
+            hint_lines.append("【外部库依赖】")
+            
+            # 从 proj_root_dict 中获取外部库的详细信息
+            external_lib_details = {}
+            if "ExternalLibraryDependencies" in self.proj_root_dict:
+                ext_deps = self.proj_root_dict["ExternalLibraryDependencies"]
+                if isinstance(ext_deps, dict):
+                    external_lib_details = ext_deps
+            
+            for lib_name in sorted(self.external_libraries):
+                lib_desc = external_lib_details.get(lib_name, "无描述")
+                hint_lines.append(f"  - module {lib_name}  # {lib_desc}")
+        
+        # 如果没有任何可用module，返回空字符串
+        if not hint_lines:
+            return ""
+        
+        return "\n".join(hint_lines)
     
     def _validate_self_reference(
         self, 

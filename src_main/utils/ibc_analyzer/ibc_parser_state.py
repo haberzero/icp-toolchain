@@ -533,6 +533,9 @@ class ClassDeclState(BaseState):
         elif self.sub_state == ClassDeclSubState.EXPECTING_LPAREN:
             if token.type == IbcTokenType.LPAREN:
                 self.sub_state = ClassDeclSubState.EXPECTING_INH_CLASS
+            elif token.type == IbcTokenType.COLON:
+                # 支持不带括号的语法
+                self.sub_state = ClassDeclSubState.EXPECTING_NEWLINE
             else:
                 raise IbcParserError(
                     message=f"ClassDeclState: Expecting left parenthesis or colon but got {token.type}",
