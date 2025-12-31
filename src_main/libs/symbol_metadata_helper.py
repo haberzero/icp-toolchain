@@ -238,3 +238,78 @@ class SymbolMetadataHelper:
                 if meta.visibility == visibility:
                     filtered[path] = meta
         return filtered
+    
+    @staticmethod
+    def build_symbol_usage_guide_text(
+        symbols_metadata: Dict[str, SymbolMetadata],
+        usage_guide_content: Optional[str] = None
+    ) -> str:
+        """构建符号使用说明文本，用于目标代码生成的用户提示词
+        
+        如果提供了 usage_guide_content（从 symbol_usage_guide.md 文件读取），
+        则直接使用；否则根据符号元数据生成基本的使用说明。
+        
+        Args:
+            symbols_metadata: 符号元数据字典
+            usage_guide_content: 可选的完整使用说明书内容（Markdown格式）
+            
+        Returns:
+            str: 符号使用说明文本
+        """
+        # 如果提供了完整的使用说明书，直接返回
+        if usage_guide_content:
+            return usage_guide_content
+        
+        # 否则根据符号元数据生成基本说明
+        lines = []
+        
+        for symbol_path, meta in symbols_metadata.items():
+            # 只处理实际符号
+            if not isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata)):
+                continue
+            
+            # 提取原始符号名和规范化名称
+            original_name = symbol_path.split('.')[-1]
+            normalized_name = meta.normalized_name if meta.normalized_name else original_name
+            
+            # 基本信息
+            description = meta.description or "无描述"
+            lines.append(f"### {normalized_name}")
+            lines.append(f"- **类型**: {meta.type}")
+            lines.append(f"- **功能描述**: {description}")
+            
+            # 添加参数信息
+            if isinstance(meta, ClassMetadata) and meta.init_parameters:
+                lines.append(f"- **构造参数**:")
+                for param_name, param_desc in meta.init_parameters.items():
+                    lines.append(f"  - `{param_name}`: {param_desc}")
+            elif isinstance(meta, FunctionMetadata) and meta.parameters:
+                lines.append(f"- **函数参数**:")
+                for param_name, param_desc in meta.parameters.items():
+                    lines.append(f"  - `{param_name}`: {param_desc}")
+            
+            lines.append("")  # 空行分隔
+        
+        return '\n'.join(lines) if lines else "无符号定义"
+    
+    @staticmethod
+    def load_usage_guide_from_file(usage_guide_file_path: str) -> Optional[str]:
+        """从文件加载符号使用说明书
+        
+        Args:
+            usage_guide_file_path: 使用说明书文件路径
+            
+        Returns:
+            Optional[str]: 使用说明书内容，如果文件不存在或读取失败则返回None
+        """
+        import os
+        
+        if not os.path.exists(usage_guide_file_path):
+            return None
+        
+        try:
+            with open(usage_guide_file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            print(f"警告: 读取使用说明书文件失败: {e}")
+            return None

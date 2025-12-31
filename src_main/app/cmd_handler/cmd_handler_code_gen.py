@@ -5,6 +5,7 @@ from typing import Dict, Any, List
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
 from typedef.ai_data_types import ChatApiConfig
+from typedef.ibc_data_types import ClassMetadata, FunctionMetadata, VariableMetadata
 
 from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
 from data_store.app_data_store import get_instance as get_app_data_store
@@ -14,6 +15,7 @@ from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.ibc_funcs import IbcFuncs
+from libs.symbol_metadata_helper import SymbolMetadataHelper
 from utils.issue_recorder import TextIssueRecorder
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 
@@ -468,6 +470,10 @@ class CmdHandlerCodeGen(BaseCmdHandler):
                 traceback.print_exc()
                 normalized_ibc_content = ibc_content
         
+        # 构建符号使用说明
+        local_symbols_usage_guide = self._build_local_symbols_usage_guide(icp_json_file_path)
+        dependency_symbols_usage_guide = self._build_dependency_symbols_usage_guide(icp_json_file_path)
+        
         # 读取提示词模板
         app_data_store = get_app_data_store()
         app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'target_code_gen_user.md')
@@ -486,8 +492,130 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         user_prompt_str = user_prompt_str.replace('PROJROOT_DIRCONTENT_PLACEHOLDER', self.proj_root_dict_json_str)
         user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', self.implementation_plan_str if self.implementation_plan_str else '无')
         user_prompt_str = user_prompt_str.replace('IBC_CONTENT_PLACEHOLDER', normalized_ibc_content)
+        user_prompt_str = user_prompt_str.replace('LOCAL_SYMBOLS_USAGE_GUIDE_PLACEHOLDER', local_symbols_usage_guide)
+        user_prompt_str = user_prompt_str.replace('DEPENDENCY_SYMBOLS_USAGE_GUIDE_PLACEHOLDER', dependency_symbols_usage_guide)
         
         return user_prompt_str
+
+    def _build_local_symbols_usage_guide(self, icp_json_file_path: str) -> str:
+        """构建当前文件的符号使用说明
+        
+        加载当前文件的符号元数据和使用说明书，构建完整的符号使用说明。
+        这些符号是当前文件定义的，需要在生成的目标代码中实现。
+        
+        Args:
+            icp_json_file_path: 文件路径
+            
+        Returns:
+            str: 符号使用说明文本
+        """
+        ibc_data_store = get_ibc_data_store()
+        file_name = os.path.basename(icp_json_file_path)
+        
+        # 加载当前文件的符号表
+        symbols_path = ibc_data_store.build_symbols_path(self.work_ibc_dir_path, icp_json_file_path)
+        if not os.path.exists(symbols_path):
+            return "无符号定义"
+        
+        try:
+            symbols_tree, symbols_metadata = ibc_data_store.load_symbols(symbols_path, file_name)
+            
+            # 过滤出当前文件的本地符号（排除依赖符号）
+            local_symbols = {}
+            for symbol_path, meta in symbols_metadata.items():
+                # 只保留本地符号，排除依赖符号
+                if hasattr(meta, '__is_local__') and meta.__is_local__:
+                    continue
+                # 检查是否是当前文件的符号
+                if symbol_path.startswith(icp_json_file_path.replace('/', '.')):
+                    local_symbols[symbol_path] = meta
+            
+            if not local_symbols:
+                return "无符号定义"
+            
+            # 尝试加载使用说明书文件
+            work_staging_dir_path = os.path.join(self.work_dir_path, 'src_staging')
+            usage_guide_file_path = os.path.join(
+                work_staging_dir_path,
+                f"{icp_json_file_path}_symbol_usage_guide.md"
+            )
+            usage_guide_content = SymbolMetadataHelper.load_usage_guide_from_file(usage_guide_file_path)
+            
+            # 构建符号使用说明文本
+            return SymbolMetadataHelper.build_symbol_usage_guide_text(
+                local_symbols,
+                usage_guide_content
+            )
+            
+        except Exception as e:
+            print(f"    {Colors.WARNING}警告: 构建当前文件符号使用说明失败: {e}{Colors.ENDC}")
+            return "无法加载符号定义说明"
+    
+    def _build_dependency_symbols_usage_guide(self, icp_json_file_path: str) -> str:
+        """构建依赖符号的使用说明
+        
+        加载当前文件依赖的外部符号的使用说明。
+        这些符号可以在生成的目标代码中直接调用。
+        
+        Args:
+            icp_json_file_path: 文件路径
+            
+        Returns:
+            str: 依赖符号使用说明文本
+        """
+        # 获取当前文件的依赖列表
+        dependencies = self.dependent_relation.get(icp_json_file_path, [])
+        
+        if not dependencies:
+            return "无外部依赖"
+        
+        ibc_data_store = get_ibc_data_store()
+        all_dependency_symbols = {}
+        
+        # 遍历每个依赖文件
+        for dep_file_path in dependencies:
+            dep_file_name = os.path.basename(dep_file_path)
+            dep_symbols_path = ibc_data_store.build_symbols_path(self.work_ibc_dir_path, dep_file_path)
+            
+            if not os.path.exists(dep_symbols_path):
+                continue
+            
+            try:
+                _, dep_symbols_metadata = ibc_data_store.load_symbols(dep_symbols_path, dep_file_name)
+                
+                # 只收集公开的符号（public）
+                for symbol_path, meta in dep_symbols_metadata.items():
+                    # 过滤folder和file类型
+                    if not isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata)):
+                        continue
+                    # 只收集公开符号
+                    if hasattr(meta, 'visibility') and meta.visibility == 'public':
+                        all_dependency_symbols[symbol_path] = meta
+                
+                # 尝试加载依赖文件的使用说明书
+                work_staging_dir_path = os.path.join(self.work_dir_path, 'src_staging')
+                dep_usage_guide_file = os.path.join(
+                    work_staging_dir_path,
+                    f"{dep_file_path}_symbol_usage_guide.md"
+                )
+                
+                # 如果存在使用说明书，记录其路径以便后续加载
+                # （这里我们先收集所有符号，然后统一构建）
+                
+            except Exception as e:
+                print(f"    {Colors.WARNING}警告: 加载依赖文件 {dep_file_path} 的符号表失败: {e}{Colors.ENDC}")
+                continue
+        
+        if not all_dependency_symbols:
+            return "无可用的外部符号"
+        
+        # 构建依赖符号的使用说明
+        # 注意：这里不使用单个文件的usage_guide，而是统一根据符号元数据生成
+        # 因为需要整合多个依赖文件的符号
+        return SymbolMetadataHelper.build_symbol_usage_guide_text(
+            all_dependency_symbols,
+            usage_guide_content=None  # 不使用单个文件的usage_guide
+        )
 
     def _validate_generated_code(self, generated_code: str, file_path: str) -> bool:
         """验证生成的目标代码
