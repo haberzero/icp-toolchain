@@ -30,6 +30,12 @@ BEHAVIOR_CONTENT_PLACEHOLDER
 编程时，可能存在一些额外考虑，他们可能会影响到编程的实现思路，具体如下所示
 OTHERS_CONTENT_PLACEHOLDER
 
+**当前可用的第三方库：**
+
+以下是当前文件可用的第三方库列表，这些库可能在实现过程中会用到，请根据需求选择使用。
+
+EXTERN_LIB_CONTENT_PLACEHOLDER
+
 **当前文件的模块依赖：**
 
 以下是当前文件需要引用的外部模块，你应该在生成的IBC代码文件的顶部使用 `module` 关键字引用这些依赖模块。

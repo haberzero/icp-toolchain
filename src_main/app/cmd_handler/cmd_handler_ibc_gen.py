@@ -483,7 +483,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         var_content = self._extract_section_content(file_req_str, 'var')
         others_content = self._extract_section_content(file_req_str, 'others')
         behavior_content = self._extract_section_content(file_req_str, 'behavior')
-        # import_content = self._extract_section_content(file_req_str, 'import')
+        extern_lib_content = self._extract_section_content(file_req_str, 'external_lib')
         
         # 读取提取的参数（前置检查已保证文件存在且格式正确）
         extracted_params_file = os.path.join(self.work_data_dir_path, 'extracted_params.json')
@@ -519,7 +519,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         user_prompt_str = user_prompt_str.replace('VAR_CONTENT_PLACEHOLDER', var_content if var_content else '无')
         user_prompt_str = user_prompt_str.replace('OTHERS_CONTENT_PLACEHOLDER', others_content if others_content else '无')
         user_prompt_str = user_prompt_str.replace('BEHAVIOR_CONTENT_PLACEHOLDER', behavior_content if behavior_content else '无')
-        # user_prompt_str = user_prompt_str.replace('IMPORT_CONTENT_PLACEHOLDER', import_content if import_content else '无')
+        user_prompt_str = user_prompt_str.replace('EXTERN_LIB_CONTENT_PLACEHOLDER', extern_lib_content if extern_lib_content else '无')
         user_prompt_str = user_prompt_str.replace('MODULE_DEPENDENCIES_PLACEHOLDER', module_dependencies_text)
         user_prompt_str = user_prompt_str.replace('AVAILABLE_SYMBOLS_PLACEHOLDER', available_symbols_text)
         user_prompt_str = user_prompt_str.replace('DEPENDENCY_IBC_CODE_PLACEHOLDER', dependency_ibc_code)

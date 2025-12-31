@@ -125,11 +125,11 @@ class SymbolRefResolver:
         self.dependent_relation = dependent_relation
         self.current_file_path = current_file_path
         
+        # 先提取外部库依赖集合（_build_import_scopes需要使用）
+        self.external_libraries: Set[str] = self._extract_external_libraries()
+        
         # 解析module声明，构建ImportScope列表
         self.import_scopes: List[ImportScope] = self._build_import_scopes()
-        
-        # 外部库依赖集合
-        self.external_libraries: Set[str] = self._extract_external_libraries()
         
         # 本地符号表（当前文件定义的符号）
         self.local_symbols: Dict[str, SymbolMetadata] = self._extract_local_symbols()
@@ -231,9 +231,24 @@ class SymbolRefResolver:
         return module_path
     
     def _is_external_library_path(self, module_path: str) -> bool:
-        """判断模块路径是否属于外部库"""
-        top_level = module_path.split('.')[0]
-        return top_level in self._extract_external_libraries()
+        """判断模块路径是否属于外部库
+        
+        检查模块路径的任意前缀是否是外部库。
+        例如：tkinter.Canvas 会检查 'tkinter' 是否在外部库列表中。
+        """
+        if not module_path:
+            return False
+        
+        # 检查路径的所有前缀（从最长到最短）
+        parts = module_path.split('.')
+        for i in range(len(parts), 0, -1):
+            prefix = '.'.join(parts[:i])
+            if prefix in self.external_libraries:
+                return True
+        
+        # 兼容性：也检查第一级
+        top_level = parts[0]
+        return top_level in self.external_libraries
     
     def _extract_external_libraries(self) -> Set[str]:
         """从proj_root_dict中提取外部库依赖"""
@@ -382,6 +397,11 @@ class SymbolRefResolver:
         if first_part == "self":
             return
         
+        # 早期检查：如果引用的第一部分是外部库，直接跳过验证
+        # 这是一个额外的安全检查，确保第三方库符号不会被错误地标记为未找到
+        if self._is_reference_to_external_library(ref):
+            return
+        
         # 策略1: 检查上下文局部符号
         if first_part in context.local_symbols:
             # 找到局部符号
@@ -488,7 +508,8 @@ class SymbolRefResolver:
             if first_part == import_scope.alias:
                 # 外部库引用，默认有效（无论是单部分还是多部分引用）
                 # 第三方库的符号不在我们的符号表中，直接跳过验证
-                if import_scope.is_external:
+                # 额外检查：即使import_scope没有标记为external，如果它的module_path属于外部库，也跳过
+                if import_scope.is_external or self._is_external_library_path(import_scope.module_path):
                     return True
                 
                 # 内部模块引用，验证完整路径
@@ -958,6 +979,30 @@ class SymbolRefResolver:
                     else:
                         # 没有构造函数或构造函数没有参数，填入空字典
                         class_meta.init_parameters = {}
+    
+    def _is_reference_to_external_library(self, ref: str) -> bool:
+        """检查引用是否指向外部库符号
+        
+        这是一个早期检查，用于快速跳过对外部库符号的验证。
+        
+        Args:
+            ref: 符号引用字符串（如 "numpy.ndarray" 或 "tkinter.Canvas"）
+            
+        Returns:
+            bool: 是否是外部库符号引用
+        """
+        if not ref:
+            return False
+        
+        # 检查引用的第一部分是否在导入的外部库模块中
+        first_part = ref.split('.')[0]
+        
+        for import_scope in self.import_scopes:
+            # 如果别名匹配，且该导入是外部库，则认为整个引用都是外部库引用
+            if import_scope.alias == first_part and (import_scope.is_external or self._is_external_library_path(import_scope.module_path)):
+                return True
+        
+        return False
     
     def _get_symbol_path_for_node(self, node: IbcBaseAstNode) -> str:
         """获取节点的符号路径
