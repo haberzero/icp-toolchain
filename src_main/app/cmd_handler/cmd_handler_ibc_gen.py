@@ -455,6 +455,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         else:
             available_symbols_text = '暂无可用的依赖符号'
         
+        # 构建依赖文件的IBC代码内容
+        dependency_ibc_code = self._build_dependency_ibc_code(icp_json_file_path)
+        
         
         # 读取文件级实现规划
         implementation_plan_file = os.path.join(self.work_data_dir_path, 'icp_implementation_plan.txt')
@@ -519,6 +522,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # user_prompt_str = user_prompt_str.replace('IMPORT_CONTENT_PLACEHOLDER', import_content if import_content else '无')
         user_prompt_str = user_prompt_str.replace('MODULE_DEPENDENCIES_PLACEHOLDER', module_dependencies_text)
         user_prompt_str = user_prompt_str.replace('AVAILABLE_SYMBOLS_PLACEHOLDER', available_symbols_text)
+        user_prompt_str = user_prompt_str.replace('DEPENDENCY_IBC_CODE_PLACEHOLDER', dependency_ibc_code)
         
         return user_prompt_str
 
@@ -568,6 +572,71 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             return "无可用参数"
         
         return "\n".join(result_lines)
+
+    def _build_dependency_ibc_code(self, icp_json_file_path: str) -> str:
+        """构建依赖文件的IBC代码内容
+        
+        读取当前文件依赖的其他文件已生成的IBC代码，
+        使大模型能够看到具体的实现细节，从而正确引用依赖符号。
+        
+        Args:
+            icp_json_file_path: 文件路径
+            
+        Returns:
+            str: 依赖文件的IBC代码内容，按文件组织
+        """
+        # 获取当前文件的依赖列表
+        dependencies = self.dependent_relation.get(icp_json_file_path, [])
+        
+        if not dependencies:
+            return "无外部依赖，不需要参考其他文件的IBC代码。"
+        
+        result_lines = []
+        loaded_count = 0
+        ibc_data_store = get_ibc_data_store()
+        
+        # 遍历每个依赖文件
+        for dep_file_path in dependencies:
+            ibc_path = ibc_data_store.build_ibc_path(self.work_ibc_dir_path, dep_file_path)
+            
+            # 检查IBC文件是否存在
+            if not os.path.exists(ibc_path):
+                result_lines.append(f"### {dep_file_path}")
+                result_lines.append(f"IBC代码文件尚未生成，请根据符号使用说明进行引用。")
+                result_lines.append("")
+                continue
+            
+            # 读取IBC代码内容
+            try:
+                ibc_content = ibc_data_store.load_ibc_content(ibc_path)
+                
+                if not ibc_content:
+                    result_lines.append(f"### {dep_file_path}")
+                    result_lines.append(f"IBC代码文件为空。")
+                    result_lines.append("")
+                    continue
+                
+                # 添加文件头和代码块
+                result_lines.append(f"### {dep_file_path}")
+                result_lines.append(f"文件路径：`{ibc_path}`")
+                result_lines.append("")
+                result_lines.append("```Intent Behavior Code")
+                result_lines.append(ibc_content)
+                result_lines.append("```")
+                result_lines.append("")
+                
+                loaded_count += 1
+                
+            except Exception as e:
+                result_lines.append(f"### {dep_file_path}")
+                result_lines.append(f"读取IBC代码失败: {e}")
+                result_lines.append("")
+                print(f"    {Colors.WARNING}警告: 读取依赖文件 {dep_file_path} 的IBC代码失败: {e}{Colors.ENDC}")
+        
+        if loaded_count == 0:
+            return "所有依赖文件的IBC代码尚未生成，请根据符号使用说明进行引用。"
+        
+        return '\n'.join(result_lines)
 
     def _save_user_prompt_to_stage(self, icp_json_file_path: str, user_prompt: str, attempt: int) -> bool:
         """将用户提示词保存到stage文件夹以便查看
