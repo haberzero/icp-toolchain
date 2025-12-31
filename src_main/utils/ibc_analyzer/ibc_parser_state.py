@@ -1084,12 +1084,18 @@ class BehaviorStepState(BaseState):
             self.local_indent_level += 1
         elif token.type == IbcTokenType.DEDENT:
             # 延续行中的退缩进
+            # 检查当前是否还有局部缩进
+            if self.local_indent_level == 0:
+                # local_indent_level 为 0，说明延续行的局部缩进已经清空
+                # 这个 DEDENT 属于外层结构，应该结束延续行并弹出状态机
+                content_stripped = self.content.strip()
+                self.content = content_stripped
+                self._create_behavior_node()
+                self.pass_in_token_flag = False
+                self.pop_flag = True
+                return
+            # 局部缩进减1
             self.local_indent_level -= 1
-            if self.local_indent_level < 0:
-                raise IbcParserError(
-                    message=f"BehaviorStepState: Unexpected dedent structure",
-                    line_num=token.line_num
-                )
         elif token.type == IbcTokenType.NEWLINE:
             content_stripped = self.content.strip()
             
@@ -1124,12 +1130,18 @@ class BehaviorStepState(BaseState):
             self.local_indent_level += 1
         elif token.type == IbcTokenType.DEDENT:
             # 跟踪局部退缩进
+            # 检查当前是否还有局部缩进
+            if self.local_indent_level == 0:
+                # local_indent_level 为 0，说明延续行的局部缩进已经清空
+                # 这个 DEDENT 属于外层结构，应该结束延续行并弹出状态机
+                content_stripped = self.content.strip()
+                self.content = content_stripped
+                self._create_behavior_node()
+                self.pass_in_token_flag = False
+                self.pop_flag = True
+                return
+            # 局部缩进减1
             self.local_indent_level -= 1
-            if self.local_indent_level < 0:
-                raise IbcParserError(
-                    message=f"BehaviorStepState: Unexpected dedent structure",
-                    line_num=token.line_num
-                )
         elif token.type == IbcTokenType.NEWLINE:
             content_stripped = self.content.strip()
             
@@ -1161,12 +1173,16 @@ class BehaviorStepState(BaseState):
             self.local_indent_level += 1
         elif token.type == IbcTokenType.DEDENT:
             # 跟踪局部退缩进
-            self.local_indent_level -= 1
-            if self.local_indent_level < 0:
+            # 检查当前是否还有局部缩进
+            if self.local_indent_level == 0:
+                # local_indent_level 为 0，括号未封闭但代码块已结束
+                # 这是语法错误：括号未匹配
                 raise IbcParserError(
-                    message=f"BehaviorStepState: Unexpected dedent structure",
+                    message=f"BehaviorStepState: Unclosed parenthesis, missing ')'",
                     line_num=token.line_num
                 )
+            # 局部缩进减1
+            self.local_indent_level -= 1
         elif token.type == IbcTokenType.LPAREN:
             self.paren_count += 1
             self.content += token.value
@@ -1192,12 +1208,16 @@ class BehaviorStepState(BaseState):
             self.local_indent_level += 1
         elif token.type == IbcTokenType.DEDENT:
             # 跟踪局部退缩进
-            self.local_indent_level -= 1
-            if self.local_indent_level < 0:
+            # 检查当前是否还有局部缩进
+            if self.local_indent_level == 0:
+                # local_indent_level 为 0，括号未封闭但代码块已结束
+                # 这是语法错误：花括号未匹配
                 raise IbcParserError(
-                    message=f"BehaviorStepState: Unexpected dedent structure",
+                    message=f"BehaviorStepState: Unclosed brace, missing '}}",
                     line_num=token.line_num
                 )
+            # 局部缩进减1
+            self.local_indent_level -= 1
         elif token.type == IbcTokenType.LBRACE:
             self.brace_count += 1
             self.content += token.value
@@ -1223,12 +1243,16 @@ class BehaviorStepState(BaseState):
             self.local_indent_level += 1
         elif token.type == IbcTokenType.DEDENT:
             # 跟踪局部退缩进
-            self.local_indent_level -= 1
-            if self.local_indent_level < 0:
+            # 检查当前是否还有局部缩进
+            if self.local_indent_level == 0:
+                # local_indent_level 为 0，括号未封闭但代码块已结束
+                # 这是语法错误：方括号未匹配
                 raise IbcParserError(
-                    message=f"BehaviorStepState: Unexpected dedent structure",
+                    message=f"BehaviorStepState: Unclosed bracket, missing ']'",
                     line_num=token.line_num
                 )
+            # 局部缩进减1
+            self.local_indent_level -= 1
         elif token.type == IbcTokenType.LBRACKET:
             self.bracket_count += 1
             self.content += token.value

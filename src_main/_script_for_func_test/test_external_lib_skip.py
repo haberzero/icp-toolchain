@@ -27,13 +27,14 @@ from utils.issue_recorder import IbcIssueRecorder
 from typedef.cmd_data_types import Colors
 
 
-def run_test(test_name: str, ibc_content: str, proj_root_dict: dict, expected_issues: int = 0) -> bool:
+def run_test(test_name: str, ibc_content: str, proj_root_dict: dict, external_library_dependencies: dict, expected_issues: int = 0) -> bool:
     """运行单个测试用例
     
     Args:
         test_name: 测试名称
         ibc_content: IBC代码内容
-        proj_root_dict: 项目根目录字典（包含ExternalLibraryDependencies）
+        proj_root_dict: 项目根目录字典
+        external_library_dependencies: 外部库依赖字典（来自refined_requirements.json）
         expected_issues: 预期的问题数量
     
     Returns:
@@ -82,7 +83,8 @@ def run_test(test_name: str, ibc_content: str, proj_root_dict: dict, expected_is
         ibc_issue_recorder=issue_recorder,
         proj_root_dict=proj_root_dict,
         dependent_relation={"src/test": []},
-        current_file_path="src/test"
+        current_file_path="src/test",
+        external_library_dependencies=external_library_dependencies
     )
     
     # 解析所有引用
@@ -125,16 +127,17 @@ class TestWindow():
         self.button = $tkinter.Button()
 """
     
-    proj_root_dict = {
-        "ExternalLibraryDependencies": {
-            "tkinter": "Python标准GUI库"
-        }
+    proj_root_dict = {}
+    
+    external_library_dependencies = {
+        "tkinter": "Python标准GUI库"
     }
     
     return run_test(
         test_name="1. 基本外部库引用 (module tkinter + $tkinter.Canvas)",
         ibc_content=ibc_content,
         proj_root_dict=proj_root_dict,
+        external_library_dependencies=external_library_dependencies,
         expected_issues=0
     )
 
@@ -152,16 +155,17 @@ class TestWindow():
         调用 $Canvas.create_line(0, 0, 100, 100)
 """
     
-    proj_root_dict = {
-        "ExternalLibraryDependencies": {
-            "tkinter": "Python标准GUI库"
-        }
+    proj_root_dict = {}
+    
+    external_library_dependencies = {
+        "tkinter": "Python标准GUI库"
     }
     
     return run_test(
         test_name="2. 外部库子模块引用 (module tkinter.Canvas)",
         ibc_content=ibc_content,
         proj_root_dict=proj_root_dict,
+        external_library_dependencies=external_library_dependencies,
         expected_issues=0
     )
 
@@ -181,16 +185,17 @@ class TestWindow():
         调用 $tkinter.messagebox.showinfo("标题", "内容")
 """
     
-    proj_root_dict = {
-        "ExternalLibraryDependencies": {
-            "tkinter": "Python标准GUI库"
-        }
+    proj_root_dict = {}
+    
+    external_library_dependencies = {
+        "tkinter": "Python标准GUI库"
     }
     
     return run_test(
         test_name="3. 多层外部库引用 (module tkinter + $tkinter.ttk.Button)",
         ibc_content=ibc_content,
         proj_root_dict=proj_root_dict,
+        external_library_dependencies=external_library_dependencies,
         expected_issues=0
     )
 
@@ -208,16 +213,17 @@ class RandomGenerator():
         返回 数字1, 数字2, 数组
 """
     
-    proj_root_dict = {
-        "ExternalLibraryDependencies": {
-            "numpy": "数值计算库"
-        }
+    proj_root_dict = {}
+    
+    external_library_dependencies = {
+        "numpy": "数值计算库"
     }
     
     return run_test(
         test_name="4. 外部库子模块别名引用 (module numpy.random + $random.randint)",
         ibc_content=ibc_content,
         proj_root_dict=proj_root_dict,
+        external_library_dependencies=external_library_dependencies,
         expected_issues=0
     )
 
@@ -242,18 +248,19 @@ class DataVisualizer():
         绘制 数据框 到 画布 上
 """
     
-    proj_root_dict = {
-        "ExternalLibraryDependencies": {
-            "tkinter": "Python标准GUI库",
-            "numpy": "数值计算库",
-            "pandas": "数据分析库"
-        }
+    proj_root_dict = {}
+    
+    external_library_dependencies = {
+        "tkinter": "Python标准GUI库",
+        "numpy": "数值计算库",
+        "pandas": "数据分析库"
     }
     
     return run_test(
         test_name="5. 混合内部和外部引用",
         ibc_content=ibc_content,
         proj_root_dict=proj_root_dict,
+        external_library_dependencies=external_library_dependencies,
         expected_issues=0  # 只测试外部库，不涉及内部模块
     )
 
@@ -275,17 +282,18 @@ class TestClass():
         执行处理逻辑
 """
     
-    proj_root_dict = {
-        "ExternalLibraryDependencies": {
-            "tkinter": "Python标准GUI库",
-            "typing": "类型标注模块"
-        }
+    proj_root_dict = {}
+    
+    external_library_dependencies = {
+        "tkinter": "Python标准GUI库",
+        "typing": "类型标注模块"
     }
     
     return run_test(
         test_name="6. 外部库符号作为类型标注",
         ibc_content=ibc_content,
         proj_root_dict=proj_root_dict,
+        external_library_dependencies=external_library_dependencies,
         expected_issues=0
     )
 
@@ -312,17 +320,18 @@ class ApiClient():
         返回 响应
 """
     
-    proj_root_dict = {
-        "ExternalLibraryDependencies": {
-            "requests": "HTTP请求库",
-            "json": "JSON处理标准库"
-        }
+    proj_root_dict = {}
+    
+    external_library_dependencies = {
+        "requests": "HTTP请求库",
+        "json": "JSON处理标准库"
     }
     
     return run_test(
         test_name="7. 外部库符号在行为描述中使用",
         ibc_content=ibc_content,
         proj_root_dict=proj_root_dict,
+        external_library_dependencies=external_library_dependencies,
         expected_issues=0
     )
 
@@ -350,18 +359,19 @@ class FileManager():
             返回 None
 """
     
-    proj_root_dict = {
-        "ExternalLibraryDependencies": {
-            "os": "操作系统接口",
-            "tkinter": "Python标准GUI库",
-            "PIL": "Python图像库"
-        }
+    proj_root_dict = {}
+    
+    external_library_dependencies = {
+        "os": "操作系统接口",
+        "tkinter": "Python标准GUI库",
+        "PIL": "Python图像库"
     }
     
     return run_test(
         test_name="8. 综合边界情况测试",
         ibc_content=ibc_content,
         proj_root_dict=proj_root_dict,
+        external_library_dependencies=external_library_dependencies,
         expected_issues=0
     )
 
@@ -376,14 +386,15 @@ class TestClass():
         结果 = $numpy.array([1, 2, 3])
 """
     
-    proj_root_dict = {
-        "ExternalLibraryDependencies": {}
-    }
+    proj_root_dict = {}
+    
+    external_library_dependencies = {}  # 没有声明任何外部库
     
     return run_test(
         test_name="9. 未声明外部库时应该报错",
         ibc_content=ibc_content,
         proj_root_dict=proj_root_dict,
+        external_library_dependencies=external_library_dependencies,
         expected_issues=2  # 期望有2个错误：$numpy.ndarray 和 $numpy.array
     )
 
@@ -423,16 +434,17 @@ class NeuralNetworkTrainer():
         $torch.save(self.model.state_dict(), 路径)
 """
     
-    proj_root_dict = {
-        "ExternalLibraryDependencies": {
-            "torch": "PyTorch深度学习框架"
-        }
+    proj_root_dict = {}
+    
+    external_library_dependencies = {
+        "torch": "PyTorch深度学习框架"
     }
     
     return run_test(
         test_name="10. PyTorch复杂场景",
         ibc_content=ibc_content,
         proj_root_dict=proj_root_dict,
+        external_library_dependencies=external_library_dependencies,
         expected_issues=0
     )
 

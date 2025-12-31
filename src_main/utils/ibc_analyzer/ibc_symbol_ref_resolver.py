@@ -103,7 +103,8 @@ class SymbolRefResolver:
         ibc_issue_recorder: IbcIssueRecorder,
         proj_root_dict: Dict[str, Any],
         dependent_relation: Dict[str, List[str]],
-        current_file_path: str
+        current_file_path: str,
+        external_library_dependencies: Optional[Dict[str, str]] = None
     ):
         """
         初始化符号引用解析器
@@ -116,6 +117,7 @@ class SymbolRefResolver:
             proj_root_dict: 项目根目录字典
             dependent_relation: 依赖关系
             current_file_path: 当前文件路径
+            external_library_dependencies: 外部库依赖字典（来自refined_requirements.json）
         """
         self.ast_dict = ast_dict
         self.symbols_tree = symbols_tree
@@ -124,6 +126,7 @@ class SymbolRefResolver:
         self.proj_root_dict = proj_root_dict
         self.dependent_relation = dependent_relation
         self.current_file_path = current_file_path
+        self.external_library_dependencies = external_library_dependencies or {}
         
         # 先提取外部库依赖集合（_build_import_scopes需要使用）
         self.external_libraries: Set[str] = self._extract_external_libraries()
@@ -251,13 +254,19 @@ class SymbolRefResolver:
         return top_level in self.external_libraries
     
     def _extract_external_libraries(self) -> Set[str]:
-        """从proj_root_dict中提取外部库依赖"""
+        """从external_library_dependencies中提取外部库依赖
+        
+        外部库依赖信息来自 refined_requirements.json 文件的 ExternalLibraryDependencies 字段。
+        这个字段由需求分析阶段生成，包含了项目允许使用的所有第三方库。
+        
+        Returns:
+            Set[str]: 外部库名称集合
+        """
         external_libs = set()
         
-        if "ExternalLibraryDependencies" in self.proj_root_dict:
-            ext_deps = self.proj_root_dict["ExternalLibraryDependencies"]
-            if isinstance(ext_deps, dict):
-                external_libs.update(ext_deps.keys())
+        if self.external_library_dependencies:
+            if isinstance(self.external_library_dependencies, dict):
+                external_libs.update(self.external_library_dependencies.keys())
         
         return external_libs
     
@@ -760,9 +769,34 @@ class SymbolRefResolver:
                 message += f"\n\n提示：是否遗漏了module引用？你可引用的内容包括：\n{available_modules}"
         else:
             # 检查第一部分是否是有效的模块别名
-            is_module = any(s.alias == first_part for s in self.import_scopes)
-            if is_module:
-                message = f"符号引用错误：在模块'{first_part}'中未找到符号'{'.'.join(parts[1:])}'。{suggestion}"
+            matching_import = None
+            for s in self.import_scopes:
+                if s.alias == first_part:
+                    matching_import = s
+                    break
+            
+            if matching_import:
+                # 检查是否是外部库引用
+                if matching_import.is_external or self._is_external_library_path(matching_import.module_path):
+                    lib_name = matching_import.module_path.split('.')[0]
+                    lib_desc = self.external_library_dependencies.get(lib_name, "第三方库")
+                    message = f"符号引用错误：在外部库'{first_part}'中未找到符号'{'.'.join(parts[1:])}'。"
+                    message += f"\n\n提示：'{lib_name}' 是一个第三方库（{lib_desc}），其内部符号不可见。"
+                    message += f"请确认：\n1. 符号名称是否正确？\n2. 是否需要修改 module 声明，引入更具体的子模块？\n3. 是否需要将这个引用改为本地实现？"
+                else:
+                    # 内部模块引用 - 检查是否为间接依赖
+                    is_indirect_dependency = self._check_if_indirect_dependency(matching_import.module_path)
+                    
+                    message = f"符号引用错误：在模块'{first_part}'中未找到符号'{'.'.join(parts[1:])}'。{suggestion}"
+                    
+                    # 如果是间接依赖，添加特别说明
+                    if is_indirect_dependency:
+                        message += f"\n\n【重要提示】模块 '{matching_import.module_path}' 不在当前文件的直接依赖列表中！"
+                        message += f"\n这可能是一个间接依赖（通过其他模块间接依赖）。"
+                        message += f"\n你绝对不应该在当前文件中直接引用间接依赖的模块！"
+                        message += f"\n\n解决方案："
+                        message += f"\n1. 删除当前文件中对 'module {matching_import.module_path}' 的声明"
+                        message += f"\n2. 只使用直接依赖模块中的符号，通过它们间接使用所需功能"
             else:
                 message = f"符号引用错误：'{first_part}'不是有效的模块或本地符号。{suggestion}"
                 # 如果有可用的module，提示用户是否遗漏了module引用
@@ -802,15 +836,9 @@ class SymbolRefResolver:
                 hint_lines.append("")
             hint_lines.append("【外部库依赖】")
             
-            # 从 proj_root_dict 中获取外部库的详细信息
-            external_lib_details = {}
-            if "ExternalLibraryDependencies" in self.proj_root_dict:
-                ext_deps = self.proj_root_dict["ExternalLibraryDependencies"]
-                if isinstance(ext_deps, dict):
-                    external_lib_details = ext_deps
-            
+            # 从 external_library_dependencies 中获取外部库的详细信息
             for lib_name in sorted(self.external_libraries):
-                lib_desc = external_lib_details.get(lib_name, "无描述")
+                lib_desc = self.external_library_dependencies.get(lib_name, "无描述")
                 hint_lines.append(f"  - module {lib_name}  # {lib_desc}")
         
         # 如果没有任何可用module，返回空字符串
@@ -818,6 +846,41 @@ class SymbolRefResolver:
             return ""
         
         return "\n".join(hint_lines)
+    
+    def _check_if_indirect_dependency(self, module_path: str) -> bool:
+        """检查模块是否为间接依赖
+        
+        间接依赖：模块不在当前文件的直接依赖列表中，
+        但可能是通过其他依赖模块间接依赖的。
+        
+        Args:
+            module_path: 模块路径，如 "src.heptagon.heptagon_shape"
+        
+        Returns:
+            bool: 如果是间接依赖则返回 True
+        """
+        # 将模块路径转换为文件路径格式
+        file_path = module_path.replace('.', '/')
+        
+        # 获取当前文件的直接依赖列表
+        direct_dependencies = self.dependent_relation.get(self.current_file_path, [])
+        
+        # 检查是否在直接依赖列表中
+        if file_path not in direct_dependencies:
+            # 不在直接依赖中，可能是间接依赖
+            # 进一步检查：是否是某个直接依赖的依赖
+            for direct_dep in direct_dependencies:
+                indirect_deps = self.dependent_relation.get(direct_dep, [])
+                if file_path in indirect_deps:
+                    # 确认是间接依赖
+                    return True
+            
+            # 即使不是直接的二层依贖，也可能是更深层的间接依赖
+            # 或者完全不相关的模块
+            # 这里简化处理：只要不在直接依赖中，就认为是间接或无关
+            return True
+        
+        return False
     
     def _validate_self_reference(
         self, 

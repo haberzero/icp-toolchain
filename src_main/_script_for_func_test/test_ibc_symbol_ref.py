@@ -151,6 +151,10 @@ def run_test(
     
     # 创建解析器
     issue_recorder.clear()
+    
+    # 从PROJ_ROOT_DICT中提取ExternalLibraryDependencies(如果存在)
+    external_library_dependencies = proj_root_dict.get("ExternalLibraryDependencies", {})
+    
     resolver = SymbolRefResolver(
         ast_dict=ast_dict,
         symbols_tree=visible_symbols_tree,
@@ -158,7 +162,8 @@ def run_test(
         ibc_issue_recorder=issue_recorder,
         proj_root_dict=proj_root_dict,
         dependent_relation=dependent_relation,
-        current_file_path=current_file_path
+        current_file_path=current_file_path,
+        external_library_dependencies=external_library_dependencies
     )
     
     # 解析所有引用

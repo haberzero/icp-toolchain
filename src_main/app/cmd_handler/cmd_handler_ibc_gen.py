@@ -117,6 +117,16 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             print(f"  {Colors.FAIL}错误: 未找到用户原始需求{Colors.ENDC}")
             return
         
+        # 读取外部库依赖信息（来自 refined_requirements.json）
+        external_library_dependencies = {}
+        refined_requirements_file = os.path.join(self.work_data_dir_path, 'refined_requirements.json')
+        try:
+            with open(refined_requirements_file, 'r', encoding='utf-8') as rf:
+                refined = json.load(rf)
+                external_library_dependencies = refined.get('ExternalLibraryDependencies', {}) if isinstance(refined, dict) else {}
+        except Exception as e:
+            print(f"  {Colors.WARNING}警告: 读取外部库依赖信息失败: {e}，将使用空依赖{Colors.ENDC}")
+        
         # 检查目录
         work_staging_dir_path = os.path.join(self.work_dir_path, 'src_staging')
         if not os.path.exists(work_staging_dir_path):
@@ -153,6 +163,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self.user_requirements_str = user_requirements_str
         self.work_staging_dir_path = work_staging_dir_path
         self.work_ibc_dir_path = work_ibc_dir_path
+        self.external_library_dependencies = external_library_dependencies
         
         # 初始化可见符号表构建器
         self.visible_symbol_builder = VisibleSymbolBuilder(
@@ -616,12 +627,28 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                     result_lines.append("")
                     continue
                 
+                # 过滤掉 module 声明，避免误导大模型引用间接依赖
+                # 只保留类、函数、变量等实现细节
+                filtered_lines = []
+                for line in ibc_content.split('\n'):
+                    # 跳过 module 声明行（包括空行前的 module 声明）
+                    stripped = line.strip()
+                    if not stripped.startswith('module '):
+                        filtered_lines.append(line)
+                    # 如果是 module 声明，添加注释说明被过滤
+                    elif stripped.startswith('module '):
+                        # 在第一个 module 声明处添加说明（只添加一次）
+                        if not any('模块声明已被过滤' in l for l in filtered_lines):
+                            filtered_lines.append("// 注意：此依赖文件的 module 声明已被过滤，不应在当前文件中引用这些间接依赖")
+                
+                filtered_content = '\n'.join(filtered_lines)
+                
                 # 添加文件头和代码块
                 result_lines.append(f"### {dep_file_path}")
                 result_lines.append(f"文件路径：`{ibc_path}`")
                 result_lines.append("")
                 result_lines.append("```Intent Behavior Code")
-                result_lines.append(ibc_content)
+                result_lines.append(filtered_content)
                 result_lines.append("```")
                 result_lines.append("")
                 
@@ -814,7 +841,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             ibc_issue_recorder=self.ibc_issue_recorder,
             proj_root_dict=self.proj_root_dict,
             dependent_relation=self.dependent_relation,
-            current_file_path=current_file_path
+            current_file_path=current_file_path,
+            external_library_dependencies=self.external_library_dependencies
         )
         ref_resolver.resolve_all_references()
     
