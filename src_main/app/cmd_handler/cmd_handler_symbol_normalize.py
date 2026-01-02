@@ -130,8 +130,8 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             return
 
         # 获取IBC文件夹路径
-        if "file_system_mapping" in icp_config_json_dict:
-            ibc_dir_name = icp_config_json_dict["file_system_mapping"].get("ibc_dir_name", "src_ibc")
+        if "path_mapping" in icp_config_json_dict:
+            ibc_dir_name = icp_config_json_dict["path_mapping"].get("ibc_dir_name", "src_ibc")
         else:
             ibc_dir_name = "src_ibc"
         
@@ -990,8 +990,8 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
                 print(f"  {Colors.FAIL}错误: 读取ICP配置文件失败: {e}{Colors.ENDC}")
                 return False
 
-            if "file_system_mapping" in icp_config_json_dict:
-                ibc_dir_name = icp_config_json_dict["file_system_mapping"].get("ibc_dir_name", "src_ibc")
+            if "path_mapping" in icp_config_json_dict:
+                ibc_dir_name = icp_config_json_dict["path_mapping"].get("ibc_dir_name", "src_ibc")
             else:
                 ibc_dir_name = "src_ibc"
             

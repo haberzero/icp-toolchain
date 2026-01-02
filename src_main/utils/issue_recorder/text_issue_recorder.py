@@ -52,10 +52,10 @@ class TextIssueRecorder:
         return [issue.issue_content for issue in self._issues]
 
     def print_issues_for_retry(self) -> None:
-        """打印已记录的问题信息，并说明会用于下一次重试生成"""
+        """打印已记录的问题信息，并说明这些问题将用于后续的诊断与修复建议生成"""
         if not self._issues:
             return
 
-        print(f"{Colors.WARNING}以下问题信息已记录，将在下一次向大模型发起重试生成时作为问题列表进行反馈：{Colors.ENDC}")
+        print(f"{Colors.WARNING}以下问题信息已记录，将在后续的分析与修复流程中作为问题列表提供给大模型参考：{Colors.ENDC}")
         for idx, issue in enumerate(self._issues, start=1):
             print(f"  {idx}. {issue.issue_content}")

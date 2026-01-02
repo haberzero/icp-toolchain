@@ -136,9 +136,9 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         self.target_file_extension = icp_config_json_dict.get('target_file_extension', '.py')
 
         # 获取IBC文件夹路径
-        if "file_system_mapping" in icp_config_json_dict:
-            ibc_dir_name = icp_config_json_dict["file_system_mapping"].get("ibc_dir_name", "src_ibc")
-            target_dir_name = icp_config_json_dict["file_system_mapping"].get("target_dir_name", "src_target")
+        if "path_mapping" in icp_config_json_dict:
+            ibc_dir_name = icp_config_json_dict["path_mapping"].get("ibc_dir_name", "src_ibc")
+            target_dir_name = icp_config_json_dict["path_mapping"].get("target_dir_name", "src_target")
         else:
             ibc_dir_name = "src_ibc"
             target_dir_name = "src_target"
@@ -781,8 +781,8 @@ class CmdHandlerCodeGen(BaseCmdHandler):
                 print(f"  {Colors.FAIL}错误: 读取ICP配置文件失败: {e}{Colors.ENDC}")
                 return False
 
-            if "file_system_mapping" in icp_config_json_dict:
-                ibc_dir_name = icp_config_json_dict["file_system_mapping"].get("ibc_dir_name", "src_ibc")
+            if "path_mapping" in icp_config_json_dict:
+                ibc_dir_name = icp_config_json_dict["path_mapping"].get("ibc_dir_name", "src_ibc")
             else:
                 ibc_dir_name = "src_ibc"
             

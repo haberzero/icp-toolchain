@@ -12,6 +12,7 @@ from data_store.user_data_store import get_instance as get_user_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
+from utils.icp_ai_handler.retry_prompt_helper import RetryPromptHelper
 from libs.dir_json_funcs import DirJsonFuncs
 from utils.issue_recorder import TextIssueRecorder
 
@@ -46,6 +47,8 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         # 初始化issue recorder和上一次生成的内容
         self.issue_recorder = TextIssueRecorder()
         self.last_generated_content = None  # 上一次生成的内容
+        self.last_sys_prompt_used = ""  # 上一次调用时使用的系统提示词
+        self.last_user_prompt_used = ""  # 上一次调用时使用的用户提示词
         
         # 初始化AI处理器
         self._init_ai_handlers()
@@ -60,6 +63,8 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         # 重置实例变量
         self.issue_recorder.clear()
         self.last_generated_content = None
+        self.last_sys_prompt_used = ""
+        self.last_user_prompt_used = ""
         
         # 构建用户提示词基础部分
         self.user_prompt_base = self._build_user_prompt_base()
@@ -69,41 +74,102 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         
         max_attempts = 3
         new_json_dict = None
+        is_valid = False
+        cleaned_json_str = ""
+        
         for attempt in range(max_attempts):
             print(f"{self.role_name}正在进行第 {attempt + 1} 次尝试...")
-            
-            # 根据是否是重试来组合提示词
+        
             if attempt == 0:
-                # 第一次尝试,使用基础提示词
+                # 第一次尝试：直接使用基础提示词
                 current_sys_prompt = self.sys_prompt
                 current_user_prompt = self.user_prompt_base
+        
+                response_content, success = asyncio.run(self.chat_handler.get_role_response(
+                    role_name=self.role_name,
+                    sys_prompt=current_sys_prompt,
+                    user_prompt=current_user_prompt
+                ))
+        
+                # 如果响应失败，继续下一次尝试
+                if not success:
+                    print(f"{Colors.WARNING}警告: AI响应失败，将进行下一次尝试{Colors.ENDC}")
+                    continue
+        
+                # 记录本次调用使用的提示词
+                self.last_sys_prompt_used = current_sys_prompt
+                self.last_user_prompt_used = current_user_prompt
+        
+                # 清理代码块标记
+                cleaned_json_str = ICPChatHandler.clean_code_block_markers(response_content)
+        
+                # 验证响应内容
+                is_valid = self._validate_response(cleaned_json_str)
+                if is_valid:
+                    break
+        
+                # 如果验证失败，保存当前生成的内容，供后续诊断和修复使用
+                self.last_generated_content = cleaned_json_str
+        
             else:
-                # 重试时,添加重试部分
+                # 重试阶段：先调用「诊断与修复建议」角色，再根据修复建议进行结果修复
+                if not self.last_generated_content or not self.issue_recorder.has_issues():
+                    print(f"{Colors.WARNING}警告: 无可用的上一次输出或问题信息，无法执行重试修复{Colors.ENDC}")
+                    continue
+        
+                # 将 issue_recorder 中的问题整理为文本列表
+                issues_list = "\n".join([f"- {issue.issue_content}" for issue in self.issue_recorder.get_issues()])
+        
+                # 第一步：根据上一次提示词 / 输出 / 问题列表，生成修复建议
+                analysis_sys_prompt, analysis_user_prompt = RetryPromptHelper.build_retry_analysis_prompts(
+                    previous_sys_prompt=self.last_sys_prompt_used,
+                    previous_user_prompt=self.last_user_prompt_used,
+                    previous_content=self.last_generated_content,
+                    issues_text=issues_list,
+                )
+        
+                fix_suggestion_raw, success = asyncio.run(self.chat_handler.get_role_response(
+                    role_name=self.role_name,
+                    sys_prompt=analysis_sys_prompt,
+                    user_prompt=analysis_user_prompt,
+                ))
+        
+                if not success or not fix_suggestion_raw:
+                    print(f"{Colors.WARNING}警告: 生成修复建议失败，将进行下一次尝试{Colors.ENDC}")
+                    continue
+        
+                fix_suggestion = ICPChatHandler.clean_code_block_markers(fix_suggestion_raw)
+        
+                # 第二步：根据修复建议重新组织用户提示词，发起修复请求
+                self.user_prompt_retry_part = self._build_user_prompt_retry_part(fix_suggestion)
+        
                 current_sys_prompt = self.sys_prompt + "\n\n" + self.sys_prompt_retry_part
                 current_user_prompt = self.user_prompt_base + "\n\n" + self.user_prompt_retry_part
-            
-            response_content, success = asyncio.run(self.chat_handler.get_role_response(
-                role_name=self.role_name,
-                sys_prompt=current_sys_prompt,
-                user_prompt=current_user_prompt
-            ))
-            
-            # 如果响应失败，继续下一次尝试
-            if not success:
-                print(f"{Colors.WARNING}警告: AI响应失败，将进行下一次尝试{Colors.ENDC}")
-                continue
-                
-            # 清理代码块标记
-            cleaned_json_str = ICPChatHandler.clean_code_block_markers(response_content)
-            
-            # 验证响应内容
-            is_valid = self._validate_response(cleaned_json_str)
-            if is_valid:
-                break
-            
-            # 如果验证失败，保存当前生成的内容并构建重试提示词
-            self.last_generated_content = cleaned_json_str
-            self.user_prompt_retry_part = self._build_user_prompt_retry_part()
+        
+                response_content, success = asyncio.run(self.chat_handler.get_role_response(
+                    role_name=self.role_name,
+                    sys_prompt=current_sys_prompt,
+                    user_prompt=current_user_prompt
+                ))
+        
+                if not success:
+                    print(f"{Colors.WARNING}警告: 修复阶段AI响应失败，将进行下一次尝试{Colors.ENDC}")
+                    continue
+        
+                # 更新记录本次调用使用的提示词
+                self.last_sys_prompt_used = current_sys_prompt
+                self.last_user_prompt_used = current_user_prompt
+        
+                # 清理代码块标记
+                cleaned_json_str = ICPChatHandler.clean_code_block_markers(response_content)
+        
+                # 再次验证修复后的响应内容
+                is_valid = self._validate_response(cleaned_json_str)
+                if is_valid:
+                    break
+        
+                # 如果依然验证失败，保存当前生成的内容，供下一轮重试使用
+                self.last_generated_content = cleaned_json_str
         
         if attempt == max_attempts - 1 and not is_valid:
             print(f"{Colors.FAIL}错误: 达到最大尝试次数，未能生成符合要求的依赖关系{Colors.ENDC}")
@@ -188,8 +254,11 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         
         return user_prompt_str
     
-    def _build_user_prompt_retry_part(self) -> str:
-        """构建用户提示词重试部分
+    def _build_user_prompt_retry_part(self, fix_suggestion: str) -> str:
+        """构建用户提示词重试部分（基于修复建议的输出修复提示）
+        
+        Args:
+            fix_suggestion: 上一步诊断阶段生成的修复建议
         
         Returns:
             str: 重试部分的用户提示词，失败时返回空字符串
@@ -197,26 +266,16 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         if not self.issue_recorder.has_issues() or not self.last_generated_content:
             return ""
         
-        # 读取重试提示词模板
-        app_data_store = get_app_data_store()
-        retry_template_path = os.path.join(app_data_store.get_user_prompt_dir(), 'retry_prompt_template.md')
-        
-        try:
-            with open(retry_template_path, 'r', encoding='utf-8') as f:
-                retry_template = f.read()
-        except Exception as e:
-            print(f"{Colors.FAIL}错误: 读取重试模板失败: {e}{Colors.ENDC}")
-            return ""
-        
-        # 格式化上一次生成的内容（用json代码块包裹）
-        formatted_content = f"```json\n{self.last_generated_content}\n```"
-        
-        # 格式化问题列表
+        # 将 issue_recorder 中的问题整理为文本列表
         issues_list = "\n".join([f"- {issue.issue_content}" for issue in self.issue_recorder.get_issues()])
         
-        # 替换占位符
-        retry_prompt = retry_template.replace('PREVIOUS_CONTENT_PLACEHOLDER', formatted_content)
-        retry_prompt = retry_prompt.replace('ISSUES_LIST_PLACEHOLDER', issues_list)
+        # 交给通用的 RetryPromptHelper 构建「输出修复」阶段的附加提示词
+        retry_prompt = RetryPromptHelper.build_fix_user_prompt_part(
+            previous_content=self.last_generated_content,
+            issues_text=issues_list,
+            fix_suggestion=fix_suggestion,
+            code_block_type="json",
+        )
         
         return retry_prompt
 

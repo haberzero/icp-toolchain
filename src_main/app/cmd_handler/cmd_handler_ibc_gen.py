@@ -19,6 +19,7 @@ from data_store.ibc_data_store import get_instance as get_ibc_data_store
 
 from .base_cmd_handler import BaseCmdHandler
 from utils.icp_ai_handler import ICPChatHandler
+from utils.icp_ai_handler.retry_prompt_helper import RetryPromptHelper
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 from utils.ibc_analyzer.ibc_visible_symbol_builder import VisibleSymbolBuilder
 from utils.ibc_analyzer.ibc_symbol_ref_resolver import SymbolRefResolver
@@ -55,6 +56,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 初始化issue recorder和上一次生成的内容
         self.ibc_issue_recorder = IbcIssueRecorder()
         self.last_generated_ibc_content = None  # 上一次生成的IBC内容
+        self.last_sys_prompt_used = ""  # 上一次调用时使用的系统提示词
+        self.last_user_prompt_used = ""  # 上一次调用时使用的用户提示词
         
         self.user_prompt_base = ""  # 用户提示词基础部分
         self.user_prompt_retry_part = ""  # 用户提示词重试部分
@@ -142,8 +145,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             return
 
         # 获取文件夹名称配置并创建对应文件夹
-        if "file_system_mapping" in icp_config_json_dict:
-            ibc_dir_name = icp_config_json_dict["file_system_mapping"].get("ibc_dir_name", "src_ibc")
+        if "path_mapping" in icp_config_json_dict:
+            ibc_dir_name = icp_config_json_dict["path_mapping"].get("ibc_dir_name", "src_ibc")
         if ibc_dir_name is not None:
             work_ibc_dir_path = os.path.join(self.work_dir_path, ibc_dir_name)
         else:
@@ -294,6 +297,9 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 重置实例变量
         self.ibc_issue_recorder.clear()
         self.last_generated_ibc_content = None
+        self.last_sys_prompt_used = ""
+        self.last_user_prompt_used = ""
+        self.user_prompt_retry_part = ""
         
         # 构建用户提示词基础部分
         self.user_prompt_base = self._build_user_prompt_for_ibc_generator(icp_json_file_path)
@@ -303,53 +309,133 @@ class CmdHandlerIbcGen(BaseCmdHandler):
 
         # 带重试的生成逻辑（IBC 代码的生成过程不确定性更多，提供较多的重试次数）
         max_attempts = 5
+        is_valid = False
+        ibc_content = ""
+        ast_dict = {}
+        symbols_tree = {}
+        symbols_metadata = {}
+
         for attempt in range(max_attempts):
             print(f"    {Colors.OKBLUE}正在进行第 {attempt + 1}/{max_attempts} 次尝试...{Colors.ENDC}")
 
-            # 根据是否是重试来组合提示词
             if attempt == 0:
-                # 第一次尝试,使用基础提示词
+                # 第一次尝试：直接使用基础提示词
                 current_sys_prompt = self.sys_prompt_ibc_gen
                 current_user_prompt = self.user_prompt_base
+
+                # 记录本次调用使用的提示词
+                self.last_sys_prompt_used = current_sys_prompt
+                self.last_user_prompt_used = current_user_prompt
+
+                # 将用户提示词保存到stage文件夹以便查看生成过程
+                self._save_user_prompt_to_stage(icp_json_file_path, current_user_prompt, attempt + 1)
+
+                # 调用AI生成IBC代码
+                response_content, success = asyncio.run(self.chat_handler.get_role_response(
+                    role_name=self.role_ibc_gen,
+                    sys_prompt=current_sys_prompt,
+                    user_prompt=current_user_prompt
+                ))
+
+                if not success or not response_content:
+                    print(f"    {Colors.WARNING}警告: AI响应失败或为空{Colors.ENDC}")
+                    continue
+
+                # 清理代码块标记
+                ibc_content = ICPChatHandler.clean_code_block_markers(response_content)
+
+                # 解析IBC代码生成AST
+                print(f"    {Colors.OKBLUE}正在分析IBC代码生成AST...{Colors.ENDC}")
+                ast_dict, symbols_tree, symbols_metadata = analyze_ibc_content(ibc_content, self.ibc_issue_recorder)
+
+                # 验证是否得到有效的AST和符号数据（包括符号引用验证）
+                is_valid = self._validate_ibc_response(
+                    ast_dict=ast_dict,
+                    current_file_path=icp_json_file_path,
+                    symbols_tree=symbols_tree,
+                    symbols_metadata=symbols_metadata
+                )
+                if is_valid:
+                    break
+
+                # 如果验证失败，保存当前生成的内容，供后续诊断和修复使用
+                self.last_generated_ibc_content = ibc_content
+
             else:
-                # 重试时,添加重试部分
+                # 重试阶段：先调用「诊断与修复建议」角色，再根据修复建议进行结果修复
+                if not self.last_generated_ibc_content or not self.ibc_issue_recorder.has_issues():
+                    print(f"    {Colors.WARNING}警告: 无可用的上一次输出或问题信息，无法执行重试修复{Colors.ENDC}")
+                    continue
+
+                # 构建问题列表文本（使用 IbcIssueRecorder 的格式）
+                ibc_issues = self.ibc_issue_recorder.get_issues()
+                issues_text = "\n".join(
+                    [f"- 第{issue.line_num}行: {issue.message} (代码: {issue.line_content})" for issue in ibc_issues]
+                )
+
+                # 第一步：根据上一次提示词 / 输出 / 问题列表，生成修复建议
+                analysis_sys_prompt, analysis_user_prompt = RetryPromptHelper.build_retry_analysis_prompts(
+                    previous_sys_prompt=self.last_sys_prompt_used,
+                    previous_user_prompt=self.last_user_prompt_used,
+                    previous_content=self.last_generated_ibc_content,
+                    issues_text=issues_text,
+                )
+
+                fix_suggestion_raw, success = asyncio.run(self.chat_handler.get_role_response(
+                    role_name=self.role_ibc_gen,
+                    sys_prompt=analysis_sys_prompt,
+                    user_prompt=analysis_user_prompt,
+                ))
+
+                if not success or not fix_suggestion_raw:
+                    print(f"    {Colors.WARNING}警告: 生成修复建议失败，将进行下一次尝试{Colors.ENDC}")
+                    continue
+
+                fix_suggestion = ICPChatHandler.clean_code_block_markers(fix_suggestion_raw)
+
+                # 第二步：根据修复建议重新组织用户提示词，发起修复请求
+                self.user_prompt_retry_part = self._build_user_prompt_retry_part(fix_suggestion)
+
                 current_sys_prompt = self.sys_prompt_ibc_gen + "\n\n" + self.sys_prompt_retry_part
                 current_user_prompt = self.user_prompt_base + "\n\n" + self.user_prompt_retry_part
-            
-            # 将用户提示词保存到stage文件夹以便查看生成过程
-            self._save_user_prompt_to_stage(icp_json_file_path, current_user_prompt, attempt + 1)
-            
-            # 调用AI生成IBC代码
-            response_content, success = asyncio.run(self.chat_handler.get_role_response(
-                role_name=self.role_ibc_gen,
-                sys_prompt=current_sys_prompt,
-                user_prompt=current_user_prompt
-            ))
-            
-            if not success or not response_content:
-                print(f"    {Colors.WARNING}警告: AI响应失败或为空{Colors.ENDC}")
-                continue
-            
-            # 清理代码块标记
-            ibc_content = ICPChatHandler.clean_code_block_markers(response_content)
-                    
-            # 解析IBC代码生成AST
-            print(f"    {Colors.OKBLUE}正在分析IBC代码生成AST...{Colors.ENDC}")
-            ast_dict, symbols_tree, symbols_metadata = analyze_ibc_content(ibc_content, self.ibc_issue_recorder)
-            
-            # 验证是否得到有效的AST和符号数据（包括符号引用验证）
-            is_valid = self._validate_ibc_response(
-                ast_dict=ast_dict,
-                current_file_path=icp_json_file_path,
-                symbols_tree=symbols_tree,
-                symbols_metadata=symbols_metadata
-            )
-            if is_valid:
-                break
-            
-            # 如果验证失败，保存当前生成的内容并构建重试提示词
-            self.last_generated_ibc_content = ibc_content
-            self.user_prompt_retry_part = self._build_user_prompt_retry_part()
+
+                # 将用户提示词保存到stage文件夹以便查看生成过程
+                self._save_user_prompt_to_stage(icp_json_file_path, current_user_prompt, attempt + 1)
+
+                # 调用AI生成修复后的IBC代码
+                response_content, success = asyncio.run(self.chat_handler.get_role_response(
+                    role_name=self.role_ibc_gen,
+                    sys_prompt=current_sys_prompt,
+                    user_prompt=current_user_prompt
+                ))
+
+                if not success or not response_content:
+                    print(f"    {Colors.WARNING}警告: 修复阶段AI响应失败或为空{Colors.ENDC}")
+                    continue
+
+                # 更新记录本次调用使用的提示词
+                self.last_sys_prompt_used = current_sys_prompt
+                self.last_user_prompt_used = current_user_prompt
+
+                # 清理代码块标记
+                ibc_content = ICPChatHandler.clean_code_block_markers(response_content)
+
+                # 解析IBC代码生成AST
+                print(f"    {Colors.OKBLUE}正在分析修复后的IBC代码生成AST...{Colors.ENDC}")
+                ast_dict, symbols_tree, symbols_metadata = analyze_ibc_content(ibc_content, self.ibc_issue_recorder)
+
+                # 再次验证修复后的响应内容
+                is_valid = self._validate_ibc_response(
+                    ast_dict=ast_dict,
+                    current_file_path=icp_json_file_path,
+                    symbols_tree=symbols_tree,
+                    symbols_metadata=symbols_metadata
+                )
+                if is_valid:
+                    break
+
+                # 如果依然验证失败，保存当前生成的内容，供下一轮重试使用
+                self.last_generated_ibc_content = ibc_content
         
         # 循环已跳出，检查运行结果并进行相应操作
         if attempt == max_attempts - 1 and not is_valid:
@@ -760,8 +846,11 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         )
         ref_resolver.resolve_all_references()
     
-    def _build_user_prompt_retry_part(self) -> str:
-        """构建用户提示词重试部分
+    def _build_user_prompt_retry_part(self, fix_suggestion: str) -> str:
+        """构建用户提示词重试部分（基于修复建议的输出修复提示）
+        
+        Args:
+            fix_suggestion: 上一步诊断阶段生成的修复建议
         
         Returns:
             str: 重试部分的用户提示词，失败时返回空字符串
@@ -769,27 +858,19 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         if not self.ibc_issue_recorder.has_issues() or not self.last_generated_ibc_content:
             return ""
         
-        # 读取重试提示词模板
-        app_data_store = get_app_data_store()
-        retry_template_path = os.path.join(app_data_store.get_user_prompt_dir(), 'retry_prompt_template.md')
-        
-        try:
-            with open(retry_template_path, 'r', encoding='utf-8') as f:
-                retry_template = f.read()
-        except Exception as e:
-            print(f"{Colors.FAIL}错误: 读取重试模板失败: {e}{Colors.ENDC}")
-            return ""
-        
-        # 格式化上一次生成的内容(不用代码块包裹)
-        formatted_content = self.last_generated_ibc_content
-        
-        # 格式化问题列表 - 使用IbcIssueRecorder的格式
+        # 使用 IbcIssueRecorder 的格式构建问题列表文本
         ibc_issues = self.ibc_issue_recorder.get_issues()
-        issues_list = "\n".join([f"- 第{issue.line_num}行: {issue.message} (代码: {issue.line_content})" for issue in ibc_issues])
+        issues_text = "\n".join(
+            [f"- 第{issue.line_num}行: {issue.message} (代码: {issue.line_content})" for issue in ibc_issues]
+        )
         
-        # 替换占位符
-        retry_prompt = retry_template.replace('PREVIOUS_CONTENT_PLACEHOLDER', formatted_content)
-        retry_prompt = retry_prompt.replace('ISSUES_LIST_PLACEHOLDER', issues_list)
+        # 交给通用的 RetryPromptHelper 构建「输出修复」阶段的附加提示词
+        retry_prompt = RetryPromptHelper.build_fix_user_prompt_part(
+            previous_content=self.last_generated_ibc_content,
+            issues_text=issues_text,
+            fix_suggestion=fix_suggestion,
+            code_block_type="intent_behavior_code",
+        )
         
         return retry_prompt
 

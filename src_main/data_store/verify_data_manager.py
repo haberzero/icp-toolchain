@@ -10,7 +10,7 @@ class VerifyDataManager:
     职责：
     - 统一管理IBC文件的MD5校验码
     - 新版：统一verify文件管理（保存在 icp_proj_data/icp_verify_data.json）
-    - 旧版：单文件verify管理（已废弃，保留向后兼容）
+    - 旧版：单文件verify管理（等待废弃，保留向后兼容）
     
     所有方法均为静态方法，可独立使用。
     
@@ -156,7 +156,7 @@ class VerifyDataManager:
                 # 单个文件失败不影响其他文件
                 continue
     
-    # ==================== 旧版校验数据管理（已废弃，保留以保持向后兼容） ====================
+    # ==================== 旧版校验数据管理（等待废弃，保留以保持向后兼容） ====================
     
     @staticmethod
     def build_verify_path(ibc_root: str, file_path: str) -> str:

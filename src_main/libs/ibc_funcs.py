@@ -177,7 +177,7 @@ class IbcFuncs:
         replacements: Dict[str, Tuple[str, str, int]],
         symbols_metadata: Dict[str, SymbolMetadata]
     ) -> str:
-        """应用符号替换到IBC内容（内部方法，已废弃）
+        """应用符号替换到IBC内容（内部方法，等待废弃）
         
         该方法已被SymbolReplacer类接管，保留此方法仅为向后兼容
         """
@@ -190,7 +190,7 @@ class IbcFuncs:
         symbols_metadata: Dict[str, SymbolMetadata],
         replacements: Dict[str, Tuple[str, str, int]]
     ) -> str:
-        """替换$符号引用中的符号名称（内部方法，已废弃）
+        """替换$符号引用中的符号名称（内部方法，等待废弃）
         
         该方法已被SymbolReplacer类接管，保留此方法仅为向后兼容
         """
