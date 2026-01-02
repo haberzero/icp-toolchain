@@ -121,7 +121,7 @@ class IbcDataStore:
         """
         return VerifyDataManager.batch_update_ibc_verify_codes(data_dir_path, ibc_root, file_paths)
     
-    # ==================== 旧版校验数据管理（已废弃，保留以保持向后兼容） ====================
+    # ==================== 旧版校验数据管理（等待废弃，保留以保持向后兼容） ====================
     # 委托给 VerifyDataManager
     
     def build_verify_path(self, ibc_root: str, file_path: str) -> str:
