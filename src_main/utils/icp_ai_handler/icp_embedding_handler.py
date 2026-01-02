@@ -1,8 +1,9 @@
 import time
 from typing import List, Optional, Tuple
 
-from libs.ai_interface.embedding_interface import EmbeddingInterface
 from typedef.ai_data_types import EmbeddingApiConfig, EmbeddingStatus
+
+from .embedding_interface import EmbeddingInterface
 
 
 class ICPEmbeddingHandler:

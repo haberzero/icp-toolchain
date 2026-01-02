@@ -2,9 +2,10 @@ import asyncio
 import time
 from typing import Dict, Optional, Tuple
 
-from libs.ai_interface.chat_interface import ChatInterface
 from typedef.ai_data_types import ChatApiConfig, ChatResponseStatus
 from typedef.cmd_data_types import Colors
+
+from .chat_interface import ChatInterface
 
 
 class ICPChatHandler:
