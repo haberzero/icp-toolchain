@@ -4,7 +4,6 @@ import json
 from typing import Dict, Any, List
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
-from typedef.ai_data_types import ChatApiConfig
 from typedef.ibc_data_types import (
     ClassMetadata, FunctionMetadata, VariableMetadata,
     FolderMetadata, FileMetadata, SymbolMetadata
@@ -15,7 +14,7 @@ from data_store.app_data_store import get_instance as get_app_data_store
 from data_store.ibc_data_store import get_instance as get_ibc_data_store
 
 from .base_cmd_handler import BaseCmdHandler
-from utils.icp_ai_handler import ICPChatHandler
+from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.ibc_funcs import IbcFuncs
 from utils.issue_recorder import TextIssueRecorder
@@ -41,64 +40,33 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
         self.work_icp_config_file_path = os.path.join(self.work_config_dir_path, 'icp_config.json')
 
-        self.role_symbol_normalizer = "8_symbol_normalizer"
-        # 【已注释】符号使用说明书生成角色暂时禁用
-        # self.role_usage_guide_gen = "8_symbol_usage_guide_gen"
-        self.sys_prompt_symbol_normalizer = ""  # 系统提示词基础部分,在_init_ai_handlers中加载
-        # 【已注释】符号使用说明书生成角色的系统提示词暂时禁用
-        # self.sys_prompt_usage_guide_gen = ""  # 使用说明书生成角色的系统提示词
-        self.sys_prompt_retry_part = ""  # 系统提示词重试部分,在_init_ai_handlers中加载
-        self.chat_handler = ICPChatHandler()
+        # 系统提示词加载
+        app_data_store = get_app_data_store()
+        self.role_name = "8_symbol_normalizer"
+        self.sys_prompt = app_data_store.get_sys_prompt_by_name(self.role_name)
+        self.sys_prompt_retry_part = app_data_store.get_sys_prompt_by_name('retry_sys_prompt')
+        
+        # 用户提示词在命令运行过程中，经由模板以及过程变量进行构建
+        self.user_prompt_base = ""  # 用户提示词基础部分
+        self.user_prompt_retry_part = ""  # 用户提示词重试部分
         
         # 初始化issue recorder和上一次生成的内容
         self.issue_recorder = TextIssueRecorder()
         self.last_generated_content = None  # 上一次生成的内容
-        
-        self.user_prompt_base = ""  # 用户提示词基础部分
-        self.user_prompt_retry_part = ""  # 用户提示词重试部分
-        
-        # 实例变量初始化（在_build_pre_execution_variables中赋值）
-        self.dependent_relation = None
-        self.file_creation_order_list = None
-        self.work_ibc_dir_path = None
-        self.symbols_to_normalize_dict = {}  # {file_path: symbols_to_normalize}
-        
-        self._init_ai_handlers()
-    
+
     def execute(self):
         """执行符号规范化"""
         if not self.is_cmd_valid():
             return
         
         print(f"{Colors.OKBLUE}开始符号规范化...{Colors.ENDC}")
-        
-        # 准备执行前所需的变量
         self._build_pre_execution_variables()
-        
-        # 第一阶段：按依赖顺序遍历并处理每个文件的符号规范化
         for file_path in self.file_creation_order_list:
             success = self._normalize_single_file_symbols(file_path)
             if not success:
                 print(f"{Colors.FAIL}文件 {file_path} 符号规范化失败，退出运行{Colors.ENDC}")
                 return
         
-        print(f"{Colors.OKGREEN}符号规范化完成{Colors.ENDC}")
-        
-        # 第二阶段：基于已保存的规范化结果，生成符号使用说明书
-        # 【已注释】符号使用说明书生成功能暂时禁用，专注于符号规范化
-        # print(f"{Colors.OKBLUE}开始生成符号使用说明书...{Colors.ENDC}")
-        # 
-        # # 准备第二阶段执行所需的变量
-        # self._build_usage_guide_variables()
-        # 
-        # # 按依赖顺序遍历并生成每个文件的使用说明书
-        # for file_path in self.file_creation_order_list:
-        #     success = self._generate_single_file_usage_guide(file_path)
-        #     if not success:
-        #         print(f"{Colors.WARNING}警告: 文件 {file_path} 使用说明书生成失败{Colors.ENDC}")
-        #         # 使用说明书生成失败不影响整体流程，继续处理下一个文件
-        # 
-        # print(f"{Colors.OKGREEN}符号使用说明书生成完成{Colors.ENDC}")
         print(f"{Colors.OKGREEN}符号规范化命令执行完毕!{Colors.ENDC}")
     
     def _build_pre_execution_variables(self):
@@ -386,16 +354,16 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             # 根据是否是重试来组合提示词
             if attempt == 0:
                 # 第一次尝试,使用基础提示词
-                current_sys_prompt = self.sys_prompt_symbol_normalizer
+                current_sys_prompt = self.role_name
                 current_user_prompt = self.user_prompt_base
             else:
                 # 重试时,添加重试部分
-                current_sys_prompt = self.sys_prompt_symbol_normalizer + "\n\n" + self.sys_prompt_retry_part
+                current_sys_prompt = self.role_name + "\n\n" + self.sys_prompt_retry_part
                 current_user_prompt = self.user_prompt_base + "\n\n" + self.user_prompt_retry_part
             
-            # 调用AI进行规范化
+            # 调用AI进行符号规范化
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
-                role_name=self.role_symbol_normalizer,
+                role_name=self.role_name,
                 sys_prompt=current_sys_prompt,
                 user_prompt=current_user_prompt
             ))
@@ -636,297 +604,6 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         
         print(f"    {Colors.OKGREEN}规范化验证数据已保存: MD5={normalized_md5[:8]}...{Colors.ENDC}")
     
-    # 【已注释】符号使用说明书生成功能暂时禁用
-    # def _build_usage_guide_variables(self):
-    #     """准备第二阶段（使用说明书生成）所需的变量
-    #     
-    #     第一阶段已经完成，相关文件和符号表已存在，只需加载已规范化的符号信息
-    #     """
-    #     print(f"  {Colors.OKBLUE}正在加载已规范化符号信息...{Colors.ENDC}")
-    #     
-    #     ibc_data_store = get_ibc_data_store()
-    #     self.files_with_normalized_symbols = []
-    #     
-    #     # 遍历所有文件，记录哪些文件有已规范化的符号
-    #     for file_path in self.file_creation_order_list:
-    #         symbols_path = ibc_data_store.build_symbols_path(self.work_ibc_dir_path, file_path)
-    #         
-    #         # 第一阶段已经完成，符号表文件必然存在，不需要再检查
-    #         file_name = os.path.basename(file_path)
-    #         symbols_tree, symbols_metadata = ibc_data_store.load_symbols(symbols_path, file_name)
-    #         
-    #         if not symbols_metadata:
-    #             continue
-    #         
-    #         # 检查是否有已规范化的符号
-    #         has_normalized = any(
-    #             hasattr(meta, 'normalized_name') and meta.normalized_name
-    #             for meta in symbols_metadata.values()
-    #             if isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata))
-    #         )
-    #         
-    #         if has_normalized:
-    #             self.files_with_normalized_symbols.append(file_path)
-    #     
-    #     print(f"  {Colors.OKGREEN}已加载 {len(self.files_with_normalized_symbols)} 个文件的已规范化符号信息{Colors.ENDC}")
-    
-    # 【已注释】符号使用说明书生成功能暂时禁用
-    # def _generate_single_file_usage_guide(self, icp_json_file_path: str) -> bool:
-    #     """为单个文件生成符号使用说明书
-    #     
-    #     Args:
-    #         icp_json_file_path: 文件路径
-    #         
-    #     Returns:
-    #         bool: 是否成功生成
-    #     """
-    #     # 如果该文件没有已规范化的符号，跳过
-    #     if icp_json_file_path not in self.files_with_normalized_symbols:
-    #         return True
-    #     
-    #     print(f"  {Colors.OKBLUE}正在为文件生成使用说明书: {icp_json_file_path}{Colors.ENDC}")
-    #     
-    #     # 重置状态
-    #     self.issue_recorder.clear()
-    #     self.last_generated_content = None
-    #     
-    #     # 从文件系统加载符号元数据（第一阶段已经保存）
-    #     ibc_data_store = get_ibc_data_store()
-    #     symbols_path = ibc_data_store.build_symbols_path(self.work_ibc_dir_path, icp_json_file_path)
-    #     file_name = os.path.basename(icp_json_file_path)
-    #     symbols_tree, symbols_metadata = ibc_data_store.load_symbols(symbols_path, file_name)
-    #     
-    #     # 构建规范化映射（从符号元数据中提取）
-    #     normalized_mapping = self._extract_normalized_mapping(symbols_metadata)
-    #     if not normalized_mapping:
-    #         return True
-    #     
-    #     # 构建用户提示词
-    #     user_prompt = self._build_user_prompt_for_usage_guide(
-    #         icp_json_file_path,
-    #         normalized_mapping,
-    #         symbols_metadata
-    #     )
-    #     
-    #     if not user_prompt:
-    #         print(f"    {Colors.FAIL}错误: 使用说明书用户提示词构建失败{Colors.ENDC}")
-    #         return False
-    #     
-    #     # 带重试的生成逻辑
-    #     max_attempts = 2
-    #     is_success = False
-    #     
-    #     for attempt in range(max_attempts):
-    #         if attempt > 0:
-    #             print(f"    {Colors.OKBLUE}正在进行第 {attempt + 1}/{max_attempts} 次尝试...{Colors.ENDC}")
-    #         
-    #         # 调用AI生成使用说明书
-    #         response_content, success = asyncio.run(self.chat_handler.get_role_response(
-    #             role_name=self.role_usage_guide_gen,
-    #             sys_prompt=self.sys_prompt_usage_guide_gen,
-    #             user_prompt=user_prompt
-    #         ))
-    #         
-    #         if not success or not response_content:
-    #             print(f"    {Colors.WARNING}警告: AI响应失败或为空{Colors.ENDC}")
-    #             continue
-    #         
-    #         # 清理代码块标记
-    #         cleaned_response = ICPChatHandler.clean_code_block_markers(response_content)
-    #         
-    #         # 保存使用说明书
-    #         is_success = self._save_usage_guide(icp_json_file_path, cleaned_response)
-    #         if is_success:
-    #             break
-    #     
-    #     return is_success
-    
-    # 【已注释】符号使用说明书生成功能暂时禁用
-    # def _extract_normalized_mapping(self, symbols_metadata: Dict[str, SymbolMetadata]) -> Dict[str, str]:
-    #     """从符号元数据中提取规范化映射
-    #     
-    #     Args:
-    #         symbols_metadata: 符号元数据字典
-    #         
-    #     Returns:
-    #         Dict[str, str]: {原始符号路径: 规范化名称}
-    #     """
-    #     normalized_mapping = {}
-    #     for symbol_path, meta in symbols_metadata.items():
-    #         if isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata)):
-    #             if hasattr(meta, 'normalized_name') and meta.normalized_name:
-    #                 normalized_mapping[symbol_path] = meta.normalized_name
-    #     return normalized_mapping
-    
-    # 【已注释】符号使用说明书生成功能暂时禁用
-    # def _build_user_prompt_for_usage_guide(
-    #     self,
-    #     icp_json_file_path: str,
-    #     normalized_mapping: Dict[str, str],
-    #     symbols_metadata: Dict[str, SymbolMetadata]
-    # ) -> str:
-    #     """构建使用说明书生成的用户提示词
-    #     
-    #     Args:
-    #         icp_json_file_path: 文件路径
-    #         normalized_mapping: 规范化映射 {符号树路径: 规范化名称}
-    #         symbols_metadata: 符号元数据字典
-    #         
-    #     Returns:
-    #         str: 用户提示词，失败时返回空字符串
-    #     """
-    #     ibc_data_store = get_ibc_data_store()
-    #     
-    #     # 读取IBC代码
-    #     ibc_path = ibc_data_store.build_ibc_path(self.work_ibc_dir_path, icp_json_file_path)
-    #     try:
-    #         with open(ibc_path, 'r', encoding='utf-8') as f:
-    #             ibc_content = f.read()
-    #     except Exception as e:
-    #         print(f"    {Colors.FAIL}错误: 读取IBC代码失败: {e}{Colors.ENDC}")
-    #         return ""
-    #     
-    #     # 获取目标语言
-    #     target_language = self._get_target_language()
-    #     
-    #     # 构建简化的规范化映射（只包含原始符号名，不包含符号树路径）
-    #     simplified_normalized_mapping = self._build_simplified_normalized_mapping(
-    #         normalized_mapping,
-    #         symbols_metadata
-    #     )
-    #     normalized_json = json.dumps(simplified_normalized_mapping, indent=2, ensure_ascii=False)
-    #     
-    #     # 格式化符号详细信息（包含类型、描述和参数列表）
-    #     symbols_detail_text = self._format_symbols_detail_for_usage_guide(
-    #         normalized_mapping, 
-    #         symbols_metadata
-    #     )
-    #     
-    #     # 读取提示词模板
-    #     app_data_store = get_app_data_store()
-    #     app_user_prompt_file_path = os.path.join(
-    #         app_data_store.get_user_prompt_dir(), 
-    #         'symbol_usage_guide_gen_user.md'
-    #     )
-    #     try:
-    #         with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
-    #             user_prompt_template_str = f.read()
-    #     except Exception as e:
-    #         print(f"    {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
-    #         return ""
-    #     
-    #     # 填充占位符
-    #     user_prompt_str = user_prompt_template_str.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
-    #     user_prompt_str = user_prompt_str.replace('FILE_PATH_PLACEHOLDER', icp_json_file_path)
-    #     user_prompt_str = user_prompt_str.replace('CONTEXT_INFO_PLACEHOLDER', ibc_content)
-    #     user_prompt_str = user_prompt_str.replace('NORMALIZED_SYMBOLS_PLACEHOLDER', normalized_json)
-    #     user_prompt_str = user_prompt_str.replace('SYMBOLS_DETAIL_INFO_PLACEHOLDER', symbols_detail_text)
-    #     
-    #     return user_prompt_str
-    
-    # 【已注释】符号使用说明书生成功能暂时禁用
-    # def _build_simplified_normalized_mapping(
-    #     self,
-    #     normalized_mapping: Dict[str, str],
-    #     symbols_metadata: Dict[str, SymbolMetadata]
-    # ) -> Dict[str, str]:
-    #     """构建简化的规范化映射（只包含原始符号名，不包含符号树路径）
-    #     
-    #     Args:
-    #         normalized_mapping: 完整的规范化映射 {符号树路径: 规范化名称}
-    #         symbols_metadata: 符号元数据字典
-    #         
-    #     Returns:
-    #         Dict[str, str]: {原始符号名: 规范化名称}
-    #     """
-    #     simplified_mapping = {}
-    #     
-    #     for symbol_path, normalized_name in normalized_mapping.items():
-    #         # 从符号树路径中提取原始符号名（最后一个点之后的部分）
-    #         original_name = symbol_path.split('.')[-1]
-    #         simplified_mapping[original_name] = normalized_name
-    #     
-    #     return simplified_mapping
-    
-    # 【已注释】符号使用说明书生成功能暂时禁用
-    # def _format_symbols_detail_for_usage_guide(
-    #     self,
-    #     normalized_mapping: Dict[str, str],
-    #     symbols_metadata: Dict[str, SymbolMetadata]
-    # ) -> str:
-    #     """格式化符号详细信息用于使用说明书生成
-    #     
-    #     包含类型、功能描述，以及对于函数/类的参数列表
-    #     
-    #     Args:
-    #         normalized_mapping: 规范化映射 {符号树路径: 规范化名称}
-    #         symbols_metadata: 符号元数据字典
-    #         
-    #     Returns:
-    #         str: 格式化后的符号详细信息
-    #     """
-    #     lines = []
-    #     
-    #     for symbol_path, normalized_name in normalized_mapping.items():
-    #         if symbol_path not in symbols_metadata:
-    #             continue
-    #         
-    #         meta = symbols_metadata[symbol_path]
-    #         # 提取原始符号名
-    #         original_name = symbol_path.split('.')[-1]
-    #         
-    #         # 基本信息
-    #         description = meta.description or "无描述"
-    #         lines.append(f"### {original_name} → {normalized_name}")
-    #         lines.append(f"- **类型**: {meta.type}")
-    #         lines.append(f"- **对外功能描述**: {description}")
-    #         
-    #         # 添加参数信息（仅对函数和类）
-    #         if isinstance(meta, ClassMetadata) and meta.init_parameters:
-    #             lines.append(f"- **构造函数参数**:")
-    #             for param_name, param_desc in meta.init_parameters.items():
-    #                 lines.append(f"  - `{param_name}`: {param_desc}")
-    #         elif isinstance(meta, FunctionMetadata) and meta.parameters:
-    #             lines.append(f"- **函数参数**:")
-    #             for param_name, param_desc in meta.parameters.items():
-    #                 lines.append(f"  - `{param_name}`: {param_desc}")
-    #         
-    #         lines.append("")  # 空行分隔
-    #     
-    #     return '\n'.join(lines)
-    
-    # 【已注释】符号使用说明书生成功能暂时禁用
-    # def _save_usage_guide(self, icp_json_file_path: str, usage_guide_content: str) -> bool:
-    #     """保存符号使用说明书到文件
-    #     
-    #     Args:
-    #         icp_json_file_path: 文件路径
-    #         usage_guide_content: 使用说明书内容（Markdown格式）
-    #         
-    #     Returns:
-    #         bool: 是否成功保存
-    #     """
-    #     # 构建保存路径（在src_staging目录下）
-    #     work_staging_dir_path = os.path.join(self.work_dir_path, 'src_staging')
-    #     usage_guide_file_path = os.path.join(
-    #         work_staging_dir_path, 
-    #         f"{icp_json_file_path}_symbol_usage_guide.md"
-    #     )
-    #     
-    #     # 创建目录
-    #     parent_dir = os.path.dirname(usage_guide_file_path)
-    #     if parent_dir:
-    #         os.makedirs(parent_dir, exist_ok=True)
-    #     
-    #     try:
-    #         with open(usage_guide_file_path, 'w', encoding='utf-8') as f:
-    #             f.write(usage_guide_content)
-    #         print(f"    {Colors.OKGREEN}使用说明书已保存: {usage_guide_file_path}{Colors.ENDC}")
-    #         return True
-    #     except Exception as e:
-    #         print(f"    {Colors.FAIL}错误: 保存使用说明书失败: {e}{Colors.ENDC}")
-    #         return False
-    
     def _build_user_prompt_retry_part(self) -> str:
         """构建用户提示词重试部分
         
@@ -961,6 +638,7 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
 
         
     def is_cmd_valid(self):
+        """检查命令的必要条件是否满足"""
         return self._check_cmd_requirement() and self._check_ai_handler()
 
     def _check_cmd_requirement(self) -> bool:
@@ -1013,73 +691,14 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
     
     def _check_ai_handler(self) -> bool:
         """验证AI处理器是否初始化成功"""
+        # 检查共享的ChatInterface是否初始化
         if not ICPChatHandler.is_initialized():
+            print(f"  {Colors.FAIL}错误: ChatInterface 未正确初始化{Colors.ENDC}")
             return False
         
-        if not self.sys_prompt_symbol_normalizer:
+        # 检查系统提示词是否加载
+        if not self.sys_prompt:
+            print(f"  {Colors.FAIL}错误: 系统提示词 {self.role_name} 未加载{Colors.ENDC}")
             return False
-        
-        # if not self.sys_prompt_usage_guide_gen:
-        #     print(f"  {Colors.WARNING}警告: 使用说明书生成系统提示词未加载{Colors.ENDC}")
-        #     # 不阻止执行，仅警告
-        
+            
         return True
-    
-    def _init_ai_handlers(self):
-        """初始化AI处理器"""
-        if not os.path.exists(self.work_api_config_file_path):
-            print(f"错误: 配置文件 {self.work_api_config_file_path} 不存在")
-            return
-        
-        try:
-            with open(self.work_api_config_file_path, 'r', encoding='utf-8') as f:
-                config_json_dict = json.load(f)
-        except Exception as e:
-            print(f"错误: 读取配置文件失败: {e}")
-            return
-        
-        chat_api_config_dict = None
-        if 'intent_behavior_code_gen_handler' in config_json_dict:
-            chat_api_config_dict = config_json_dict['intent_behavior_code_gen_handler']
-        elif 'coder_handler' in config_json_dict:
-            chat_api_config_dict = config_json_dict['coder_handler']
-        else:
-            print("错误: 配置文件缺少intent_behavior_code_gen_handler或coder_handler配置")
-            return
-
-        chat_config = ChatApiConfig(
-            base_url=chat_api_config_dict.get('api-url', ''),
-            api_key=chat_api_config_dict.get('api-key', ''),
-            model=chat_api_config_dict.get('model', '')
-        )
-
-        if not ICPChatHandler.is_initialized():
-            ICPChatHandler.initialize_chat_interface(chat_config)
-        
-        # 加载系统提示词
-        app_data_store = get_app_data_store()
-        app_prompt_dir_path = app_data_store.get_prompt_dir()
-        
-        # 加载符号规范化角色的系统提示词基础部分
-        sys_prompt_path = os.path.join(app_prompt_dir_path, f"{self.role_symbol_normalizer}.md")
-        try:
-            with open(sys_prompt_path, 'r', encoding='utf-8') as f:
-                self.sys_prompt_symbol_normalizer = f.read()
-        except Exception as e:
-            print(f"错误: 读取系统提示词文件失败 ({self.role_symbol_normalizer}): {e}")
-        
-        # 加载使用说明书生成角色的系统提示词
-        # usage_guide_sys_prompt_path = os.path.join(app_prompt_dir_path, f"{self.role_usage_guide_gen}.md")
-        # try:
-        #     with open(usage_guide_sys_prompt_path, 'r', encoding='utf-8') as f:
-        #         self.sys_prompt_usage_guide_gen = f.read()
-        # except Exception as e:
-        #     print(f"错误: 读取使用说明书生成系统提示词失败 ({self.role_usage_guide_gen}): {e}")
-        
-        # 加载系统提示词重试部分
-        retry_sys_prompt_path = os.path.join(app_prompt_dir_path, 'retry_sys_prompt.md')
-        try:
-            with open(retry_sys_prompt_path, 'r', encoding='utf-8') as f:
-                self.sys_prompt_retry_part = f.read()
-        except Exception as e:
-            print(f"错误: 读取系统提示词重试部分失败: {e}")

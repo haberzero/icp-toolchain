@@ -11,7 +11,7 @@ from data_store.app_data_store import get_instance as get_app_data_store
 from data_store.ibc_data_store import get_instance as get_ibc_data_store
 
 from .base_cmd_handler import BaseCmdHandler
-from utils.icp_ai_handler import ICPChatHandler
+from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.ibc_funcs import IbcFuncs
 from libs.symbol_metadata_helper import SymbolMetadataHelper
@@ -37,32 +37,22 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_icp_config_file_path = os.path.join(self.work_dir_path, '.icp_proj_config', 'icp_config.json')
 
+        # 获取coder_handler实例（单例）
+        self.chat_handler = ICPChatHandler(handler_key='coder_handler')
+
+        # 系统提示词加载
+        app_data_store = get_app_data_store()
         self.role_code_gen = "9_target_code_gen"
-        self.sys_prompt_code_gen = ""  # 系统提示词基础部分,在_init_ai_handlers中加载
-        self.sys_prompt_retry_part = ""  # 系统提示词重试部分,在_init_ai_handlers中加载
-        self.chat_handler = ICPChatHandler()
+        self.sys_prompt_code_gen = app_data_store.get_sys_prompt_by_name(self.role_code_gen)
+        self.sys_prompt_retry_part = app_data_store.get_sys_prompt_by_name('retry_sys_prompt')
         
-        # 初始化issue recorder和上一次生成的内容
-        self.issue_recorder = TextIssueRecorder()
-        self.last_generated_content = None  # 上一次生成的内容
-        
+        # 用户提示词在命令运行过程中，经由模板以及过程变量进行构建
         self.user_prompt_base = ""  # 用户提示词基础部分
         self.user_prompt_retry_part = ""  # 用户提示词重试部分
-        
-        # 实例变量初始化（在_build_pre_execution_variables中赋值）
-        self.dependent_relation = None
-        self.file_creation_order_list = None
-        self.work_ibc_dir_path = None
-        self.work_target_dir_path = None
-        self.proj_root_dict = None
-        self.proj_root_dict_json_str = None
-        self.implementation_plan_str = None
-        self.extracted_params_str = None
-        self.allowed_libs_text = None
-        self.target_language = None
-        self.target_file_extension = None
-        
-        self._init_ai_handlers()
+
+        # issue recorder和上一次生成的内容
+        self.issue_recorder = TextIssueRecorder()
+        self.last_generated_content = None  # 上一次生成的内容
     
     def execute(self):
         """执行目标代码生成"""
@@ -613,6 +603,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         return retry_prompt
 
     def is_cmd_valid(self):
+        """检查命令的必要条件是否满足"""
         return self._check_cmd_requirement() and self._check_ai_handler()
 
     def _check_cmd_requirement(self) -> bool:
@@ -684,45 +675,14 @@ class CmdHandlerCodeGen(BaseCmdHandler):
     
     def _check_ai_handler(self) -> bool:
         """验证AI处理器是否初始化成功"""
+        # 检查共享的ChatInterface是否初始化
         if not ICPChatHandler.is_initialized():
+            print(f"  {Colors.FAIL}错误: ChatInterface 未正确初始化{Colors.ENDC}")
             return False
         
+        # 检查系统提示词是否加载
         if not self.sys_prompt_code_gen:
+            print(f"  {Colors.FAIL}错误: 系统提示词 {self.role_code_gen} 未加载{Colors.ENDC}")
             return False
-        
+            
         return True
-    
-    def _init_ai_handlers(self):
-        """初始化AI处理器"""
-        proj_run_time_cfg = get_proj_run_time_cfg()
-        app_data_store = get_app_data_store()
-        
-        # 优先使用target_code_gen_handler，若不存在则回退到coder_handler
-        handler_type = None
-        if proj_run_time_cfg.check_specific_ai_handler_config_exists('target_code_gen_handler'):
-            handler_type = 'target_code_gen_handler'
-        elif proj_run_time_cfg.check_specific_ai_handler_config_exists('coder_handler'):
-            handler_type = 'coder_handler'
-        else:
-            print(f"{Colors.FAIL}错误: API配置文件中缺少target_code_gen_handler或coder_handler配置{Colors.ENDC}")
-            return
-        
-        chat_config = proj_run_time_cfg.get_chat_handler_config(handler_type)
-        if not chat_config.is_config_valid():
-            print(f"{Colors.FAIL}错误: 处理器配置无效{Colors.ENDC}")
-            return
-        
-        # 初始化聊天处理器
-        if not ICPChatHandler.is_initialized():
-            ICPChatHandler.initialize_chat_interface(chat_config)
-        
-        # 使用app_data_store加载系统提示词
-        self.sys_prompt_code_gen = app_data_store.get_sys_prompt_by_name(self.role_code_gen)
-        if not self.sys_prompt_code_gen:
-            print(f"{Colors.FAIL}错误: 读取系统提示词文件失败 ({self.role_code_gen}){Colors.ENDC}")
-            return
-        
-        # 加载系统提示词重试部分
-        self.sys_prompt_retry_part = app_data_store.get_sys_prompt_by_name('retry_sys_prompt')
-        if not self.sys_prompt_retry_part:
-            print(f"{Colors.WARNING}警告: 读取系统提示词重试部分失败，重试功能可能受限{Colors.ENDC}")

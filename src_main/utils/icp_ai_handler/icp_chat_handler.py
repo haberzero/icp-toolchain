@@ -2,12 +2,12 @@
 ICP Chat Handler - 管理AI接口的包装器
 
 这个模块提供了一个高层次的接口来管理ChatInterface实例,
-所有实例共享一个ChatInterface以避免资源浪费。包含重试机制逻辑。
+使用单例模式管理不同配置的handler实例。包含重试机制逻辑。
 """
 
 import asyncio
 import time
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 
 from typedef.ai_data_types import ChatApiConfig, ChatResponseStatus
 from typedef.cmd_data_types import Colors
@@ -15,28 +15,63 @@ from libs.ai_interface.chat_interface import ChatInterface
 
 
 class ICPChatHandler:
-    """ICP聊天处理器,提供AI聊天接口和重试机制"""
+    """ICP聊天处理器,提供AI聊天接口和重试机制
     
-    # 类变量：共享的ChatInterface实例
-    _shared_chat_interface: Optional[ChatInterface] = None
-    _is_initialized: bool = False
-    _initialization_attempted: bool = False  # 标记是否已尝试过初始化
-    _max_retry: int = 3
-    _retry_delay: float = 1.0
+    使用单例模式，支持两个独立的handler实例：
+    - chat_handler: 用于对话场景
+    - coder_handler: 用于代码生成场景
+    """
     
-    def __init__(self):
-        """初始化ICP聊天处理器"""
-        pass
+    # 类变量：存储不同handler_key对应的单例实例
+    _instances: Dict[str, 'ICPChatHandler'] = {}
     
-    @classmethod
+    # 每个实例的状态变量
+    _chat_interface: Optional[ChatInterface]
+    _is_initialized: bool
+    _initialization_attempted: bool
+    _max_retry: int
+    _retry_delay: float
+    _handler_key: str
+    
+    def __new__(cls, handler_key: str = 'coder_handler'):
+        """创建或获取指定handler_key的单例实例
+        
+        Args:
+            handler_key: handler类型标识，支持 'chat_handler' 和 'coder_handler'
+            
+        Returns:
+            ICPChatHandler: 对应handler_key的单例实例
+        """
+        if handler_key not in cls._instances:
+            instance = super(ICPChatHandler, cls).__new__(cls)
+            cls._instances[handler_key] = instance
+        return cls._instances[handler_key]
+    
+    def __init__(self, handler_key: str = 'coder_handler'):
+        """初始化ICP聊天处理器
+        
+        Args:
+            handler_key: handler类型标识
+        """
+        # 避免重复初始化
+        if hasattr(self, '_handler_key'):
+            return
+            
+        self._handler_key = handler_key
+        self._chat_interface = None
+        self._is_initialized = False
+        self._initialization_attempted = False
+        self._max_retry = 3
+        self._retry_delay = 1.0
+    
     def initialize_chat_interface(
-        cls, 
+        self, 
         api_config: ChatApiConfig, 
         max_retry: int = 3, 
         retry_delay: float = 1.0
     ) -> bool:
         """
-        初始化共享的ChatInterface实例（类方法），支持重试机制
+        初始化当前实例的ChatInterface，支持重试机制
         
         Args:
             api_config: API配置信息
@@ -47,67 +82,65 @@ class ICPChatHandler:
             bool: 是否初始化成功
         """
         # 如果已经尝试过初始化，直接返回之前的结果
-        if cls._initialization_attempted:
-            return cls._is_initialized
+        if self._initialization_attempted:
+            return self._is_initialized
         
         # 标记已尝试初始化
-        cls._initialization_attempted = True
+        self._initialization_attempted = True
         
-        if cls._shared_chat_interface is None:
-            cls._max_retry = max_retry
-            cls._retry_delay = retry_delay
+        if self._chat_interface is None:
+            self._max_retry = max_retry
+            self._retry_delay = retry_delay
             
             # 带重试的初始化
             for attempt in range(max_retry):
                 try:
-                    cls._shared_chat_interface = ChatInterface(api_config)
-                    if cls._shared_chat_interface.client is not None:
+                    self._chat_interface = ChatInterface(api_config)
+                    if self._chat_interface.client is not None:
                         # 进行真实的连接验证
                         print(f"ChatInterface 客户端创建成功，正在验证连接...")
                         is_connected = asyncio.run(
-                            cls._shared_chat_interface.verify_connection()
+                            self._chat_interface.verify_connection()
                         )
                         
                         if is_connected:
-                            print(f"ChatInterface 初始化成功 (模型: {api_config.model})")
-                            cls._is_initialized = True
+                            print(f"ChatInterface 初始化成功 (handler: {self._handler_key}, 模型: {api_config.model})")
+                            self._is_initialized = True
                             return True
                         else:
                             print(f"模型连接验证失败 (尝试 {attempt + 1}/{max_retry})")
-                            cls._shared_chat_interface = None
+                            self._chat_interface = None
                 except Exception as e:
                     print(f"ChatInterface 初始化失败 (尝试 {attempt + 1}/{max_retry}): {e}")
-                    cls._shared_chat_interface = None
+                    self._chat_interface = None
                 
                 if attempt < max_retry - 1:
                     time.sleep(retry_delay)
             
-            cls._is_initialized = False
+            self._is_initialized = False
             print(f"ChatInterface 初始化最终失败，已尝试 {max_retry} 次")
             return False
         
-        return cls._is_initialized
+        return self._is_initialized
     
-    @classmethod
-    def is_initialized(cls) -> bool:
+    def is_initialized(self) -> bool:
         """
-        检查共享的ChatInterface是否已初始化
+        检查当前实例的ChatInterface是否已初始化
         
         Returns:
             bool: 是否已初始化
         """
-        return cls._is_initialized and cls._shared_chat_interface is not None
+        return self._is_initialized and self._chat_interface is not None
     
-    @classmethod
-    def reset_initialization(cls) -> None:
+    def reset_initialization(self) -> None:
         """
-        重置初始化状态，允许重新初始化ChatInterface
+        重置ChatInterface初始化状态，允许重新初始化ChatInterface
         在更改API配置后需要重新连接时使用
         """
-        cls._shared_chat_interface = None
-        cls._is_initialized = False
-        cls._initialization_attempted = False
-        print("已重置ChatInterface初始化状态")
+        self._chat_interface = None
+        self._is_initialized = False
+        self._initialization_attempted = False
+        print(f"已重置ChatInterface初始化状态 (handler: {self._handler_key})")
     
     @staticmethod
     def clean_code_block_markers(content: str) -> str:
@@ -150,7 +183,7 @@ class ICPChatHandler:
         """
         print(f"    {role_name}正在生成响应...")
         
-        # 检查共享的ChatInterface是否已初始化
+        # 检查当前实例的ChatInterface是否已初始化
         if not self.is_initialized():
             print(f"\n{Colors.FAIL}错误: ChatInterface未初始化{Colors.ENDC}")
             return ("", False)
@@ -165,7 +198,7 @@ class ICPChatHandler:
                 response_content += content
                 print(content, end="", flush=True)
             
-            status = await self._shared_chat_interface.stream_response(
+            status = await self._chat_interface.stream_response(
                 sys_prompt=sys_prompt,
                 user_prompt=user_prompt,
                 callback=collect_and_print

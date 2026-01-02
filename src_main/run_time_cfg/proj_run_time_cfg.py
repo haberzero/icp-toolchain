@@ -105,22 +105,12 @@ class ProjRunTimeCfg:
     
     # ==================== API配置相关方法 ====================
     def check_specific_ai_handler_config_exists(self, handler_type: str):
-        """检查指定类型的处理器配置是否存在
-        Args:
-            handler_type: 处理器类型，可选值: 'chat_handler', 'coder_handler', 'embedding_handler'
-        Returns:
-            bool: 处理器配置是否存在
-        """
+        """检查指定类型的处理器配置是否存在"""
         api_config = self._load_api_config()
         return handler_type in api_config
     
     def get_chat_handler_config(self, handler_type: str) -> ChatApiConfig:
-        """获取指定类型的处理器配置
-        Args:
-            handler_type: 处理器类型，可选值: 'chat_handler', 'coder_handler', 'embedding_handler'
-        Returns:
-            ChatApiConfig: 处理器配置对象，包含 name, api-url, api-key, model 等信息
-        """
+        """获取指定类型的对话处理器配置"""
         api_config = self._load_api_config()
         chat_config = api_config.get(handler_type, {})
         return ChatApiConfig(
@@ -130,12 +120,7 @@ class ProjRunTimeCfg:
         )
     
     def get_embedding_handler_config(self, handler_type: str) -> EmbeddingApiConfig:
-        """获取指定类型的处理器配置
-        Args:
-            handler_type: 处理器类型，可选值: 'chat_handler', 'coder_handler', 'embedding_handler'
-        Returns:
-            EmbeddingApiConfig: 处理器配置对象，包含 name, api-url, api-key, model 等信息
-        """
+        """获取指定类型的嵌入处理器配置"""
         api_config = self._load_api_config()
         embedding_config = api_config.get(handler_type, {})
         return EmbeddingApiConfig(

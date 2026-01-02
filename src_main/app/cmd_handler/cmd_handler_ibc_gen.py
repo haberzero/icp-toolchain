@@ -1,12 +1,9 @@
 import os
 import asyncio
 import json
-import hashlib
-import re
 from typing import List, Dict, Any, Optional
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
-from typedef.ai_data_types import ChatApiConfig
 from typedef.ibc_data_types import (
     IbcBaseAstNode, AstNodeType, ClassNode, FunctionNode, VariableNode, 
     VisibilityTypes
@@ -18,7 +15,7 @@ from data_store.user_data_store import get_instance as get_user_data_store
 from data_store.ibc_data_store import get_instance as get_ibc_data_store
 
 from .base_cmd_handler import BaseCmdHandler
-from utils.icp_ai_handler import ICPChatHandler
+from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
 from utils.icp_ai_handler.retry_prompt_helper import RetryPromptHelper
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 from utils.ibc_analyzer.ibc_visible_symbol_builder import VisibleSymbolBuilder
@@ -29,7 +26,7 @@ from utils.issue_recorder import IbcIssueRecorder
 
 
 class CmdHandlerIbcGen(BaseCmdHandler):
-    """将单文件需求描述转换为半自然语言行为描述代码"""
+    """半自然语言行为描述代码生成命令处理器"""
 
     def __init__(self):
         super().__init__()
@@ -48,21 +45,25 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
         self.work_icp_config_file_path = os.path.join(self.work_config_dir_path, 'icp_config.json')
 
-        self.role_ibc_gen = "7_intent_behavior_code_gen"
-        self.sys_prompt_ibc_gen = ""  # 系统提示词基础部分,在_init_ai_handlers中加载
-        self.sys_prompt_retry_part = ""  # 系统提示词重试部分,在_init_ai_handlers中加载
-        self.chat_handler = ICPChatHandler()
+        # 使用coder_handler单例
+        self.chat_handler = ICPChatHandler(handler_key='coder_handler')
+
+        # 系统提示词加载
+        app_data_store = get_app_data_store()
+        self.role_name = "7_intent_behavior_code_gen"
+        self.sys_prompt = app_data_store.get_sys_prompt_by_name(self.role_name)
+        self.sys_prompt_retry_part = app_data_store.get_sys_prompt_by_name('retry_sys_prompt')
+        
+        # 用户提示词在命令运行过程中，经由模板以及过程变量进行构建
+        self.user_prompt_base = ""  # 用户提示词基础部分
+        self.user_prompt_retry_part = ""  # 用户提示词重试部分
 
         # 初始化issue recorder和上一次生成的内容
         self.ibc_issue_recorder = IbcIssueRecorder()
         self.last_generated_ibc_content = None  # 上一次生成的IBC内容
         self.last_sys_prompt_used = ""  # 上一次调用时使用的系统提示词
         self.last_user_prompt_used = ""  # 上一次调用时使用的用户提示词
-        
-        self.user_prompt_base = ""  # 用户提示词基础部分
-        self.user_prompt_retry_part = ""  # 用户提示词重试部分
 
-        self._init_ai_handlers()
     
     def execute(self):
         """执行半自然语言行为描述代码生成"""
@@ -320,7 +321,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
 
             if attempt == 0:
                 # 第一次尝试：直接使用基础提示词
-                current_sys_prompt = self.sys_prompt_ibc_gen
+                current_sys_prompt = self.sys_prompt
                 current_user_prompt = self.user_prompt_base
 
                 # 记录本次调用使用的提示词
@@ -332,7 +333,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
 
                 # 调用AI生成IBC代码
                 response_content, success = asyncio.run(self.chat_handler.get_role_response(
-                    role_name=self.role_ibc_gen,
+                    role_name=self.role_name,
                     sys_prompt=current_sys_prompt,
                     user_prompt=current_user_prompt
                 ))
@@ -396,7 +397,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 # 第二步：根据修复建议重新组织用户提示词，发起修复请求
                 self.user_prompt_retry_part = self._build_user_prompt_retry_part(fix_suggestion)
 
-                current_sys_prompt = self.sys_prompt_ibc_gen + "\n\n" + self.sys_prompt_retry_part
+                current_sys_prompt = self.sys_prompt + "\n\n" + self.sys_prompt_retry_part
                 current_user_prompt = self.user_prompt_base + "\n\n" + self.user_prompt_retry_part
 
                 # 将用户提示词保存到stage文件夹以便查看生成过程
@@ -404,7 +405,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
 
                 # 调用AI生成修复后的IBC代码
                 response_content, success = asyncio.run(self.chat_handler.get_role_response(
-                    role_name=self.role_ibc_gen,
+                    role_name=self.role_name,
                     sys_prompt=current_sys_prompt,
                     user_prompt=current_user_prompt
                 ))
@@ -875,6 +876,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         return retry_prompt
 
     def is_cmd_valid(self):
+        """检查命令的必要条件是否满足"""
         return self._check_cmd_requirement() and self._check_ai_handler()
 
     def _check_cmd_requirement(self) -> bool:
@@ -956,61 +958,14 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     
     def _check_ai_handler(self) -> bool:
         """验证AI处理器是否初始化成功"""
+        # 检查共享的ChatInterface是否初始化
         if not ICPChatHandler.is_initialized():
+            print(f"  {Colors.FAIL}错误: ChatInterface 未正确初始化{Colors.ENDC}")
             return False
         
-        if not self.sys_prompt_ibc_gen:
+        # 检查系统提示词是否加载
+        if not self.sys_prompt:
+            print(f"  {Colors.FAIL}错误: 系统提示词 {self.role_name} 未加载{Colors.ENDC}")
             return False
-        
+            
         return True
-    
-    def _init_ai_handlers(self):
-        """初始化AI处理器"""
-        if not os.path.exists(self.work_api_config_file_path):
-            print(f"错误: 配置文件 {self.work_api_config_file_path} 不存在")
-            return
-        
-        try:
-            with open(self.work_api_config_file_path, 'r', encoding='utf-8') as f:
-                config_json_dict = json.load(f)
-        except Exception as e:
-            print(f"错误: 读取配置文件失败: {e}")
-            return
-        
-        chat_api_config_dict = None
-        if 'intent_behavior_code_gen_handler' in config_json_dict:
-            chat_api_config_dict = config_json_dict['intent_behavior_code_gen_handler']
-        elif 'coder_handler' in config_json_dict:
-            chat_api_config_dict = config_json_dict['coder_handler']
-        else:
-            print("错误: 配置文件缺少intent_behavior_code_gen_handler或coder_handler配置")
-            return
-
-        chat_config = ChatApiConfig(
-            base_url=chat_api_config_dict.get('api-url', ''),
-            api_key=chat_api_config_dict.get('api-key', ''),
-            model=chat_api_config_dict.get('model', '')
-        )
-
-        if not ICPChatHandler.is_initialized():
-            ICPChatHandler.initialize_chat_interface(chat_config)
-        
-        # 加载系统提示词
-        app_data_store = get_app_data_store()
-        app_prompt_dir_path = app_data_store.get_prompt_dir()
-        
-        # 加载IBC生成角色的系统提示词基础部分
-        sys_prompt_path = os.path.join(app_prompt_dir_path, f"{self.role_ibc_gen}.md")
-        try:
-            with open(sys_prompt_path, 'r', encoding='utf-8') as f:
-                self.sys_prompt_ibc_gen = f.read()
-        except Exception as e:
-            print(f"错误: 读取系统提示词文件失败 ({self.role_ibc_gen}): {e}")
-        
-        # 加载系统提示词重试部分
-        retry_sys_prompt_path = os.path.join(app_prompt_dir_path, 'retry_sys_prompt.md')
-        try:
-            with open(retry_sys_prompt_path, 'r', encoding='utf-8') as f:
-                self.sys_prompt_retry_part = f.read()
-        except Exception as e:
-            print(f"错误: 读取系统提示词重试部分失败: {e}")

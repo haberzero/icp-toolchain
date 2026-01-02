@@ -12,7 +12,7 @@ from data_store.app_data_store import get_instance as get_app_data_store
 from data_store.user_data_store import get_instance as get_user_data_store
 
 from .base_cmd_handler import BaseCmdHandler
-from utils.icp_ai_handler import ICPChatHandler
+from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
 from utils.issue_recorder import TextIssueRecorder
 
@@ -35,14 +35,18 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
 
-        # 使用新的 ICPChatHandler
-        self.chat_handler = ICPChatHandler()
+        # 使用coder_handler单例
+        self.chat_handler = ICPChatHandler(handler_key='coder_handler')
         self.role_dir_file_fill = "4_dir_file_fill"
         self.role_plan_gen = "4_dir_file_fill_plan_gen"
-        self.sys_prompt_dir_file_fill = ""  # 系统提示词基础部分,在_init_ai_handlers中加载
-        self.sys_prompt_plan_gen = ""  # 系统提示词基础部分,在_init_ai_handlers中加载
-        self.sys_prompt_retry_part = ""  # 系统提示词重试部分,在_init_ai_handlers中加载
+
+        # 系统提示词加载
+        app_data_store = get_app_data_store()
+        self.sys_prompt_dir_file_fill = app_data_store.get_sys_prompt_by_name(self.role_dir_file_fill)   
+        self.sys_prompt_plan_gen = app_data_store.get_sys_prompt_by_name(self.role_plan_gen)
+        self.sys_prompt_retry_part = app_data_store.get_sys_prompt_by_name('retry_sys_prompt')
         
+        # 用户提示词在命令运行过程中，经由模板以及过程变量进行构建
         self.user_prompt_base = ""  # 用户提示词基础部分
         self.user_prompt_retry_part = ""  # 用户提示词重试部分
         
@@ -50,9 +54,6 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         self.issue_recorder = TextIssueRecorder()
         self.last_generated_content = None  # 上一次生成的内容
         
-        # 初始化AI处理器
-        self._init_ai_handlers()
-
     def execute(self):
         """执行目录文件填充"""
         if not self.is_cmd_valid():
@@ -523,66 +524,3 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
             return False
             
         return True
-
-    def _init_ai_handlers(self):
-        """初始化AI处理器"""
-        # 检查配置文件是否存在
-        if not os.path.exists(self.work_api_config_file_path):
-            print(f"错误: 配置文件 {self.work_api_config_file_path} 不存在，请创建该文件并填充必要内容")
-            return
-        
-        try:
-            with open(self.work_api_config_file_path, 'r', encoding='utf-8') as f:
-                config_json_dict = json.load(f)
-        except Exception as e:
-            print(f"错误: 读取配置文件失败: {e}")
-            return
-        
-        # 优先检查是否有dir_file_fill_handler配置
-        if 'dir_file_fill_handler' in config_json_dict:
-            chat_api_config_dict = config_json_dict['dir_file_fill_handler']
-        elif 'coder_handler' in config_json_dict:
-            chat_api_config_dict = config_json_dict['coder_handler']
-        else:
-            print("错误: 配置文件缺少dir_file_fill_handler或coder_handler配置")
-            return
-        
-        chat_handler_config = ChatApiConfig(
-            base_url=chat_api_config_dict.get('api-url', ''),
-            api_key=chat_api_config_dict.get('api-key', ''),
-            model=chat_api_config_dict.get('model', '')
-        )
-        
-        # 初始化共享的ChatInterface（只初始化一次）
-        if not ICPChatHandler.is_initialized():
-            ICPChatHandler.initialize_chat_interface(chat_handler_config)
-        
-        # 加载两个角色的系统提示词
-        app_data_store = get_app_data_store()
-        app_prompt_dir_path = app_data_store.get_prompt_dir()
-        prompt_file_name_1 = self.role_dir_file_fill + ".md"
-        prompt_file_name_2 = self.role_plan_gen + ".md"
-        app_sys_prompt_file_path_1 = os.path.join(app_prompt_dir_path, prompt_file_name_1)
-        app_sys_prompt_file_path_2 = os.path.join(app_prompt_dir_path, prompt_file_name_2)
-        
-        # 读取系统提示词文件
-        try:
-            with open(app_sys_prompt_file_path_1, 'r', encoding='utf-8') as f:
-                self.sys_prompt_dir_file_fill = f.read()
-        except Exception as e:
-            print(f"错误: 读取系统提示词文件失败 ({self.role_dir_file_fill}): {e}")
-        
-        try:
-            with open(app_sys_prompt_file_path_2, 'r', encoding='utf-8') as f:
-                self.sys_prompt_plan_gen = f.read()
-        except Exception as e:
-            print(f"错误: 读取系统提示词文件失败 ({self.role_plan_gen}): {e}")
-        
-        # 加载系统提示词重试部分
-        retry_sys_prompt_path = os.path.join(app_prompt_dir_path, 'retry_sys_prompt.md')
-        try:
-            with open(retry_sys_prompt_path, 'r', encoding='utf-8') as f:
-                self.sys_prompt_retry_part = f.read()
-        except Exception as e:
-            print(f"错误: 读取系统提示词重试部分失败: {e}")
-    

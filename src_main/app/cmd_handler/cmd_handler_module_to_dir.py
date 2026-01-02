@@ -5,20 +5,18 @@ import re
 from typing import List, Dict, Any
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
-from typedef.ai_data_types import ChatApiConfig
 
 from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
 from data_store.app_data_store import get_instance as get_app_data_store
 from data_store.user_data_store import get_instance as get_user_data_store
 
 from .base_cmd_handler import BaseCmdHandler
-from utils.icp_ai_handler import ICPChatHandler
+from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
 from utils.issue_recorder import TextIssueRecorder
 
 
-
 class CmdHandlerModuleToDir(BaseCmdHandler):
-    """目录结构生成指令"""
+    """目录结构生成命令处理器"""
     
     def __init__(self):
         super().__init__()
@@ -28,25 +26,30 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             description="根据需求分析结果生成项目目录结构",
             help_text="基于需求分析生成标准化的项目目录结构",
         )
+        # 路径配置
         proj_run_time_cfg = get_proj_run_time_cfg()
         self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
 
-        self.chat_handler = ICPChatHandler()
-        self.role_name = "3_module_to_dir"
-        self.sys_prompt = ""  # 系统提示词基础部分,在_init_ai_handlers中加载
-        self.sys_prompt_retry_part = ""  # 系统提示词重试部分,在_init_ai_handlers中加载
+        # 使用coder_handler单例
+        self.chat_handler = ICPChatHandler(handler_key='coder_handler')
         
+        # 系统提示词加载
+        app_data_store = get_app_data_store()
+        self.role_name = "3_module_to_dir"
+        self.sys_prompt = app_data_store.get_sys_prompt_by_name(self.role_name) 
+        self.sys_prompt_retry_part = app_data_store.get_sys_prompt_by_name('retry_sys_prompt')
+        
+        # 用户提示词在命令运行过程中，经由模板以及过程变量进行构建
         self.user_prompt_base = ""  # 用户提示词基础部分
         self.user_prompt_retry_part = ""  # 用户提示词重试部分
         
         # 初始化issue recorder和上一次生成的内容
         self.issue_recorder = TextIssueRecorder()
         self.last_generated_content = None  # 上一次生成的内容
-        
-        self._init_ai_handlers()
+
 
     def execute(self):
         """执行目录结构生成"""
@@ -317,53 +320,15 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         return True
 
     def _check_ai_handler(self) -> bool:
+        """验证AI处理器是否初始化成功"""
+        # 检查共享的ChatInterface是否初始化
         if not ICPChatHandler.is_initialized():
             print(f"  {Colors.FAIL}错误: ChatInterface 未正确初始化{Colors.ENDC}")
             return False
+        
+        # 检查系统提示词是否加载
         if not self.sys_prompt:
             print(f"  {Colors.FAIL}错误: 系统提示词 {self.role_name} 未加载{Colors.ENDC}")
             return False
+            
         return True
-
-    def _init_ai_handlers(self):
-        if not os.path.exists(self.work_api_config_file_path):
-            print(f"错误: 配置文件 {self.work_api_config_file_path} 不存在")
-            return
-        try:
-            with open(self.work_api_config_file_path, 'r', encoding='utf-8') as f:
-                config_json_dict = json.load(f)
-        except Exception as e:
-            print(f"错误: 读取配置文件失败: {e}")
-            return
-        if 'dir_generate_handler' in config_json_dict:
-            chat_api_config_dict = config_json_dict['dir_generate_handler']
-        elif 'coder_handler' in config_json_dict:
-            chat_api_config_dict = config_json_dict['coder_handler']
-        else:
-            print("错误: 配置文件缺少配置")
-            return
-        handler_config = ChatApiConfig(
-            base_url=chat_api_config_dict.get('api-url', ''),
-            api_key=chat_api_config_dict.get('api-key', ''),
-            model=chat_api_config_dict.get('model', '')
-        )
-        if not ICPChatHandler.is_initialized():
-            ICPChatHandler.initialize_chat_interface(handler_config)
-        
-        # 加载系统提示词基础部分
-        app_data_store = get_app_data_store()
-        app_sys_prompt_file_path = os.path.join(app_data_store.get_prompt_dir(), self.role_name + ".md")
-        
-        try:
-            with open(app_sys_prompt_file_path, 'r', encoding='utf-8') as f:
-                self.sys_prompt = f.read()
-        except Exception as e:
-            print(f"错误: 读取系统提示词文件失败: {e}")
-        
-        # 加载系统提示词重试部分
-        retry_sys_prompt_path = os.path.join(app_data_store.get_prompt_dir(), 'retry_sys_prompt.md')
-        try:
-            with open(retry_sys_prompt_path, 'r', encoding='utf-8') as f:
-                self.sys_prompt_retry_part = f.read()
-        except Exception as e:
-            print(f"错误: 读取系统提示词重试部分失败: {e}")

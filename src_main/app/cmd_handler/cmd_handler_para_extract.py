@@ -4,19 +4,19 @@ import json
 from typing import Tuple
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
-from typedef.ai_data_types import ChatApiConfig
 
 from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
 from data_store.app_data_store import get_instance as get_app_data_store
 from data_store.user_data_store import get_instance as get_user_data_store
 
 from .base_cmd_handler import BaseCmdHandler
-from utils.icp_ai_handler import ICPChatHandler
+from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
+from utils.issue_recorder import TextIssueRecorder
 
 
 
 class CmdHandlerParaExtract(BaseCmdHandler):
-    """用户需求分支指令"""
+    """参数提取命令处理器"""
     
     def __init__(self):
         super().__init__()
@@ -26,17 +26,24 @@ class CmdHandlerParaExtract(BaseCmdHandler):
             description="从用户初始编程需求中提取参数",
             help_text="对用户需求进行解析，并且从中提取出关键的参数，供后续步骤使用",
         )
+        # 路径配置
         proj_run_time_cfg = get_proj_run_time_cfg()
         self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
 
-        self.chat_handler = ICPChatHandler()
+        # 使用coder_handler单例
+        self.chat_handler = ICPChatHandler(handler_key='coder_handler')
+        
+        # 系统提示词加载
+        app_data_store = get_app_data_store()
         self.role_name = "1_param_extractor"
-        self.sys_prompt = ""  # 系统提示词,在_init_ai_handlers中加载
+        self.sys_prompt = app_data_store.get_sys_prompt_by_name(self.role_name)
+        
+        # issue recorder
+        self.issue_recorder = TextIssueRecorder()
         self.last_error_msg = ""  # 记录最近一次验证失败的原因
-        self._init_ai_handlers()
 
     def execute(self):
         """执行参数提取"""
@@ -192,67 +199,33 @@ class CmdHandlerParaExtract(BaseCmdHandler):
         return True, ""
 
 
+
+
+    def is_cmd_valid(self):
+        """检查参数提取命令的必要条件是否满足"""
+        return self._check_cmd_requirement() and self._check_ai_handler()
+
     def _check_cmd_requirement(self) -> bool:
         """验证参数提取命令的前置条件"""
         # 检查用户需求内容是否存在
-        requirement_content = get_user_data_store().get_user_prompt()
+        user_data_store = get_user_data_store()
+        requirement_content = user_data_store.get_user_prompt()
         if not requirement_content:
-            print(f"  {Colors.FAIL}错误: {self.role_name} 未找到用户需求内容，请先提供需求内容{Colors.ENDC}")
+            print(f"  {Colors.WARNING}警告: 未找到用户需求内容，请先提供需求内容{Colors.ENDC}")
             return False
             
         return True
 
     def _check_ai_handler(self) -> bool:
         """验证AI处理器是否初始化成功"""
+        # 检查共享的ChatInterface是否初始化
         if not ICPChatHandler.is_initialized():
             print(f"  {Colors.FAIL}错误: ChatInterface 未正确初始化{Colors.ENDC}")
             return False
+        
+        # 检查系统提示词是否加载
         if not self.sys_prompt:
             print(f"  {Colors.FAIL}错误: 系统提示词 {self.role_name} 未加载{Colors.ENDC}")
             return False
+            
         return True
-
-    def is_cmd_valid(self):
-        """检查参数提取命令的必要条件是否满足"""
-        return self._check_cmd_requirement() and self._check_ai_handler()
-
-    def _init_ai_handlers(self):
-        """初始化AI处理器"""
-        if not os.path.exists(self.work_api_config_file_path):
-            print(f"错误: 配置文件 {self.work_api_config_file_path} 不存在")
-            return
-        
-        try:
-            with open(self.work_api_config_file_path, 'r', encoding='utf-8') as f:
-                config_json_dict = json.load(f)
-        except Exception as e:
-            print(f"错误: 读取配置文件失败: {e}")
-            return
-        
-        if 'para_extract_handler' in config_json_dict:
-            chat_api_config_dict = config_json_dict['para_extract_handler']
-        elif 'coder_handler' in config_json_dict:
-            chat_api_config_dict = config_json_dict['coder_handler']
-        else:
-            print("错误: 配置文件缺少para_extract_handler或coder_handler配置")
-            return
-        
-        handler_config = ChatApiConfig(
-            base_url=chat_api_config_dict.get('api-url', ''),
-            api_key=chat_api_config_dict.get('api-key', ''),
-            model=chat_api_config_dict.get('model', '')
-        )
-        
-        if not ICPChatHandler.is_initialized():
-            ICPChatHandler.initialize_chat_interface(handler_config)
-        
-        # 加载系统提示词
-        app_data_store = get_app_data_store()
-        app_prompt_dir_path = app_data_store.get_prompt_dir()
-        app_sys_prompt_file_path = os.path.join(app_prompt_dir_path, self.role_name + ".md")
-        
-        try:
-            with open(app_sys_prompt_file_path, 'r', encoding='utf-8') as f:
-                self.sys_prompt = f.read()
-        except Exception as e:
-            print(f"错误: 读取系统提示词文件失败: {e}")
