@@ -1,10 +1,11 @@
 import json
 import os
+from data_store.data_store_path_builder import DataStorePathBuilder
 
-# 对 icp_toolchain app 相关的持久性常用内容进行管理
-# 包括上一次运行的配置信息； toolchain app 中常用路径的管理比如系统提示词的存取
 
 class AppDataStore:
+    """应用数据管理器 - 单例模式"""
+    
     _instance = None
 
     def __new__(cls, *args, **kwargs):
@@ -13,45 +14,49 @@ class AppDataStore:
         return cls._instance
 
     def __init__(self):
-        if not hasattr(self, 'initialized'):
-            self.initialized = True
-            self.main_script_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            self.prompt_dir = os.path.join(self.main_script_path, "icp_prompt_sys")
-            self.user_prompt_dir = os.path.join(self.main_script_path, "icp_prompt_user")
-            self.app_data_dir = os.path.join(self.main_script_path, "app_data")
-            
-            self.app_data_json_path = os.path.join(self.app_data_dir, "app_data.json")
-            self.app_data = ""
+        if not hasattr(self, '_initialized'):
+            self._initialized = True
 
-    def load_last_path(self):
+    def load_last_path(self) -> str:
+        app_data_json_path = DataStorePathBuilder.get_app_data_file_path("app_data.json")
+        
         try:
-            if os.path.exists(self.app_data_json_path):
-                with open(self.app_data_json_path, 'r', encoding='utf-8') as f:
+            if os.path.exists(app_data_json_path):
+                with open(app_data_json_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     return data.get("proj_root_dict", "")
         except (json.JSONDecodeError, IOError) as e:
             print(f"读取历史数据文件失败: {e}")
         return ""
 
-    def save_last_path(self, path):
+    def save_last_path(self, path: str) -> None:
+        app_data_json_path = DataStorePathBuilder.get_app_data_file_path("app_data.json")
+        
         try:
             # 确保app_data目录存在
-            if not os.path.exists(self.app_data_dir):
-                os.makedirs(self.app_data_dir)
+            app_data_dir = os.path.dirname(app_data_json_path)
+            if app_data_dir and not os.path.exists(app_data_dir):
+                os.makedirs(app_data_dir)
                 
             # 保存路径到JSON文件
-            with open(self.app_data_json_path, 'w', encoding='utf-8') as f:
+            with open(app_data_json_path, 'w', encoding='utf-8') as f:
                 json.dump({"proj_root_dict": path}, f, ensure_ascii=False, indent=2)
         except IOError as e:
             print(f"保存{path}到文件失败: {e}")
-            
-    def get_prompt_dir(self):
-        """获取prompt目录路径"""
-        return self.prompt_dir
-        
-    def get_user_prompt_dir(self):
-        """获取用户prompt目录路径"""
-        return self.user_prompt_dir
+    
+    def get_sys_prompt_by_name(self, name: str) -> str:
+        prompt_path = DataStorePathBuilder.get_sys_prompt_file_path(name)
+        if os.path.exists(prompt_path):
+            with open(prompt_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        return ""
+    
+    def get_user_prompt_by_name(self, name: str) -> str:
+        prompt_path = DataStorePathBuilder.get_user_prompt_file_path(name)
+        if os.path.exists(prompt_path):
+            with open(prompt_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        return ""
 
 
 _instance = AppDataStore()

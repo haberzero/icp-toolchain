@@ -5,7 +5,6 @@
 - SymbolTableManager: 处理符号表的存储与加载
 - VerifyDataManager: 处理校验数据的管理
 """
-import os
 from typing import Dict, Any, List, Tuple
 from typedef.ibc_data_types import (
     IbcBaseAstNode, SymbolMetadata
@@ -15,7 +14,6 @@ from typedef.ibc_data_types import (
 from data_store.ibc_file_manager import IbcFileManager
 from data_store.symbol_table_manager import SymbolTableManager
 from data_store.verify_data_manager import VerifyDataManager
-
 
 
 class IbcDataStore:

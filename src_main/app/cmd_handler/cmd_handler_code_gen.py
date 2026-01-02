@@ -4,7 +4,6 @@ import json
 from typing import Dict, Any, List
 
 from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
-from typedef.ai_data_types import ChatApiConfig
 from typedef.ibc_data_types import ClassMetadata, FunctionMetadata, VariableMetadata
 
 from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
@@ -36,9 +35,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         proj_run_time_cfg = get_proj_run_time_cfg()
         self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
-        self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
-        self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
-        self.work_icp_config_file_path = os.path.join(self.work_config_dir_path, 'icp_config.json')
+        self.work_icp_config_file_path = os.path.join(self.work_dir_path, '.icp_proj_config', 'icp_config.json')
 
         self.role_code_gen = "9_target_code_gen"
         self.sys_prompt_code_gen = ""  # 系统提示词基础部分,在_init_ai_handlers中加载
@@ -470,20 +467,13 @@ class CmdHandlerCodeGen(BaseCmdHandler):
                 traceback.print_exc()
                 normalized_ibc_content = ibc_content
         
-        # 构建依赖文件的目标代码
-        # 【已注释】符号使用说明相关功能暂时禁用
-        # local_symbols_usage_guide = self._build_local_symbols_usage_guide(icp_json_file_path)
-        # dependency_symbols_usage_guide = self._build_dependency_symbols_usage_guide(icp_json_file_path)
         dependency_target_code = self._build_dependency_target_code(icp_json_file_path)
         
         # 读取提示词模板
         app_data_store = get_app_data_store()
-        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'target_code_gen_user.md')
-        try:
-            with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
-                user_prompt_template_str = f.read()
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+        user_prompt_template_str = app_data_store.get_user_prompt_by_name('target_code_gen_user')
+        if not user_prompt_template_str:
+            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败{Colors.ENDC}")
             return ""
         
         # 填充占位符
@@ -494,135 +484,10 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         user_prompt_str = user_prompt_str.replace('PROJROOT_DIRCONTENT_PLACEHOLDER', self.proj_root_dict_json_str)
         user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', self.implementation_plan_str if self.implementation_plan_str else '无')
         user_prompt_str = user_prompt_str.replace('IBC_CONTENT_PLACEHOLDER', normalized_ibc_content)
-        # 【已注释】符号使用说明相关功能暂时禁用
-        # user_prompt_str = user_prompt_str.replace('LOCAL_SYMBOLS_USAGE_GUIDE_PLACEHOLDER', local_symbols_usage_guide)
-        # user_prompt_str = user_prompt_str.replace('DEPENDENCY_SYMBOLS_USAGE_GUIDE_PLACEHOLDER', dependency_symbols_usage_guide)
         user_prompt_str = user_prompt_str.replace('DEPENDENCY_TARGET_CODE_PLACEHOLDER', dependency_target_code)
         
         return user_prompt_str
 
-    # 【已注释】符号使用说明相关功能暂时禁用
-    # def _build_local_symbols_usage_guide(self, icp_json_file_path: str) -> str:
-    #     """构建当前文件的符号使用说明
-    #     
-    #     加载当前文件的符号元数据和使用说明书，构建完整的符号使用说明。
-    #     这些符号是当前文件定义的，需要在生成的目标代码中实现。
-    #     
-    #     Args:
-    #         icp_json_file_path: 文件路径
-    #         
-    #     Returns:
-    #         str: 符号使用说明文本
-    #     """
-    #     ibc_data_store = get_ibc_data_store()
-    #     file_name = os.path.basename(icp_json_file_path)
-    #     
-    #     # 加载当前文件的符号表
-    #     symbols_path = ibc_data_store.build_symbols_path(self.work_ibc_dir_path, icp_json_file_path)
-    #     if not os.path.exists(symbols_path):
-    #         return "无符号定义"
-    #     
-    #     try:
-    #         symbols_tree, symbols_metadata = ibc_data_store.load_symbols(symbols_path, file_name)
-    #         
-    #         # 过滤出当前文件的本地符号（排除依赖符号）
-    #         local_symbols = {}
-    #         for symbol_path, meta in symbols_metadata.items():
-    #             # 只保留本地符号，排除依赖符号
-    #             if hasattr(meta, '__is_local__') and meta.__is_local__:
-    #                 continue
-    #             # 检查是否是当前文件的符号
-    #             if symbol_path.startswith(icp_json_file_path.replace('/', '.')):
-    #                 local_symbols[symbol_path] = meta
-    #         
-    #         if not local_symbols:
-    #             return "无符号定义"
-    #         
-    #         # 尝试加载使用说明书文件
-    #         work_staging_dir_path = os.path.join(self.work_dir_path, 'src_staging')
-    #         usage_guide_file_path = os.path.join(
-    #             work_staging_dir_path,
-    #             f"{icp_json_file_path}_symbol_usage_guide.md"
-    #         )
-    #         usage_guide_content = SymbolMetadataHelper.load_usage_guide_from_file(usage_guide_file_path)
-    #         
-    #         # 构建符号使用说明文本
-    #         return SymbolMetadataHelper.build_symbol_usage_guide_text(
-    #             local_symbols,
-    #             usage_guide_content
-    #         )
-    #         
-    #     except Exception as e:
-    #         print(f"    {Colors.WARNING}警告: 构建当前文件符号使用说明失败: {e}{Colors.ENDC}")
-    #         return "无法加载符号定义说明"
-    
-    # 【已注释】符号使用说明相关功能暂时禁用
-    # def _build_dependency_symbols_usage_guide(self, icp_json_file_path: str) -> str:
-    #     """构建依赖符号的使用说明
-    #     
-    #     加载当前文件依赖的外部符号的使用说明。
-    #     这些符号可以在生成的目标代码中直接调用。
-    #     
-    #     Args:
-    #         icp_json_file_path: 文件路径
-    #         
-    #     Returns:
-    #         str: 依赖符号使用说明文本
-    #     """
-    #     # 获取当前文件的依赖列表
-    #     dependencies = self.dependent_relation.get(icp_json_file_path, [])
-    #     
-    #     if not dependencies:
-    #         return "无外部依赖"
-    #     
-    #     ibc_data_store = get_ibc_data_store()
-    #     all_dependency_symbols = {}
-    #     
-    #     # 遍历每个依赖文件
-    #     for dep_file_path in dependencies:
-    #         dep_file_name = os.path.basename(dep_file_path)
-    #         dep_symbols_path = ibc_data_store.build_symbols_path(self.work_ibc_dir_path, dep_file_path)
-    #         
-    #         if not os.path.exists(dep_symbols_path):
-    #             continue
-    #         
-    #         try:
-    #             _, dep_symbols_metadata = ibc_data_store.load_symbols(dep_symbols_path, dep_file_name)
-    #             
-    #             # 只收集公开的符号（public）
-    #             for symbol_path, meta in dep_symbols_metadata.items():
-    #                 # 过滤folder和file类型
-    #                 if not isinstance(meta, (ClassMetadata, FunctionMetadata, VariableMetadata)):
-    #                     continue
-    #                 # 只收集公开符号
-    #                 if hasattr(meta, 'visibility') and meta.visibility == 'public':
-    #                     all_dependency_symbols[symbol_path] = meta
-    #             
-    #             # 尝试加载依赖文件的使用说明书
-    #             work_staging_dir_path = os.path.join(self.work_dir_path, 'src_staging')
-    #             dep_usage_guide_file = os.path.join(
-    #                 work_staging_dir_path,
-    #                 f"{dep_file_path}_symbol_usage_guide.md"
-    #             )
-    #             
-    #             # 如果存在使用说明书，记录其路径以便后续加载
-    #             # （这里我们先收集所有符号，然后统一构建）
-    #             
-    #         except Exception as e:
-    #             print(f"    {Colors.WARNING}警告: 加载依赖文件 {dep_file_path} 的符号表失败: {e}{Colors.ENDC}")
-    #             continue
-    #     
-    #     if not all_dependency_symbols:
-    #         return "无可用的外部符号"
-    #     
-    #     # 构建依赖符号的使用说明
-    #     # 注意：这里不使用单个文件的usage_guide，而是统一根据符号元数据生成
-    #     # 因为需要整合多个依赖文件的符号
-    #     return SymbolMetadataHelper.build_symbol_usage_guide_text(
-    #         all_dependency_symbols,
-    #         usage_guide_content=None  # 不使用单个文件的usage_guide
-    #     )
-    
     def _build_dependency_target_code(self, icp_json_file_path: str) -> str:
         """构建依赖文件的目标代码内容
         
@@ -730,13 +595,9 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         
         # 读取重试提示词模板
         app_data_store = get_app_data_store()
-        retry_template_path = os.path.join(app_data_store.get_user_prompt_dir(), 'retry_prompt_template.md')
-        
-        try:
-            with open(retry_template_path, 'r', encoding='utf-8') as f:
-                retry_template = f.read()
-        except Exception as e:
-            print(f"{Colors.FAIL}错误: 读取重试模板失败: {e}{Colors.ENDC}")
+        retry_template = app_data_store.get_user_prompt_by_name('retry_prompt_template')
+        if not retry_template:
+            print(f"{Colors.FAIL}错误: 读取重试模板失败{Colors.ENDC}")
             return ""
         
         # 格式化上一次生成的内容（用代码块包裹）
@@ -833,51 +694,35 @@ class CmdHandlerCodeGen(BaseCmdHandler):
     
     def _init_ai_handlers(self):
         """初始化AI处理器"""
-        if not os.path.exists(self.work_api_config_file_path):
-            print(f"错误: 配置文件 {self.work_api_config_file_path} 不存在")
-            return
+        proj_run_time_cfg = get_proj_run_time_cfg()
+        app_data_store = get_app_data_store()
         
-        try:
-            with open(self.work_api_config_file_path, 'r', encoding='utf-8') as f:
-                config_json_dict = json.load(f)
-        except Exception as e:
-            print(f"错误: 读取配置文件失败: {e}")
-            return
-        
-        chat_api_config_dict = None
-        if 'target_code_gen_handler' in config_json_dict:
-            chat_api_config_dict = config_json_dict['target_code_gen_handler']
-        elif 'coder_handler' in config_json_dict:
-            chat_api_config_dict = config_json_dict['coder_handler']
+        # 优先使用target_code_gen_handler，若不存在则回退到coder_handler
+        handler_type = None
+        if proj_run_time_cfg.check_specific_ai_handler_config_exists('target_code_gen_handler'):
+            handler_type = 'target_code_gen_handler'
+        elif proj_run_time_cfg.check_specific_ai_handler_config_exists('coder_handler'):
+            handler_type = 'coder_handler'
         else:
-            print("错误: 配置文件缺少target_code_gen_handler或coder_handler配置")
+            print(f"{Colors.FAIL}错误: API配置文件中缺少target_code_gen_handler或coder_handler配置{Colors.ENDC}")
             return
-
-        chat_config = ChatApiConfig(
-            base_url=chat_api_config_dict.get('api-url', ''),
-            api_key=chat_api_config_dict.get('api-key', ''),
-            model=chat_api_config_dict.get('model', '')
-        )
-
+        
+        chat_config = proj_run_time_cfg.get_chat_handler_config(handler_type)
+        if not chat_config.is_config_valid():
+            print(f"{Colors.FAIL}错误: 处理器配置无效{Colors.ENDC}")
+            return
+        
+        # 初始化聊天处理器
         if not ICPChatHandler.is_initialized():
             ICPChatHandler.initialize_chat_interface(chat_config)
         
-        # 加载系统提示词
-        app_data_store = get_app_data_store()
-        app_prompt_dir_path = app_data_store.get_prompt_dir()
-        
-        # 加载目标代码生成角色的系统提示词基础部分
-        sys_prompt_path = os.path.join(app_prompt_dir_path, f"{self.role_code_gen}.md")
-        try:
-            with open(sys_prompt_path, 'r', encoding='utf-8') as f:
-                self.sys_prompt_code_gen = f.read()
-        except Exception as e:
-            print(f"错误: 读取系统提示词文件失败 ({self.role_code_gen}): {e}")
+        # 使用app_data_store加载系统提示词
+        self.sys_prompt_code_gen = app_data_store.get_sys_prompt_by_name(self.role_code_gen)
+        if not self.sys_prompt_code_gen:
+            print(f"{Colors.FAIL}错误: 读取系统提示词文件失败 ({self.role_code_gen}){Colors.ENDC}")
+            return
         
         # 加载系统提示词重试部分
-        retry_sys_prompt_path = os.path.join(app_prompt_dir_path, 'retry_sys_prompt.md')
-        try:
-            with open(retry_sys_prompt_path, 'r', encoding='utf-8') as f:
-                self.sys_prompt_retry_part = f.read()
-        except Exception as e:
-            print(f"错误: 读取系统提示词重试部分失败: {e}")
+        self.sys_prompt_retry_part = app_data_store.get_sys_prompt_by_name('retry_sys_prompt')
+        if not self.sys_prompt_retry_part:
+            print(f"{Colors.WARNING}警告: 读取系统提示词重试部分失败，重试功能可能受限{Colors.ENDC}")
