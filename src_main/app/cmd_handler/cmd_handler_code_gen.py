@@ -15,7 +15,7 @@ from typedef.cmd_data_types import CmdProcStatus, Colors, CommandInfo
 from typedef.ibc_data_types import (ClassMetadata, FunctionMetadata,
                                     VariableMetadata)
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
-from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
+from utils.icp_ai_utils.icp_chat_inst import ICPChatInsts
 from utils.issue_recorder import TextIssueRecorder
 
 from .base_cmd_handler import BaseCmdHandler
@@ -40,7 +40,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         self.work_icp_config_file_path = os.path.join(self.work_dir_path, '.icp_proj_config', 'icp_config.json')
 
         # 获取coder_handler单例
-        self.chat_handler = ICPChatHandler.get_instance(handler_key='coder_handler')
+        self.chat_handler = ICPChatInsts.get_instance(handler_key='coder_handler')
 
         # 系统提示词加载
         app_data_store = get_app_data_store()

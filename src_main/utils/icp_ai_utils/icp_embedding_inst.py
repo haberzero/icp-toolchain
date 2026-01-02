@@ -6,7 +6,7 @@ from typedef.ai_data_types import EmbeddingApiConfig, EmbeddingStatus
 from .embedding_interface import EmbeddingInterface
 
 
-class ICPEmbeddingHandler:
+class ICPEmbeddingInsts:
     """ICP嵌入处理器，提供文本向量化服务，并提供重试机制"""
     
     # 类变量：共享的 EmbeddingInterface 实例

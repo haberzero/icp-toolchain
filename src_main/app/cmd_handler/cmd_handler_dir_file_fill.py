@@ -13,7 +13,7 @@ from run_time_cfg.proj_run_time_cfg import \
     get_instance as get_proj_run_time_cfg
 from typedef.ai_data_types import ChatApiConfig
 from typedef.cmd_data_types import CmdProcStatus, Colors, CommandInfo
-from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
+from utils.icp_ai_utils.icp_chat_inst import ICPChatInsts
 from utils.issue_recorder import TextIssueRecorder
 
 from .base_cmd_handler import BaseCmdHandler
@@ -39,7 +39,7 @@ class CmdHandlerDirFileFill(BaseCmdHandler):
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
 
         # 获取coder_handler单例
-        self.chat_handler = ICPChatHandler.get_instance(handler_key='coder_handler')
+        self.chat_handler = ICPChatInsts.get_instance(handler_key='coder_handler')
         self.role_dir_file_fill = "4_dir_file_fill"
         self.role_plan_gen = "4_dir_file_fill_plan_gen"
 

@@ -8,7 +8,7 @@ from typedef.cmd_data_types import Colors
 from .chat_interface import ChatInterface
 
 
-class ICPChatHandler:
+class ICPChatInsts:
     """ICP聊天处理器,提供AI聊天接口和重试机制
     
     使用单例模式，支持多个独立的handler实例（通过handler_key区分）：
@@ -19,7 +19,7 @@ class ICPChatHandler:
     """
     
     # 类变量：存储不同handler_key对应的单例实例
-    _instances: Dict[str, 'ICPChatHandler'] = {}
+    _instances: Dict[str, 'ICPChatInsts'] = {}
     
     def __init__(self, handler_key: str):
         """私有构造函数，请使用 get_instance() 获取实例
@@ -34,14 +34,14 @@ class ICPChatHandler:
         self._retry_delay: float = 1.0
     
     @classmethod
-    def get_instance(cls, handler_key: str = 'coder_handler') -> 'ICPChatHandler':
+    def get_instance(cls, handler_key: str = 'coder_handler') -> 'ICPChatInsts':
         """获取指定handler_key的单例实例
         
         Args:
             handler_key: handler类型标识，支持 'chat_handler' 和 'coder_handler'
             
         Returns:
-            ICPChatHandler: 对应handler_key的单例实例
+            ICPChatInsts: 对应handler_key的单例实例
         """
         if handler_key not in cls._instances:
             cls._instances[handler_key] = cls(handler_key)

@@ -12,7 +12,7 @@ from run_time_cfg.proj_run_time_cfg import \
     get_instance as get_proj_run_time_cfg
 from typedef.ai_data_types import ChatApiConfig
 from typedef.cmd_data_types import Colors
-from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
+from utils.icp_ai_utils.icp_chat_inst import ICPChatInsts
 
 from .cmd_handler.base_cmd_handler import BaseCmdHandler
 from .cmd_handler.command_manager import CommandManager
@@ -114,7 +114,7 @@ class IcpCmdCli:
                 return
             
             # 初始化handler
-            success = ICPChatHandler.initialize_handler(
+            success = ICPChatInsts.initialize_handler(
                 handler_key='coder_handler',
                 api_config=api_config,
                 max_retry=3,

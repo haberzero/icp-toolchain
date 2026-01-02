@@ -18,8 +18,8 @@ from typedef.ibc_data_types import (AstNodeType, ClassNode, FunctionNode,
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 from utils.ibc_analyzer.ibc_symbol_ref_resolver import SymbolRefResolver
 from utils.ibc_analyzer.ibc_visible_symbol_builder import VisibleSymbolBuilder
-from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
-from utils.icp_ai_handler.retry_prompt_helper import RetryPromptHelper
+from utils.icp_ai_utils.icp_chat_inst import ICPChatInsts
+from utils.icp_ai_utils.retry_prompt_helper import RetryPromptHelper
 from utils.issue_recorder import IbcIssueRecorder
 
 from .base_cmd_handler import BaseCmdHandler
@@ -46,7 +46,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self.work_icp_config_file_path = os.path.join(self.work_config_dir_path, 'icp_config.json')
 
         # 获取coder_handler单例
-        self.chat_handler = ICPChatHandler.get_instance(handler_key='coder_handler')
+        self.chat_handler = ICPChatInsts.get_instance(handler_key='coder_handler')
 
         # 系统提示词加载
         app_data_store = get_app_data_store()

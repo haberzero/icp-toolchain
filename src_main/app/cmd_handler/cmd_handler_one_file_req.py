@@ -11,7 +11,7 @@ from libs.text_funcs import ChatResponseCleaner
 from run_time_cfg.proj_run_time_cfg import \
     get_instance as get_proj_run_time_cfg
 from typedef.cmd_data_types import CmdProcStatus, Colors, CommandInfo
-from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
+from utils.icp_ai_utils.icp_chat_inst import ICPChatInsts
 from utils.issue_recorder import TextIssueRecorder
 
 from .base_cmd_handler import BaseCmdHandler
@@ -36,7 +36,7 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
 
         # 获取coder_handler单例
-        self.chat_handler = ICPChatHandler.get_instance(handler_key='coder_handler')
+        self.chat_handler = ICPChatInsts.get_instance(handler_key='coder_handler')
 
         # 系统提示词加载
         app_data_store = get_app_data_store()
