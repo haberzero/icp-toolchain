@@ -8,11 +8,15 @@ import time
 from enum import Enum
 from typing import Optional
 
+from data_store.app_data_store import get_instance as get_app_data_store
 from run_time_cfg.proj_run_time_cfg import \
     get_instance as get_proj_run_time_cfg
 from typedef.ai_data_types import ChatApiConfig
 from typedef.cmd_data_types import Colors
 from utils.icp_ai_utils.icp_chat_inst import ICPChatInsts
+
+from app.sys_prompt_manager import get_instance as get_sys_prompt_manager
+from app.user_prompt_manager import get_instance as get_user_prompt_manager
 
 from .cmd_handler.base_cmd_handler import BaseCmdHandler
 from .cmd_handler.command_manager import CommandManager
@@ -97,22 +101,25 @@ class IcpCmdCli:
     def _initialize_ai_handler(self):
         """初始化AI处理器"""
         print(f"\n{Colors.OKBLUE}正在初始化AI处理器...{Colors.ENDC}")
-        
+
         # 检查API配置是否存在
         if not self.proj_run_time_cfg.check_specific_ai_handler_config_exists('coder_handler'):
             print(f"{Colors.WARNING}警告: 未找到 coder_handler API配置，AI功能将不可用{Colors.ENDC}")
             print(f"{Colors.WARNING}请在工作目录的 .icp_proj_config/icp_api_config.json 中配置API{Colors.ENDC}")
+            # 即便AI不可用，仍然初始化提示词管理器，方便后续诊断
+            self._initialize_prompt_managers()
             return
-        
-        # 获取API配置
+
         try:
+            # 获取API配置
             api_config = self.proj_run_time_cfg.get_chat_handler_config('coder_handler')
-            
+
             # 验证配置有效性
             if not api_config.is_config_valid():
                 print(f"{Colors.WARNING}警告: coder_handler API配置不完整，AI功能将不可用{Colors.ENDC}")
+                self._initialize_prompt_managers()
                 return
-            
+
             # 初始化handler
             success = ICPChatInsts.initialize_handler(
                 handler_key='coder_handler',
@@ -120,15 +127,17 @@ class IcpCmdCli:
                 max_retry=3,
                 retry_delay=1.0
             )
-            
+
             if success:
                 print(f"{Colors.OKGREEN}AI处理器初始化成功{Colors.ENDC}")
             else:
                 print(f"{Colors.FAIL}AI处理器初始化失败，AI功能将不可用{Colors.ENDC}")
-                
         except Exception as e:
             print(f"{Colors.FAIL}初始化AI处理器时发生错误: {e}{Colors.ENDC}")
             print(f"{Colors.WARNING}AI功能将不可用{Colors.ENDC}")
+        finally:
+            # 无论AI是否可用，都初始化提示词管理器
+            self._initialize_prompt_managers()
     
     def _run_main_loop(self):
         """运行主循环"""
@@ -220,9 +229,48 @@ class IcpCmdCli:
             self.current_state = CliState.WAITING_INPUT
             time.sleep(0.1)
     
-    def _cleanup(self):
-        """清理资源"""
-        pass
+    def _initialize_prompt_managers(self):
+        """初始化系统提示词和用户提示词管理器。
+
+        - 扫描 icp_prompt_sys 目录中的所有 .md 文件，通过文件名加载系统提示词
+        - 扫描 icp_prompt_user 目录中的所有 .md 文件，通过文件名加载用户提示词模板
+        加载完成后，管理器内部仅保留「角色名/模板名 -> 内容」映射。
+        """
+        app_data_store = get_app_data_store()
+        sys_prompt_manager = get_sys_prompt_manager()
+        user_prompt_manager = get_user_prompt_manager()
+
+        # 注册系统提示词
+        try:
+            sys_prompt_dir = app_data_store.get_sys_prompt_dir()
+            if os.path.isdir(sys_prompt_dir):
+                for file_name in os.listdir(sys_prompt_dir):
+                    if not file_name.endswith(".md"):
+                        continue
+                    role_name, _ = os.path.splitext(file_name)
+                    prompt_content = app_data_store.get_sys_prompt_by_name(role_name)
+                    if prompt_content:
+                        sys_prompt_manager.register_prompt(role_name, prompt_content)
+            else:
+                print(f"{Colors.WARNING}警告: 系统提示词目录不存在: {sys_prompt_dir}{Colors.ENDC}")
+        except Exception as e:
+            print(f"{Colors.WARNING}警告: 初始化系统提示词时发生错误: {e}{Colors.ENDC}")
+
+        # 注册用户提示词模板
+        try:
+            user_prompt_dir = app_data_store.get_user_prompt_dir()
+            if os.path.isdir(user_prompt_dir):
+                for file_name in os.listdir(user_prompt_dir):
+                    if not file_name.endswith(".md"):
+                        continue
+                    template_name, _ = os.path.splitext(file_name)
+                    template_content = app_data_store.get_user_prompt_by_name(template_name)
+                    if template_content:
+                        user_prompt_manager.register_template(template_name, template_content)
+            else:
+                print(f"{Colors.WARNING}警告: 用户提示词目录不存在: {user_prompt_dir}{Colors.ENDC}")
+        except Exception as e:
+            print(f"{Colors.WARNING}警告: 初始化用户提示词模板时发生错误: {e}{Colors.ENDC}")
 
     def _show_help(self):
         """显示帮助信息"""

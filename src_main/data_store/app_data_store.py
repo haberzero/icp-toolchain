@@ -59,6 +59,18 @@ class AppDataStore:
                 return f.read()
         return ""
 
+    def get_prompt_dir(self) -> str:
+        """获取系统提示词目录（兼容旧接口）"""
+        return DataStorePathBuilder._get_sys_prompt_dir_path()
+
+    def get_sys_prompt_dir(self) -> str:
+        """获取系统提示词目录"""
+        return DataStorePathBuilder._get_sys_prompt_dir_path()
+
+    def get_user_prompt_dir(self) -> str:
+        """获取用户提示词模板目录"""
+        return DataStorePathBuilder._get_user_prompt_dir_path()
+
 
 _instance = AppDataStore()
 
