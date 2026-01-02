@@ -71,11 +71,12 @@ class IcpCmdCli:
         
     def start_cli(self):
         """启动CLI主循环"""
-        self._initialize()
+        self._initialize_ai_handler()
+        self._initialize_cli()
         self._run_main_loop()
         self._cleanup()
     
-    def _initialize(self):
+    def _initialize_cli(self):
         """初始化CLI"""
         global _current_cli_state
         
@@ -87,10 +88,7 @@ class IcpCmdCli:
         
         print("欢迎使用 ICP - Intent Code Protocol 命令行工具")
         print("当前工作目录:", self.proj_run_time_cfg.get_work_dir_path())
-        
-        # 初始化AI Handler
-        self._initialize_ai_handler()
-        
+
         self._show_status()
         self._show_help()
         
