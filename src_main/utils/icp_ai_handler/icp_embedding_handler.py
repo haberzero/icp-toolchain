@@ -1,16 +1,8 @@
-"""
-ICP Embedding Handler - 管理嵌入向量服务的包装器
-
-这个模块提供了一个高层次的接口来管理文本嵌入服务，
-共享 EmbeddingInterfaces 实例以避免资源浪费。
-包含重试机制逻辑。
-"""
-
 import time
 from typing import List, Optional, Tuple
 
-from typedef.ai_data_types import EmbeddingApiConfig, EmbeddingStatus
 from libs.ai_interface.embedding_interface import EmbeddingInterface
+from typedef.ai_data_types import EmbeddingApiConfig, EmbeddingStatus
 
 
 class ICPEmbeddingHandler:

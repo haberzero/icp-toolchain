@@ -3,13 +3,14 @@
 包含反斜杠延续行、逗号延续行、运算符延续行的各种测试场景
 """
 
-import sys
 import os
+import sys
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
+from typedef.ibc_data_types import BehaviorStepNode, IbcTokenType
 from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
-from typedef.ibc_data_types import BehaviorStepNode, IbcTokenType
 
 
 def print_ast_tree(ast_nodes, uid=0, indent=0):

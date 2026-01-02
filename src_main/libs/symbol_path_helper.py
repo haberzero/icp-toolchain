@@ -1,9 +1,4 @@
-"""符号路径处理辅助类
-
-负责处理符号路径的简化、解析和转换等操作
-从ibc_funcs.py中提取的符号路径相关功能
-"""
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 
 class SymbolPathHelper:

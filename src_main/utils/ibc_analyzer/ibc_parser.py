@@ -1,19 +1,21 @@
 from enum import Enum
-from typing import List, Dict, Any, Optional, Tuple, Callable
-from typedef.ibc_data_types import (
-    IbcTokenType, Token, IbcBaseAstNode, AstNodeType, 
-    ModuleNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode,
-    VisibilityTypes
-)
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 from typedef.exception_types import IbcParserError
-
-from utils.ibc_analyzer.ibc_parser_state import (
-    ParserState, BaseState, TopLevelState, ModuleDeclState, 
-    VarDeclState, DescriptionState, ClassContentState, FuncContentState,
-    ClassDeclState, FuncDeclState, BehaviorStepState, IntentCommentState,
-    VisibilityDeclState
-)
-
+from typedef.ibc_data_types import (AstNodeType, BehaviorStepNode, ClassNode,
+                                    FunctionNode, IbcBaseAstNode, IbcTokenType,
+                                    ModuleNode, Token, VariableNode,
+                                    VisibilityTypes)
+from utils.ibc_analyzer.ibc_parser_state import (BaseState, BehaviorStepState,
+                                                 ClassContentState,
+                                                 ClassDeclState,
+                                                 DescriptionState,
+                                                 FuncContentState,
+                                                 FuncDeclState,
+                                                 IntentCommentState,
+                                                 ModuleDeclState, ParserState,
+                                                 TopLevelState, VarDeclState,
+                                                 VisibilityDeclState)
 from utils.ibc_analyzer.ibc_parser_uid_generator import IbcParserUidGenerator
 
 

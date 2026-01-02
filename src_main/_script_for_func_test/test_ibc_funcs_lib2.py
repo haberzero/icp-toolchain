@@ -5,19 +5,18 @@
 验证符号替换的正确性、稳定性和各种边界情况
 """
 
-import sys
 import os
+import sys
 
 # 添加项目根目录到Python路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
 from libs.ibc_funcs import IbcFuncs
+from typedef.ibc_data_types import (ClassMetadata, FunctionMetadata,
+                                    VariableMetadata)
 from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
-from typedef.ibc_data_types import (
-    ClassMetadata, FunctionMetadata, VariableMetadata
-)
 
 
 def test_simple_symbol_replacement():

@@ -10,20 +10,20 @@
 7. Module层次引用：文件夹级别、深层文件夹、类级别、函数级别
 8. 边界条件：参数类型、混合引用、无导入检测
 """
-import sys
 import os
+import sys
 
 # 添加项目根目录到系统路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from utils.ibc_analyzer.ibc_visible_symbol_builder import VisibleSymbolBuilder
+from typedef.cmd_data_types import Colors
+from typedef.ibc_data_types import (ClassMetadata, FunctionMetadata,
+                                    VariableMetadata)
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 from utils.ibc_analyzer.ibc_symbol_ref_resolver import SymbolRefResolver
+from utils.ibc_analyzer.ibc_visible_symbol_builder import VisibleSymbolBuilder
 from utils.issue_recorder import IbcIssueRecorder
-from typedef.cmd_data_types import Colors
-from typedef.ibc_data_types import ClassMetadata, FunctionMetadata, VariableMetadata
-
 
 # ===========================
 # 测试辅助函数

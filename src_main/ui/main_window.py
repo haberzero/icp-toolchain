@@ -1,8 +1,10 @@
+import os
 import tkinter as tk
 from tkinter import ttk
-import os
-from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
+
 from data_store.user_data_store import get_instance as get_user_data_store
+from run_time_cfg.proj_run_time_cfg import \
+    get_instance as get_proj_run_time_cfg
 
 
 class MainWindow:

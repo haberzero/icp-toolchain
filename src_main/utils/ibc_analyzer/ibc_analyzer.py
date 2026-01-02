@@ -1,16 +1,12 @@
-from typing import Dict, List, Optional, Any, Tuple
-from typedef.ibc_data_types import (
-    IbcKeywords, IbcTokenType, Token, IbcBaseAstNode, AstNodeType,
-    SymbolMetadata
-)
+from typing import Any, Dict, List, Optional, Tuple
 
+from typedef.exception_types import IbcAnalyzerError
+from typedef.ibc_data_types import (AstNodeType, IbcBaseAstNode, IbcKeywords,
+                                    IbcTokenType, SymbolMetadata, Token)
 from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
 from utils.ibc_analyzer.ibc_symbol_processor import IbcSymbolProcessor
 from utils.issue_recorder import IbcIssueRecorder
-
-from typedef.ibc_data_types import IbcBaseAstNode
-from typedef.exception_types import IbcAnalyzerError
 
 
 def analyze_ibc_content(

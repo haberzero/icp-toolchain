@@ -1,21 +1,22 @@
-import sys, os
 import asyncio
 import json
-from typing import List, Dict, Any
+import os
+import sys
+from typing import Any, Dict, List
 
-from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
-from typedef.ai_data_types import ChatApiConfig
-
-from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
 from data_store.app_data_store import get_instance as get_app_data_store
 from data_store.user_data_store import get_instance as get_user_data_store
-
-from .base_cmd_handler import BaseCmdHandler
+from libs.dir_json_funcs import DirJsonFuncs
+from libs.text_funcs import ChatResponseCleaner
+from run_time_cfg.proj_run_time_cfg import \
+    get_instance as get_proj_run_time_cfg
+from typedef.ai_data_types import ChatApiConfig
+from typedef.cmd_data_types import CmdProcStatus, Colors, CommandInfo
 from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
 from utils.icp_ai_handler.retry_prompt_helper import RetryPromptHelper
-from libs.dir_json_funcs import DirJsonFuncs
 from utils.issue_recorder import TextIssueRecorder
 
+from .base_cmd_handler import BaseCmdHandler
 
 
 class CmdHandlerDependAnalysis(BaseCmdHandler):
@@ -29,14 +30,16 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             description="分析项目依赖关系",
             help_text="根据目录结构分析并生成项目依赖关系",
         )
+
+        # 路径配置
         proj_run_time_cfg = get_proj_run_time_cfg()
         self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
 
-        # 获取coder_handler实例（单例）
-        self.chat_handler = ICPChatHandler(handler_key='coder_handler')
+        # 获取coder_handler单例
+        self.chat_handler = ICPChatHandler.get_instance(handler_key='coder_handler')
 
         # 系统提示词加载
         app_data_store = get_app_data_store()
@@ -102,7 +105,7 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
                 self.last_user_prompt_used = current_user_prompt
         
                 # 清理代码块标记
-                cleaned_json_str = ICPChatHandler.clean_code_block_markers(response_content)
+                cleaned_json_str = ChatResponseCleaner.clean_code_block_markers(response_content)
         
                 # 验证响应内容
                 is_valid = self._validate_response(cleaned_json_str)
@@ -139,7 +142,7 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
                     print(f"{Colors.WARNING}警告: 生成修复建议失败，将进行下一次尝试{Colors.ENDC}")
                     continue
         
-                fix_suggestion = ICPChatHandler.clean_code_block_markers(fix_suggestion_raw)
+                fix_suggestion = ChatResponseCleaner.clean_code_block_markers(fix_suggestion_raw)
         
                 # 第二步：根据修复建议重新组织用户提示词，发起修复请求
                 self.user_prompt_retry_part = self._build_user_prompt_retry_part(fix_suggestion)
@@ -162,7 +165,7 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
                 self.last_user_prompt_used = current_user_prompt
         
                 # 清理代码块标记
-                cleaned_json_str = ICPChatHandler.clean_code_block_markers(response_content)
+                cleaned_json_str = ChatResponseCleaner.clean_code_block_markers(response_content)
         
                 # 再次验证修复后的响应内容
                 is_valid = self._validate_response(cleaned_json_str)
@@ -367,8 +370,8 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
 
     def _check_ai_handler(self) -> bool:
         """验证AI处理器是否初始化成功"""
-        # 检查共享的ChatInterface是否初始化
-        if not ICPChatHandler.is_initialized():
+        # 检查handler实例是否已初始化
+        if not self.chat_handler.is_initialized():
             print(f"  {Colors.FAIL}错误: ChatInterface 未正确初始化{Colors.ENDC}")
             return False
         

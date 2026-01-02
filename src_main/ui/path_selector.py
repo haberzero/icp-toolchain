@@ -1,8 +1,8 @@
-import tkinter as tk
-from tkinter import filedialog
-from tkinter import messagebox
-import sys
 import os
+import sys
+import tkinter as tk
+from tkinter import filedialog, messagebox
+
 
 class PathSelector:
     def __init__(self, parent, proj_path = ""):

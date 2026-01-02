@@ -1,17 +1,13 @@
-"""符号替换处理类
-
-负责将IBC代码中的符号替换为规范化名称
-从ibc_funcs.py中提取的符号替换相关功能
-"""
 import re
-from typing import Dict, List, Tuple, Any
-from typedef.ibc_data_types import (
-    IbcBaseAstNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode,
-    SymbolMetadata, ClassMetadata, FunctionMetadata, VariableMetadata,
-    FolderMetadata, FileMetadata
-)
-from libs.symbol_path_helper import SymbolPathHelper
+from typing import Any, Dict, List, Tuple
+
 from libs.symbol_metadata_helper import SymbolMetadataHelper
+from libs.symbol_path_helper import SymbolPathHelper
+from typedef.ibc_data_types import (BehaviorStepNode, ClassMetadata, ClassNode,
+                                    FileMetadata, FolderMetadata,
+                                    FunctionMetadata, FunctionNode,
+                                    IbcBaseAstNode, SymbolMetadata,
+                                    VariableMetadata, VariableNode)
 
 
 class SymbolReplacer:

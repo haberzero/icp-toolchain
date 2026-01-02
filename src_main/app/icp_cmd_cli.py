@@ -1,17 +1,21 @@
 # 信息交换层，当以命令行模式运行时，与外部命令行指令进行数据交互。
 # 使用状态机模式重构，降低代码复杂度，减少嵌套层级
-import sys
 import os
-import time
-import signal
 import platform
+import signal
+import sys
+import time
 from enum import Enum
 from typing import Optional
 
+from run_time_cfg.proj_run_time_cfg import \
+    get_instance as get_proj_run_time_cfg
+from typedef.ai_data_types import ChatApiConfig
 from typedef.cmd_data_types import Colors
-from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
-from .cmd_handler.command_manager import CommandManager
+from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
+
 from .cmd_handler.base_cmd_handler import BaseCmdHandler
+from .cmd_handler.command_manager import CommandManager
 
 # ==================== 状态定义 ====================
 
@@ -84,10 +88,49 @@ class IcpCmdCli:
         print("欢迎使用 ICP - Intent Code Protocol 命令行工具")
         print("当前工作目录:", self.proj_run_time_cfg.get_work_dir_path())
         
+        # 初始化AI Handler
+        self._initialize_ai_handler()
+        
         self._show_status()
         self._show_help()
         
         _current_cli_state = CliState.WAITING_INPUT
+    
+    def _initialize_ai_handler(self):
+        """初始化AI处理器"""
+        print(f"\n{Colors.OKBLUE}正在初始化AI处理器...{Colors.ENDC}")
+        
+        # 检查API配置是否存在
+        if not self.proj_run_time_cfg.check_specific_ai_handler_config_exists('coder_handler'):
+            print(f"{Colors.WARNING}警告: 未找到 coder_handler API配置，AI功能将不可用{Colors.ENDC}")
+            print(f"{Colors.WARNING}请在工作目录的 .icp_proj_config/icp_api_config.json 中配置API{Colors.ENDC}")
+            return
+        
+        # 获取API配置
+        try:
+            api_config = self.proj_run_time_cfg.get_chat_handler_config('coder_handler')
+            
+            # 验证配置有效性
+            if not api_config.is_config_valid():
+                print(f"{Colors.WARNING}警告: coder_handler API配置不完整，AI功能将不可用{Colors.ENDC}")
+                return
+            
+            # 初始化handler
+            success = ICPChatHandler.initialize_handler(
+                handler_key='coder_handler',
+                api_config=api_config,
+                max_retry=3,
+                retry_delay=1.0
+            )
+            
+            if success:
+                print(f"{Colors.OKGREEN}AI处理器初始化成功{Colors.ENDC}")
+            else:
+                print(f"{Colors.FAIL}AI处理器初始化失败，AI功能将不可用{Colors.ENDC}")
+                
+        except Exception as e:
+            print(f"{Colors.FAIL}初始化AI处理器时发生错误: {e}{Colors.ENDC}")
+            print(f"{Colors.WARNING}AI功能将不可用{Colors.ENDC}")
     
     def _run_main_loop(self):
         """运行主循环"""

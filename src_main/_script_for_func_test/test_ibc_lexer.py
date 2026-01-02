@@ -1,10 +1,12 @@
-import sys
 import os
+import sys
 
 # 正确添加src_main目录到sys.path，以便能够导入libs中的模块
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from utils.ibc_analyzer.ibc_lexer import IbcLexer, IbcTokenType, IbcKeywords, LexerError
+from utils.ibc_analyzer.ibc_lexer import (IbcKeywords, IbcLexer, IbcTokenType,
+                                          LexerError)
+
 
 def test_edge_cases():
     """测试边界情况：空文件和只有注释的文件"""

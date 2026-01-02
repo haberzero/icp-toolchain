@@ -1,18 +1,17 @@
 from typing import Dict, List, Optional
 
 from .base_cmd_handler import BaseCmdHandler
-from .cmd_handler_quit import CmdHandlerQuit
-from .cmd_handler_help import CmdHandlerHelp
-from .cmd_handler_para_extract import CmdHandlerParaExtract
-from .cmd_handler_req_analysis import CmdHandlerReqAnalysis
-from .cmd_handler_module_to_dir import CmdHandlerModuleToDir
-from .cmd_handler_dir_file_fill import CmdHandlerDirFileFill
-from .cmd_handler_depend_analysis import CmdHandlerDependAnalysis
-from .cmd_handler_one_file_req import CmdHandlerOneFileReq
-from .cmd_handler_ibc_gen import CmdHandlerIbcGen
-from .cmd_handler_symbol_normalize import CmdHandlerSymbolNormalize
 from .cmd_handler_code_gen import CmdHandlerCodeGen
-
+from .cmd_handler_depend_analysis import CmdHandlerDependAnalysis
+from .cmd_handler_dir_file_fill import CmdHandlerDirFileFill
+from .cmd_handler_help import CmdHandlerHelp
+from .cmd_handler_ibc_gen import CmdHandlerIbcGen
+from .cmd_handler_module_to_dir import CmdHandlerModuleToDir
+from .cmd_handler_one_file_req import CmdHandlerOneFileReq
+from .cmd_handler_para_extract import CmdHandlerParaExtract
+from .cmd_handler_quit import CmdHandlerQuit
+from .cmd_handler_req_analysis import CmdHandlerReqAnalysis
+from .cmd_handler_symbol_normalize import CmdHandlerSymbolNormalize
 
 # TODO: 是否有必要进行倒置？
 # 给CommandManager实现一个register_command()方法，让各个CmdHandler注册自己？随后单独做一个工厂类放一个文件？

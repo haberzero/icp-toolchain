@@ -1,18 +1,11 @@
-"""
-IBC可见符号表构建器
-
-负责构建当前文件的可见符号树。
-调用方根据 dependent_relation 从依赖文件中加载符号表后传入本构建器，
-本构建器负责按可见性过滤并结合proj_root_dict构建成树状结构。
-"""
-import os
 import json
-from typing import Dict, List, Any, Optional, Set, Tuple
+import os
+from typing import Any, Dict, List, Optional, Set, Tuple
+
 from libs.dir_json_funcs import DirJsonFuncs
-from typedef.ibc_data_types import (
-    SymbolMetadata, FolderMetadata, FileMetadata, ClassMetadata, 
-    FunctionMetadata, VariableMetadata
-)
+from typedef.ibc_data_types import (ClassMetadata, FileMetadata,
+                                    FolderMetadata, FunctionMetadata,
+                                    SymbolMetadata, VariableMetadata)
 
 
 class VisibleSymbolBuilder:

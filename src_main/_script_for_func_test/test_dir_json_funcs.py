@@ -1,11 +1,12 @@
 import json
-import sys
 import os
+import sys
 
 # 正确添加src_main目录到sys.path，以便能够导入libs中的模块
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from libs.dir_json_funcs import DirJsonFuncs
+
 
 def test_detect_circular_dependencies():
     """测试循环依赖检测功能"""

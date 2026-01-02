@@ -1,7 +1,8 @@
 import sys
 from typing import List
 
-from typedef.cmd_data_types import CommandInfo, CmdProcStatus
+from typedef.cmd_data_types import CmdProcStatus, CommandInfo
+
 from .base_cmd_handler import BaseCmdHandler
 
 

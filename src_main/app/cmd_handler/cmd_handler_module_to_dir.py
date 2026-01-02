@@ -1,18 +1,20 @@
-import sys, os
 import asyncio
 import json
+import os
 import re
-from typing import List, Dict, Any
+import sys
+from typing import Any, Dict, List
 
-from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
-
-from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
 from data_store.app_data_store import get_instance as get_app_data_store
 from data_store.user_data_store import get_instance as get_user_data_store
-
-from .base_cmd_handler import BaseCmdHandler
+from libs.text_funcs import ChatResponseCleaner
+from run_time_cfg.proj_run_time_cfg import \
+    get_instance as get_proj_run_time_cfg
+from typedef.cmd_data_types import CmdProcStatus, Colors, CommandInfo
 from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
 from utils.issue_recorder import TextIssueRecorder
+
+from .base_cmd_handler import BaseCmdHandler
 
 
 class CmdHandlerModuleToDir(BaseCmdHandler):
@@ -26,6 +28,7 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
             description="根据需求分析结果生成项目目录结构",
             help_text="基于需求分析生成标准化的项目目录结构",
         )
+
         # 路径配置
         proj_run_time_cfg = get_proj_run_time_cfg()
         self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
@@ -33,8 +36,8 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
         self.work_config_dir_path = os.path.join(self.work_dir_path, '.icp_proj_config')
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
 
-        # 使用coder_handler单例
-        self.chat_handler = ICPChatHandler(handler_key='coder_handler')
+        # 获取coder_handler单例
+        self.chat_handler = ICPChatHandler.get_instance(handler_key='coder_handler')
         
         # 系统提示词加载
         app_data_store = get_app_data_store()
@@ -94,7 +97,7 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
                 continue
             
             # 清理代码块标记
-            cleaned_content = ICPChatHandler.clean_code_block_markers(response_content)
+            cleaned_content = ChatResponseCleaner.clean_code_block_markers(response_content)
             
             # 验证响应内容
             is_valid = self._validate_response(cleaned_content)
@@ -321,8 +324,8 @@ class CmdHandlerModuleToDir(BaseCmdHandler):
 
     def _check_ai_handler(self) -> bool:
         """验证AI处理器是否初始化成功"""
-        # 检查共享的ChatInterface是否初始化
-        if not ICPChatHandler.is_initialized():
+        # 检查handler实例是否已初始化
+        if not self.chat_handler.is_initialized():
             print(f"  {Colors.FAIL}错误: ChatInterface 未正确初始化{Colors.ENDC}")
             return False
         

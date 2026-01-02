@@ -1,10 +1,4 @@
-"""
-AI 接口相关的数据类型定义
-包括状态码、配置等
-"""
-
 from dataclasses import dataclass
-
 
 # ====== Chat 相关类型定义 ======
 

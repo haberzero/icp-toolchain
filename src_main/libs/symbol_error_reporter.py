@@ -1,18 +1,8 @@
-"""符号错误报告器
-
-负责统一处理符号引用错误的报告逻辑，包括：
-- 收集候选符号
-- 查找相似符号
-- 生成建议信息
-- 记录未找到错误
-
-迁移说明：
-从 ibc_symbol_ref_resolver.py 中提取的错误报告逻辑，
-包括 _record_symbol_not_found() 方法的功能。
-"""
 import difflib
-from typing import Dict, List, Set, Any
-from typedef.ibc_data_types import SymbolMetadata, ClassMetadata, FunctionMetadata, VariableMetadata
+from typing import Any, Dict, List, Set
+
+from typedef.ibc_data_types import (ClassMetadata, FunctionMetadata,
+                                    SymbolMetadata, VariableMetadata)
 from utils.issue_recorder import IbcIssueRecorder
 
 

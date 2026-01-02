@@ -1,6 +1,7 @@
 from typing import List
 
-from typedef.cmd_data_types import CommandInfo, Colors, CmdProcStatus
+from typedef.cmd_data_types import CmdProcStatus, Colors, CommandInfo
+
 from .base_cmd_handler import BaseCmdHandler
 
 

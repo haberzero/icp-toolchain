@@ -1,20 +1,10 @@
-"""IBC符号提取模块
+from typing import Any, Dict, Optional, Tuple
 
-职责:
-- 从AST中提取符号信息,构建符号树和符号元数据
-- 只处理类、函数、变量节点,忽略Module和BehaviorStep节点
-- 自动推断变量作用域(global/field/local)
-- 注意：构造函数参数提取和ClassMetadata.init_parameters的更新由SymbolRefResolver负责
-
-使用示例:
-    processor = IbcSymbolProcessor(ast_dict)
-    symbols_tree, symbols_metadata = processor.build_symbol_tree()
-"""
-from typing import Dict, Optional, Any, Tuple
-from typedef.ibc_data_types import (
-    IbcBaseAstNode, ClassNode, FunctionNode, VariableNode, ModuleNode, BehaviorStepNode,
-    VisibilityTypes, SymbolMetadata, ClassMetadata, FunctionMetadata, VariableMetadata
-)
+from typedef.ibc_data_types import (BehaviorStepNode, ClassMetadata, ClassNode,
+                                    FunctionMetadata, FunctionNode,
+                                    IbcBaseAstNode, ModuleNode, SymbolMetadata,
+                                    VariableMetadata, VariableNode,
+                                    VisibilityTypes)
 
 
 class IbcSymbolProcessor:

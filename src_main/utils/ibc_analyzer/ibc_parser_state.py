@@ -1,13 +1,13 @@
 from enum import Enum
-from typing import List, Dict, Optional
-from typedef.ibc_data_types import (
-    IbcTokenType, Token, IbcBaseAstNode, AstNodeType, 
-    ModuleNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode,
-    VisibilityTypes
-)
-from typedef.exception_types import IbcParserError
+from typing import Dict, List, Optional
 
+from typedef.exception_types import IbcParserError
+from typedef.ibc_data_types import (AstNodeType, BehaviorStepNode, ClassNode,
+                                    FunctionNode, IbcBaseAstNode, IbcTokenType,
+                                    ModuleNode, Token, VariableNode,
+                                    VisibilityTypes)
 from utils.ibc_analyzer.ibc_parser_uid_generator import IbcParserUidGenerator
+
 
 class ParserState(Enum):
     """解析器状态枚举"""

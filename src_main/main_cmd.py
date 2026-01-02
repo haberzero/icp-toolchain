@@ -1,14 +1,14 @@
-import sys
-import os
 import argparse
-
+import os
+import sys
 import tkinter as tk
-from ui.path_selector import PathSelector
 
-from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
+from app.icp_cmd_cli import IcpCmdCli
 from data_store.app_data_store import get_instance as get_app_data_store
 from data_store.user_data_store import get_instance as get_user_data_store
-from app.icp_cmd_cli import IcpCmdCli
+from run_time_cfg.proj_run_time_cfg import \
+    get_instance as get_proj_run_time_cfg
+from ui.path_selector import PathSelector
 
 
 # CMD 模式启动

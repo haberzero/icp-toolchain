@@ -1,4 +1,5 @@
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 from typedef.issue_recorder_types import IbcIssue
 
 

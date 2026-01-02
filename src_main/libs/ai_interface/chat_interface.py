@@ -1,8 +1,9 @@
-from typing import Callable, Optional
-from openai import AsyncOpenAI
 import asyncio
+from typing import Callable, Optional
 
+from openai import AsyncOpenAI
 from typedef.ai_data_types import ChatApiConfig, ChatResponseStatus
+
 
 class ChatInterface:
     """Chat接口类，使用标准OpenAI API，仅提供基础功能封装"""

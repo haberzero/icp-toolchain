@@ -13,18 +13,18 @@
 7. 边界情况：外部库符号在行为描述中使用
 """
 
-import sys
 import os
+import sys
 
 # 添加项目根目录到系统路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
+from typedef.cmd_data_types import Colors
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 from utils.ibc_analyzer.ibc_symbol_ref_resolver import SymbolRefResolver
 from utils.ibc_analyzer.ibc_visible_symbol_builder import VisibleSymbolBuilder
 from utils.issue_recorder import IbcIssueRecorder
-from typedef.cmd_data_types import Colors
 
 
 def run_test(test_name: str, ibc_content: str, proj_root_dict: dict, external_library_dependencies: dict, expected_issues: int = 0) -> bool:

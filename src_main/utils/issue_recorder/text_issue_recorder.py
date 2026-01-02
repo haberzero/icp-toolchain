@@ -1,6 +1,7 @@
 from typing import List, Optional
-from typedef.issue_recorder_types import TextIssue
+
 from typedef.cmd_data_types import Colors
+from typedef.issue_recorder_types import TextIssue
 
 
 class TextIssueRecorder:

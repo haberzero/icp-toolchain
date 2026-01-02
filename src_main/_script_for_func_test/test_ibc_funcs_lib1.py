@@ -5,16 +5,18 @@
 验证这些工具函数的正确性和稳定性
 """
 
-import sys
-import os
 import hashlib
+import os
+import sys
 
 # 添加项目根目录到Python路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
 from libs.ibc_funcs import IbcFuncs
-from typedef.ibc_data_types import ClassMetadata, FunctionMetadata, VariableMetadata, FolderMetadata, FileMetadata
+from typedef.ibc_data_types import (ClassMetadata, FileMetadata,
+                                    FolderMetadata, FunctionMetadata,
+                                    VariableMetadata)
 
 
 def create_test_meta(meta_type: str, **kwargs):

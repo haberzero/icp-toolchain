@@ -1,6 +1,6 @@
-import os
 import json
-from typing import List, Dict, Optional, Union, Set, Any
+import os
+from typing import Any, Dict, List, Optional, Set, Union
 
 
 class DirJsonFuncs:

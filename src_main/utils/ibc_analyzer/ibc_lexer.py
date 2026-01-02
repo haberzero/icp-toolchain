@@ -1,7 +1,8 @@
 from typing import List
 
-from typedef.ibc_data_types import IbcKeywords, IbcTokenType, Token
 from typedef.exception_types import LexerError
+from typedef.ibc_data_types import IbcKeywords, IbcTokenType, Token
+
 
 class IbcLexer:
     """Intent Behavior Code 词法分析器"""

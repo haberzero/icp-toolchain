@@ -6,20 +6,19 @@
 3. 符号表序列化/反序列化（基于元数据）
 4. 符号规范化流程（基于元数据）
 """
-import sys
-import os
 import json
-from typing import Dict, Any
+import os
+import sys
+from typing import Any, Dict
 
 # 添加src_main目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from typedef.ibc_data_types import (ClassMetadata, FunctionMetadata,
+                                    VariableMetadata, VisibilityTypes)
 from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
 from utils.ibc_analyzer.ibc_symbol_processor import IbcSymbolProcessor
-from typedef.ibc_data_types import (
-    VisibilityTypes, ClassMetadata, FunctionMetadata, VariableMetadata
-)
 
 # ==================== 数据类型基础测试 ======================================
 

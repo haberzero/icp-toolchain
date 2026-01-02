@@ -81,20 +81,20 @@ VisibleSymbolBuilder.build_visible_symbol_tree() 返回两个字典：
 
 注意：在可见符号树中不会出现 visibility="private" 的节点（已被过滤）
 """
-import sys
-import os
 import json
+import os
+import sys
 
 # 添加项目根目录到路径
 test_env_root = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(test_env_root, '..', '..'))
 sys.path.insert(0, project_root)
 
+from data_store.ibc_data_store import get_instance as get_ibc_data_store
+from typedef.cmd_data_types import Colors
 # 导入真实的工程模块
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 from utils.ibc_analyzer.ibc_visible_symbol_builder import VisibleSymbolBuilder
-from data_store.ibc_data_store import get_instance as get_ibc_data_store
-from typedef.cmd_data_types import Colors
 
 
 class SymbolBuilderWorkflowTest:

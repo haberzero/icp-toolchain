@@ -8,21 +8,21 @@ IBC数据管理器测试
 4. 符号表数据管理
 5. 真实IBC代码的AST持久化测试
 """
-import sys
 import os
-from typing import Dict, Any
+import sys
+from typing import Any, Dict
 
 # 添加src_main到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from typedef.ibc_data_types import (
-    IbcBaseAstNode, AstNodeType, ModuleNode, ClassNode, 
-    FunctionNode, VariableNode, BehaviorStepNode,
-    VisibilityTypes, ClassMetadata, FunctionMetadata, VariableMetadata
-)
 from data_store.ibc_data_store import get_instance as get_ibc_data_store
-from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 from libs.ibc_funcs import IbcFuncs
+from typedef.ibc_data_types import (AstNodeType, BehaviorStepNode,
+                                    ClassMetadata, ClassNode, FunctionMetadata,
+                                    FunctionNode, IbcBaseAstNode, ModuleNode,
+                                    VariableMetadata, VariableNode,
+                                    VisibilityTypes)
+from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 
 
 def setup_test_environment():

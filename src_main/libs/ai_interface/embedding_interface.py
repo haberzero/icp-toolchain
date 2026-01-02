@@ -1,6 +1,6 @@
 from typing import List, Optional
-from openai import OpenAI
 
+from openai import OpenAI
 from typedef.ai_data_types import EmbeddingApiConfig, EmbeddingStatus
 
 

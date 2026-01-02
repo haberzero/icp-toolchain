@@ -5,18 +5,18 @@
 2. 类同时有同名构造函数和__init__ - 应该报错
 3. 构造函数参数应该被正确提取到metadata
 """
-import sys
 import os
+import sys
 
 # 添加src_main目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from typedef.ibc_data_types import ClassMetadata
 from utils.ibc_analyzer.ibc_lexer import IbcLexer
 from utils.ibc_analyzer.ibc_parser import IbcParser
 from utils.ibc_analyzer.ibc_symbol_processor import IbcSymbolProcessor
 from utils.ibc_analyzer.ibc_symbol_ref_resolver import SymbolRefResolver
 from utils.issue_recorder import IbcIssueRecorder
-from typedef.ibc_data_types import ClassMetadata
 
 
 def test_no_constructor_allowed():

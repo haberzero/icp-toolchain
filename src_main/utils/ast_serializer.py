@@ -1,17 +1,8 @@
-"""AST序列化管理器
+from typing import Any, Dict
 
-统一管理AST节点的序列化和反序列化操作。
-
-设计说明：
-- 从各AST节点类的to_dict/from_dict方法中提取序列化逻辑
-- 提供统一的序列化接口
-- 简化IbcDataStore中的AST处理代码
-"""
-from typing import Dict, Any
-from typedef.ibc_data_types import (
-    IbcBaseAstNode, ModuleNode, ClassNode, FunctionNode,
-    VariableNode, BehaviorStepNode, AstNodeType
-)
+from typedef.ibc_data_types import (AstNodeType, BehaviorStepNode, ClassNode,
+                                    FunctionNode, IbcBaseAstNode, ModuleNode,
+                                    VariableNode)
 
 
 class AstSerializer:

@@ -1,18 +1,18 @@
 # 截至目前，此文件暂时完全vibe生成，仍未进行深入review，而是通过ai提供的测试脚本来验证功能/输出结果，确认可用。
 # 具体测试脚本请参考：test_ibc_symbol_ref.py
 
-import re
 import difflib
-from enum import Enum
+import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Optional, Set, Any
+from enum import Enum
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-from typedef.ibc_data_types import (
-    IbcBaseAstNode, ModuleNode, FunctionNode, VariableNode, 
-    BehaviorStepNode, ClassNode, VisibilityTypes,
-    SymbolMetadata, ClassMetadata, FunctionMetadata, VariableMetadata,
-    FolderMetadata, FileMetadata
-)
+from typedef.ibc_data_types import (BehaviorStepNode, ClassMetadata, ClassNode,
+                                    FileMetadata, FolderMetadata,
+                                    FunctionMetadata, FunctionNode,
+                                    IbcBaseAstNode, ModuleNode, SymbolMetadata,
+                                    VariableMetadata, VariableNode,
+                                    VisibilityTypes)
 from utils.issue_recorder import IbcIssueRecorder
 
 

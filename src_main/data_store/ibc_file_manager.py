@@ -1,11 +1,9 @@
-"""IBC文件操作管理器 - 专门处理IBC代码文件和AST文件的读写操作"""
 import json
 import os
-from typing import Dict, Any
-from typedef.ibc_data_types import (
-    IbcBaseAstNode, ModuleNode, ClassNode, 
-    FunctionNode, VariableNode, BehaviorStepNode
-)
+from typing import Any, Dict
+
+from typedef.ibc_data_types import (BehaviorStepNode, ClassNode, FunctionNode,
+                                    IbcBaseAstNode, ModuleNode, VariableNode)
 
 
 class IbcFileManager:

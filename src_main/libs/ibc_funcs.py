@@ -1,19 +1,21 @@
-import os
-import json
-import re
 import hashlib
-from typing import List, Dict, Optional, Union, Set, Any, Tuple
+import json
+import os
+import re
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-from typedef.exception_types import SymbolNotFoundError
-from typedef.ibc_data_types import (
-    IbcBaseAstNode, AstNodeType, ClassNode, FunctionNode, VariableNode, BehaviorStepNode,
-    SymbolMetadata, ClassMetadata, FunctionMetadata, VariableMetadata, FolderMetadata, FileMetadata
-)
-
+from libs.symbol_metadata_helper import SymbolMetadataHelper
 # 导入新的辅助类
 from libs.symbol_path_helper import SymbolPathHelper
-from libs.symbol_metadata_helper import SymbolMetadataHelper
 from libs.symbol_replacer import SymbolReplacer
+from typedef.exception_types import SymbolNotFoundError
+from typedef.ibc_data_types import (AstNodeType, BehaviorStepNode,
+                                    ClassMetadata, ClassNode, FileMetadata,
+                                    FolderMetadata, FunctionMetadata,
+                                    FunctionNode, IbcBaseAstNode,
+                                    SymbolMetadata, VariableMetadata,
+                                    VariableNode)
+
 
 class IbcFuncs:
     """IBC代码处理相关的静态工具函数集合

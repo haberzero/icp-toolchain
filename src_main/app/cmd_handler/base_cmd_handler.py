@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 
-from typedef.cmd_data_types import CommandInfo, CmdProcStatus
-
+from typedef.cmd_data_types import CmdProcStatus, CommandInfo
 
 # TODO: 命令操作的编写时间比较早，错误处理都不完善，后面需要进行精细调整和重构
 

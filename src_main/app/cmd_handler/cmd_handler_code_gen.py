@@ -1,22 +1,24 @@
-import os
 import asyncio
 import json
-from typing import Dict, Any, List
+import os
+from typing import Any, Dict, List
 
-from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
-from typedef.ibc_data_types import ClassMetadata, FunctionMetadata, VariableMetadata
-
-from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
 from data_store.app_data_store import get_instance as get_app_data_store
 from data_store.ibc_data_store import get_instance as get_ibc_data_store
-
-from .base_cmd_handler import BaseCmdHandler
-from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.ibc_funcs import IbcFuncs
 from libs.symbol_metadata_helper import SymbolMetadataHelper
-from utils.issue_recorder import TextIssueRecorder
+from libs.text_funcs import ChatResponseCleaner
+from run_time_cfg.proj_run_time_cfg import \
+    get_instance as get_proj_run_time_cfg
+from typedef.cmd_data_types import CmdProcStatus, Colors, CommandInfo
+from typedef.ibc_data_types import (ClassMetadata, FunctionMetadata,
+                                    VariableMetadata)
 from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
+from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
+from utils.issue_recorder import TextIssueRecorder
+
+from .base_cmd_handler import BaseCmdHandler
 
 
 class CmdHandlerCodeGen(BaseCmdHandler):
@@ -37,8 +39,8 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         self.work_data_dir_path = os.path.join(self.work_dir_path, 'icp_proj_data')
         self.work_icp_config_file_path = os.path.join(self.work_dir_path, '.icp_proj_config', 'icp_config.json')
 
-        # 获取coder_handler实例（单例）
-        self.chat_handler = ICPChatHandler(handler_key='coder_handler')
+        # 获取coder_handler单例
+        self.chat_handler = ICPChatHandler.get_instance(handler_key='coder_handler')
 
         # 系统提示词加载
         app_data_store = get_app_data_store()
@@ -344,7 +346,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
                 continue
             
             # 清理代码块标记
-            cleaned_code = ICPChatHandler.clean_code_block_markers(response_content)
+            cleaned_code = ChatResponseCleaner.clean_code_block_markers(response_content)
             
             # 验证生成的代码
             is_valid = self._validate_generated_code(cleaned_code, icp_json_file_path)
@@ -675,8 +677,8 @@ class CmdHandlerCodeGen(BaseCmdHandler):
     
     def _check_ai_handler(self) -> bool:
         """验证AI处理器是否初始化成功"""
-        # 检查共享的ChatInterface是否初始化
-        if not ICPChatHandler.is_initialized():
+        # 检查handler实例是否已初始化
+        if not self.chat_handler.is_initialized():
             print(f"  {Colors.FAIL}错误: ChatInterface 未正确初始化{Colors.ENDC}")
             return False
         

@@ -1,7 +1,7 @@
-from enum import Enum
 import enum
-from typing import List, Dict, Any, Optional, Union
-from dataclasses import dataclass, field, fields, asdict
+from dataclasses import asdict, dataclass, field, fields
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
 
 
 # ====== Lexer 模块 数据类型定义 ======

@@ -1,15 +1,10 @@
-"""符号元数据处理辅助类
-
-负责处理符号元数据的更新、验证、统计等操作
-从ibc_funcs.py中提取的符号元数据相关功能
-"""
-import json
 import hashlib
-from typing import Dict, List, Any, Optional
-from typedef.ibc_data_types import (
-    SymbolMetadata, ClassMetadata, FunctionMetadata, VariableMetadata,
-    FolderMetadata, FileMetadata
-)
+import json
+from typing import Any, Dict, List, Optional
+
+from typedef.ibc_data_types import (ClassMetadata, FileMetadata,
+                                    FolderMetadata, FunctionMetadata,
+                                    SymbolMetadata, VariableMetadata)
 
 
 class SymbolMetadataHelper:

@@ -1,7 +1,7 @@
-"""符号表管理器 - 专门处理符号树和符号元数据的存储与加载"""
 import json
 import os
-from typing import Dict, Any, List, Tuple
+from typing import Any, Dict, List, Tuple
+
 from typedef.ibc_data_types import SymbolMetadata, create_symbol_metadata
 
 
@@ -217,7 +217,7 @@ class SymbolTableManager:
             ValueError: 符号数据不存在或符号路径无效
         """
         from libs.ibc_funcs import IbcFuncs
-        
+
         # 加载符号数据
         symbols_tree, symbols_metadata = SymbolTableManager.load_symbols(symbols_path, file_name)
         if not symbols_metadata:
@@ -269,7 +269,7 @@ class SymbolTableManager:
             >>> print(f"更新了 {count} 个符号")
         """
         from libs.ibc_funcs import IbcFuncs
-        
+
         # 加载符号数据
         symbols_tree, symbols_metadata = SymbolTableManager.load_symbols(symbols_path, file_name)
         if not symbols_metadata:

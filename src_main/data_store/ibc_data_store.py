@@ -1,19 +1,10 @@
-"""IBC数据管理器 - 统一管理IBC相关数据的持久化存储
-
-本类作为facade模式，为保持向后兼容，委托给专门的管理器类：
-- IbcFileManager: 处理IBC文件和AST文件的读写操作
-- SymbolTableManager: 处理符号表的存储与加载
-- VerifyDataManager: 处理校验数据的管理
-"""
-from typing import Dict, Any, List, Tuple
-from typedef.ibc_data_types import (
-    IbcBaseAstNode, SymbolMetadata
-)
+from typing import Any, Dict, List, Tuple
 
 # 导入专门的管理器类
 from data_store.ibc_file_manager import IbcFileManager
 from data_store.symbol_table_manager import SymbolTableManager
 from data_store.verify_data_manager import VerifyDataManager
+from typedef.ibc_data_types import IbcBaseAstNode, SymbolMetadata
 
 
 class IbcDataStore:

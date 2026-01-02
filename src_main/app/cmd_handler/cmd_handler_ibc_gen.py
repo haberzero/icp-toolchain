@@ -1,28 +1,28 @@
-import os
 import asyncio
 import json
-from typing import List, Dict, Any, Optional
+import os
+from typing import Any, Dict, List, Optional
 
-from typedef.cmd_data_types import CommandInfo, CmdProcStatus, Colors
-from typedef.ibc_data_types import (
-    IbcBaseAstNode, AstNodeType, ClassNode, FunctionNode, VariableNode, 
-    VisibilityTypes
-)
-
-from run_time_cfg.proj_run_time_cfg import get_instance as get_proj_run_time_cfg
 from data_store.app_data_store import get_instance as get_app_data_store
-from data_store.user_data_store import get_instance as get_user_data_store
 from data_store.ibc_data_store import get_instance as get_ibc_data_store
-
-from .base_cmd_handler import BaseCmdHandler
-from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
-from utils.icp_ai_handler.retry_prompt_helper import RetryPromptHelper
-from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
-from utils.ibc_analyzer.ibc_visible_symbol_builder import VisibleSymbolBuilder
-from utils.ibc_analyzer.ibc_symbol_ref_resolver import SymbolRefResolver
+from data_store.user_data_store import get_instance as get_user_data_store
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.ibc_funcs import IbcFuncs
+from libs.text_funcs import ChatResponseCleaner
+from run_time_cfg.proj_run_time_cfg import \
+    get_instance as get_proj_run_time_cfg
+from typedef.cmd_data_types import CmdProcStatus, Colors, CommandInfo
+from typedef.ibc_data_types import (AstNodeType, ClassNode, FunctionNode,
+                                    IbcBaseAstNode, VariableNode,
+                                    VisibilityTypes)
+from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
+from utils.ibc_analyzer.ibc_symbol_ref_resolver import SymbolRefResolver
+from utils.ibc_analyzer.ibc_visible_symbol_builder import VisibleSymbolBuilder
+from utils.icp_ai_handler.icp_chat_handler import ICPChatHandler
+from utils.icp_ai_handler.retry_prompt_helper import RetryPromptHelper
 from utils.issue_recorder import IbcIssueRecorder
+
+from .base_cmd_handler import BaseCmdHandler
 
 
 class CmdHandlerIbcGen(BaseCmdHandler):
@@ -45,8 +45,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         self.work_api_config_file_path = os.path.join(self.work_config_dir_path, 'icp_api_config.json')
         self.work_icp_config_file_path = os.path.join(self.work_config_dir_path, 'icp_config.json')
 
-        # 使用coder_handler单例
-        self.chat_handler = ICPChatHandler(handler_key='coder_handler')
+        # 获取coder_handler单例
+        self.chat_handler = ICPChatHandler.get_instance(handler_key='coder_handler')
 
         # 系统提示词加载
         app_data_store = get_app_data_store()
@@ -343,7 +343,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                     continue
 
                 # 清理代码块标记
-                ibc_content = ICPChatHandler.clean_code_block_markers(response_content)
+                ibc_content = ChatResponseCleaner.clean_code_block_markers(response_content)
 
                 # 解析IBC代码生成AST
                 print(f"    {Colors.OKBLUE}正在分析IBC代码生成AST...{Colors.ENDC}")
@@ -392,7 +392,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                     print(f"    {Colors.WARNING}警告: 生成修复建议失败，将进行下一次尝试{Colors.ENDC}")
                     continue
 
-                fix_suggestion = ICPChatHandler.clean_code_block_markers(fix_suggestion_raw)
+                fix_suggestion = ChatResponseCleaner.clean_code_block_markers(fix_suggestion_raw)
 
                 # 第二步：根据修复建议重新组织用户提示词，发起修复请求
                 self.user_prompt_retry_part = self._build_user_prompt_retry_part(fix_suggestion)
@@ -419,7 +419,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 self.last_user_prompt_used = current_user_prompt
 
                 # 清理代码块标记
-                ibc_content = ICPChatHandler.clean_code_block_markers(response_content)
+                ibc_content = ChatResponseCleaner.clean_code_block_markers(response_content)
 
                 # 解析IBC代码生成AST
                 print(f"    {Colors.OKBLUE}正在分析修复后的IBC代码生成AST...{Colors.ENDC}")
@@ -958,8 +958,8 @@ class CmdHandlerIbcGen(BaseCmdHandler):
     
     def _check_ai_handler(self) -> bool:
         """验证AI处理器是否初始化成功"""
-        # 检查共享的ChatInterface是否初始化
-        if not ICPChatHandler.is_initialized():
+        # 检查handler实例是否已初始化
+        if not self.chat_handler.is_initialized():
             print(f"  {Colors.FAIL}错误: ChatInterface 未正确初始化{Colors.ENDC}")
             return False
         
