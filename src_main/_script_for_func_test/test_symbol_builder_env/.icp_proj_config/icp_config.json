@@ -1,5 +1,5 @@
 {
-  "file_system_mapping": {
+  "path_mapping": {
     "ibc_dir_name": "src_ibc",
     "staging_dir_name": "src_staging",
     "target_dir_name": "src_target"

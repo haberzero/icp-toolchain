@@ -3,7 +3,7 @@
     "icp_toolchain_version": "0.0.1",
     "target_language": "Python",
     "target_suffix": ".py",
-    "file_system_mapping": {
+    "path_mapping": {
         "staging_layer_dir": "src_staging",
         "behavioral_layer_dir": "src_ibc",
         "target_layer_dir": "src_main",
