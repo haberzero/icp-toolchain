@@ -3,10 +3,12 @@ import json
 import os
 from typing import Any, Dict, List
 
-from data_store.sys_prompt_manager import get_instance as get_sys_prompt_manager
-from data_store.user_prompt_manager import get_instance as get_user_prompt_manager
 from data_store.app_data_store import get_instance as get_app_data_store
 from data_store.ibc_data_store import get_instance as get_ibc_data_store
+from data_store.sys_prompt_manager import \
+    get_instance as get_sys_prompt_manager
+from data_store.user_prompt_manager import \
+    get_instance as get_user_prompt_manager
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.ibc_funcs import IbcFuncs
 from libs.symbol_metadata_helper import SymbolMetadataHelper

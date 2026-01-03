@@ -1,8 +1,10 @@
 from typing import Dict, Optional
-from typedef.cmd_data_types import Colors
+
 from flow.flow_context import FlowContext
 from flow.flow_engine import FlowState
 from libs.text_funcs import ChatResponseCleaner
+from typedef.cmd_data_types import Colors
+
 
 class LLMGenerateState(FlowState):
     """

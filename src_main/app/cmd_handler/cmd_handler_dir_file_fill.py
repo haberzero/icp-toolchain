@@ -5,9 +5,11 @@ import re
 import sys
 from typing import Any, Dict, List
 
-from data_store.sys_prompt_manager import get_instance as get_sys_prompt_manager
-from data_store.user_prompt_manager import get_instance as get_user_prompt_manager
+from data_store.sys_prompt_manager import \
+    get_instance as get_sys_prompt_manager
 from data_store.user_data_store import get_instance as get_user_data_store
+from data_store.user_prompt_manager import \
+    get_instance as get_user_prompt_manager
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.text_funcs import ChatResponseCleaner
 from run_time_cfg.proj_run_time_cfg import \

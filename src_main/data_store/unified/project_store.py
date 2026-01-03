@@ -2,14 +2,13 @@ import json
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-from typedef.ibc_data_types import (
-    IbcBaseAstNode, 
-    SymbolMetadata, 
-    create_symbol_metadata,
-    ModuleNode, ClassNode, FunctionNode, VariableNode, BehaviorStepNode
-)
 from libs.dir_json_funcs import DirJsonFuncs
+from typedef.ibc_data_types import (BehaviorStepNode, ClassNode, FunctionNode,
+                                    IbcBaseAstNode, ModuleNode, SymbolMetadata,
+                                    VariableNode, create_symbol_metadata)
+
 from .path_manager import get_instance as get_path_manager
+
 
 class ProjectStore:
     """

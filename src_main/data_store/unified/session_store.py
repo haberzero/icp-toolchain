@@ -1,5 +1,6 @@
 from typing import Any, Dict
 
+
 class SessionStore:
     """
     Manages transient session data.

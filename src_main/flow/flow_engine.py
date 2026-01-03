@@ -1,8 +1,10 @@
+import traceback
 from abc import ABC, abstractmethod
 from typing import Dict, Optional
-from typedef.cmd_data_types import Colors
+
 from flow.flow_context import FlowContext
-import traceback
+from typedef.cmd_data_types import Colors
+
 
 class FlowState(ABC):
     """Base class for all flow states."""

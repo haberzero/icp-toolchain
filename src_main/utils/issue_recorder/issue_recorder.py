@@ -1,10 +1,10 @@
-from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union
-from dataclasses import dataclass, field
 import json
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Union
 
 from typedef.cmd_data_types import Colors
-from typedef.issue_recorder_types import IssueBase, SimpleTextIssue, CodeIssue
+from typedef.issue_recorder_types import CodeIssue, IssueBase, SimpleTextIssue
 
 
 class IssueRecorder:
