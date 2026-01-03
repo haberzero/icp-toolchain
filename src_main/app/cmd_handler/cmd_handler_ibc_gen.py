@@ -377,11 +377,17 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 )
 
                 # 第一步：根据上一次提示词 / 输出 / 问题列表，生成修复建议
-                analysis_sys_prompt, analysis_user_prompt = RetryPromptHelper.build_retry_analysis_prompts(
-                    previous_sys_prompt=self.last_sys_prompt_used,
-                    previous_user_prompt=self.last_user_prompt_used,
-                    previous_content=self.last_generated_ibc_content,
-                    issues_text=issues_text,
+                analysis_sys_prompt = self.sys_prompt_manager.get_prompt("retry_analysis_sys_prompt")
+                
+                analysis_mapping = {
+                    "PREVIOUS_SYS_PROMPT_PLACEHOLDER": self.last_sys_prompt_used or "(无)",
+                    "PREVIOUS_USER_PROMPT_PLACEHOLDER": self.last_user_prompt_used or "(无)",
+                    "PREVIOUS_CONTENT_PLACEHOLDER": self.last_generated_ibc_content or "(无输出)",
+                    "ISSUES_LIST_PLACEHOLDER": issues_text or "(未检测到问题描述)"
+                }
+                analysis_user_prompt = self.user_prompt_manager.build_prompt_from_template(
+                    "retry_analysis_prompt_template", 
+                    analysis_mapping
                 )
 
                 fix_suggestion_raw, success = asyncio.run(self.chat_handler.get_role_response(
