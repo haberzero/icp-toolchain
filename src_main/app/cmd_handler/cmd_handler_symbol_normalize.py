@@ -3,7 +3,8 @@ import json
 import os
 from typing import Any, Dict, List
 
-from data_store.app_data_store import get_instance as get_app_data_store
+from app.sys_prompt_manager import get_instance as get_sys_prompt_manager
+from app.user_prompt_manager import get_instance as get_user_prompt_manager
 from data_store.ibc_data_store import get_instance as get_ibc_data_store
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.ibc_funcs import IbcFuncs
@@ -32,6 +33,9 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             help_text="调用AI对符号进行规范化命名",
         )
         
+        # 关联系统提示词角色名
+        self.role_name = "8_symbol_normalizer"
+        
         # 路径配置
         proj_run_time_cfg = get_proj_run_time_cfg()
         self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
@@ -43,12 +47,10 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         # 获取coder_handler单例
         self.chat_handler = ICPChatInsts.get_instance(handler_key='coder_handler')
 
-        # 系统提示词加载
-        app_data_store = get_app_data_store()
-        self.role_name = "8_symbol_normalizer"
-        self.sys_prompt = app_data_store.get_sys_prompt_by_name(self.role_name)
-        self.sys_prompt_retry_part = app_data_store.get_sys_prompt_by_name('retry_sys_prompt')
-        
+        # 提示词管理器
+        self.sys_prompt_manager = get_sys_prompt_manager()
+        self.user_prompt_manager = get_user_prompt_manager()
+
         # 用户提示词在命令运行过程中，经由模板以及过程变量进行构建
         self.user_prompt_base = ""  # 用户提示词基础部分
         self.user_prompt_retry_part = ""  # 用户提示词重试部分
@@ -357,11 +359,17 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             # 根据是否是重试来组合提示词
             if attempt == 0:
                 # 第一次尝试,使用基础提示词
-                current_sys_prompt = self.role_name
+                base_sys_prompt = self.sys_prompt_manager.get_prompt(self.role_name)
+                current_sys_prompt = base_sys_prompt
                 current_user_prompt = self.user_prompt_base
             else:
                 # 重试时,添加重试部分
-                current_sys_prompt = self.role_name + "\n\n" + self.sys_prompt_retry_part
+                base_sys_prompt = self.sys_prompt_manager.get_prompt(self.role_name)
+                retry_sys_prompt = self.sys_prompt_manager.get_prompt('retry_sys_prompt')
+                if retry_sys_prompt:
+                    current_sys_prompt = base_sys_prompt + "\n\n" + retry_sys_prompt
+                else:
+                    current_sys_prompt = base_sys_prompt
                 current_user_prompt = self.user_prompt_base + "\n\n" + self.user_prompt_retry_part
             
             # 调用AI进行符号规范化
@@ -540,13 +548,10 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             return ""
         
         # 读取提示词模板
-        app_data_store = get_app_data_store()
-        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'symbol_normalizer_user.md')
-        try:
-            with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
-                user_prompt_template_str = f.read()
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+        app_user_prompt_file_path = os.path.join(self.work_dir_path, 'icp_proj_data')  # 占位，路径不再使用
+        user_prompt_template_str = self.user_prompt_manager.get_template('symbol_normalizer_user')
+        if not user_prompt_template_str:
+            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败{Colors.ENDC}")
             return ""
         
         # 获取目标语言
@@ -556,10 +561,19 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         symbols_text = self._format_symbols_for_prompt(symbols_to_normalize)
         
         # 填充占位符
-        user_prompt_str = user_prompt_template_str.replace('TARGET_LANGUAGE_PLACEHOLDER', target_language)
-        user_prompt_str = user_prompt_str.replace('FILE_PATH_PLACEHOLDER', icp_json_file_path)
-        user_prompt_str = user_prompt_str.replace('CONTEXT_INFO_PLACEHOLDER', ibc_content)
-        user_prompt_str = user_prompt_str.replace('AST_SYMBOLS_PLACEHOLDER', symbols_text)
+        placeholder_mapping = {
+            'TARGET_LANGUAGE_PLACEHOLDER': target_language,
+            'FILE_PATH_PLACEHOLDER': icp_json_file_path,
+            'CONTEXT_INFO_PLACEHOLDER': ibc_content,
+            'AST_SYMBOLS_PLACEHOLDER': symbols_text,
+        }
+        user_prompt_str = self.user_prompt_manager.build_prompt_from_template(
+            template_name='symbol_normalizer_user',
+            placeholder_mapping=placeholder_mapping,
+        )
+        if not user_prompt_str:
+            print(f"  {Colors.FAIL}错误: 符号规范化用户提示词模板构建失败{Colors.ENDC}")
+            return ""
         
         return user_prompt_str
 
@@ -616,26 +630,24 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
         if not self.issue_recorder.has_issues() or not self.last_generated_content:
             return ""
         
-        # 读取重试提示词模板
-        app_data_store = get_app_data_store()
-        retry_template_path = os.path.join(app_data_store.get_user_prompt_dir(), 'retry_prompt_template.md')
-        
-        try:
-            with open(retry_template_path, 'r', encoding='utf-8') as f:
-                retry_template = f.read()
-        except Exception as e:
-            print(f"{Colors.FAIL}错误: 读取重试模板失败: {e}{Colors.ENDC}")
-            return ""
-        
         # 格式化上一次生成的内容（用json代码块包裹）
         formatted_content = f"```json\n{self.last_generated_content}\n```"
         
         # 格式化问题列表
         issues_list = "\n".join([f"- {issue.issue_content}" for issue in self.issue_recorder.get_issues()])
         
-        # 替换占位符
-        retry_prompt = retry_template.replace('PREVIOUS_CONTENT_PLACEHOLDER', formatted_content)
-        retry_prompt = retry_prompt.replace('ISSUES_LIST_PLACEHOLDER', issues_list)
+        # 使用用户提示词模板管理器构建重试提示词
+        placeholder_mapping = {
+            'PREVIOUS_CONTENT_PLACEHOLDER': formatted_content,
+            'ISSUES_LIST_PLACEHOLDER': issues_list,
+        }
+        retry_prompt = self.user_prompt_manager.build_prompt_from_template(
+            template_name='retry_prompt_template',
+            placeholder_mapping=placeholder_mapping,
+        )
+        if not retry_prompt:
+            print(f"{Colors.FAIL}错误: 重试提示词模板构建失败{Colors.ENDC}")
+            return ""
         
         return retry_prompt
 
@@ -700,8 +712,22 @@ class CmdHandlerSymbolNormalize(BaseCmdHandler):
             return False
         
         # 检查系统提示词是否加载
-        if not self.sys_prompt:
+        if not self.sys_prompt_manager.has_prompt(self.role_name):
             print(f"  {Colors.FAIL}错误: 系统提示词 {self.role_name} 未加载{Colors.ENDC}")
             return False
-            
+        
+        if not self.sys_prompt_manager.has_prompt('retry_sys_prompt'):
+            print(f"  {Colors.FAIL}错误: 重试系统提示词 retry_sys_prompt 未加载{Colors.ENDC}")
+            return False
+        
+        # 检查用户提示词模板
+        required_templates = [
+            'symbol_normalizer_user',
+            'retry_prompt_template',
+        ]
+        for template_name in required_templates:
+            if not self.user_prompt_manager.has_template(template_name):
+                print(f"  {Colors.FAIL}错误: 用户提示词模板 {template_name} 未加载{Colors.ENDC}")
+                return False
+        
         return True

@@ -3,7 +3,8 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
-from data_store.app_data_store import get_instance as get_app_data_store
+from app.sys_prompt_manager import get_instance as get_sys_prompt_manager
+from app.user_prompt_manager import get_instance as get_user_prompt_manager
 from data_store.ibc_data_store import get_instance as get_ibc_data_store
 from data_store.user_data_store import get_instance as get_user_data_store
 from libs.dir_json_funcs import DirJsonFuncs
@@ -48,11 +49,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         # 获取coder_handler单例
         self.chat_handler = ICPChatInsts.get_instance(handler_key='coder_handler')
 
-        # 系统提示词加载
-        app_data_store = get_app_data_store()
+        # 提示词管理器
+        self.sys_prompt_manager = get_sys_prompt_manager()
+        self.user_prompt_manager = get_user_prompt_manager()
         self.role_name = "7_intent_behavior_code_gen"
-        self.sys_prompt = app_data_store.get_sys_prompt_by_name(self.role_name)
-        self.sys_prompt_retry_part = app_data_store.get_sys_prompt_by_name('retry_sys_prompt')
         
         # 用户提示词在命令运行过程中，经由模板以及过程变量进行构建
         self.user_prompt_base = ""  # 用户提示词基础部分
@@ -319,9 +319,12 @@ class CmdHandlerIbcGen(BaseCmdHandler):
         for attempt in range(max_attempts):
             print(f"    {Colors.OKBLUE}正在进行第 {attempt + 1}/{max_attempts} 次尝试...{Colors.ENDC}")
 
+            base_sys_prompt = self.sys_prompt_manager.get_prompt(self.role_name)
+            retry_sys_prompt = self.sys_prompt_manager.get_prompt('retry_sys_prompt')
+
             if attempt == 0:
                 # 第一次尝试：直接使用基础提示词
-                current_sys_prompt = self.sys_prompt
+                current_sys_prompt = base_sys_prompt
                 current_user_prompt = self.user_prompt_base
 
                 # 记录本次调用使用的提示词
@@ -383,7 +386,7 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 )
 
                 fix_suggestion_raw, success = asyncio.run(self.chat_handler.get_role_response(
-                    role_name=self.role_ibc_gen,
+                    role_name=self.role_name,
                     sys_prompt=analysis_sys_prompt,
                     user_prompt=analysis_user_prompt,
                 ))
@@ -397,7 +400,10 @@ class CmdHandlerIbcGen(BaseCmdHandler):
                 # 第二步：根据修复建议重新组织用户提示词，发起修复请求
                 self.user_prompt_retry_part = self._build_user_prompt_retry_part(fix_suggestion)
 
-                current_sys_prompt = self.sys_prompt + "\n\n" + self.sys_prompt_retry_part
+                if retry_sys_prompt:
+                    current_sys_prompt = base_sys_prompt + "\n\n" + retry_sys_prompt
+                else:
+                    current_sys_prompt = base_sys_prompt
                 current_user_prompt = self.user_prompt_base + "\n\n" + self.user_prompt_retry_part
 
                 # 将用户提示词保存到stage文件夹以便查看生成过程
@@ -592,15 +598,11 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             return ""
         
         # 读取用户提示词模板
-        app_data_store = get_app_data_store()
-        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'intent_code_behavior_gen_user.md')
-        try:
-            with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
-                user_prompt_template_str = f.read()
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+        user_prompt_template_str = self.user_prompt_manager.get_template('intent_code_behavior_gen_user')
+        if not user_prompt_template_str:
+            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败{Colors.ENDC}")
             return ""
-            
+        
         # 填充占位符
         user_prompt_str = user_prompt_template_str
         # user_prompt_str = user_prompt_str.replace('USER_REQUIREMENTS_PLACEHOLDER', self.user_requirements_str)
@@ -964,8 +966,21 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             return False
         
         # 检查系统提示词是否加载
-        if not self.sys_prompt:
+        if not self.sys_prompt_manager.has_prompt(self.role_name):
             print(f"  {Colors.FAIL}错误: 系统提示词 {self.role_name} 未加载{Colors.ENDC}")
+            return False
+        
+        if not self.sys_prompt_manager.has_prompt('retry_sys_prompt'):
+            print(f"  {Colors.FAIL}错误: 重试系统提示词 retry_sys_prompt 未加载{Colors.ENDC}")
+            return False
+        
+        # 检查用户提示词模板
+        if not self.user_prompt_manager.has_template('intent_code_behavior_gen_user'):
+            print(f"  {Colors.FAIL}错误: 用户提示词模板 intent_code_behavior_gen_user 未加载{Colors.ENDC}")
+            return False
+        
+        if not self.user_prompt_manager.has_template('retry_prompt_template'):
+            print(f"  {Colors.FAIL}错误: 用户提示词模板 retry_prompt_template 未加载{Colors.ENDC}")
             return False
             
         return True

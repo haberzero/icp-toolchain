@@ -8,15 +8,14 @@ import time
 from enum import Enum
 from typing import Optional
 
+from app.sys_prompt_manager import get_instance as get_sys_prompt_manager
+from app.user_prompt_manager import get_instance as get_user_prompt_manager
 from data_store.app_data_store import get_instance as get_app_data_store
 from run_time_cfg.proj_run_time_cfg import \
     get_instance as get_proj_run_time_cfg
 from typedef.ai_data_types import ChatApiConfig
 from typedef.cmd_data_types import Colors
 from utils.icp_ai_utils.icp_chat_inst import ICPChatInsts
-
-from app.sys_prompt_manager import get_instance as get_sys_prompt_manager
-from app.user_prompt_manager import get_instance as get_user_prompt_manager
 
 from .cmd_handler.base_cmd_handler import BaseCmdHandler
 from .cmd_handler.command_manager import CommandManager

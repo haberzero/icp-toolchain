@@ -4,7 +4,8 @@ import os
 import sys
 from typing import Any, Dict, List
 
-from data_store.app_data_store import get_instance as get_app_data_store
+from app.sys_prompt_manager import get_instance as get_sys_prompt_manager
+from app.user_prompt_manager import get_instance as get_user_prompt_manager
 from data_store.user_data_store import get_instance as get_user_data_store
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.text_funcs import ChatResponseCleaner
@@ -31,6 +32,9 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             help_text="根据目录结构分析并生成项目依赖关系",
         )
 
+        # 关联系统提示词角色名
+        self.role_name = "5_depend_analyzer"
+
         # 路径配置
         proj_run_time_cfg = get_proj_run_time_cfg()
         self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
@@ -41,11 +45,9 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         # 获取coder_handler单例
         self.chat_handler = ICPChatInsts.get_instance(handler_key='coder_handler')
 
-        # 系统提示词加载
-        app_data_store = get_app_data_store()
-        self.role_name = "5_depend_analyzer"
-        self.sys_prompt = app_data_store.get_sys_prompt_by_name(self.role_name)
-        self.sys_prompt_retry_part = app_data_store.get_sys_prompt_by_name('retry_sys_prompt')
+        # 提示词管理器
+        self.sys_prompt_manager = get_sys_prompt_manager()
+        self.user_prompt_manager = get_user_prompt_manager()
 
         # 用户提示词在命令运行过程中，经由模板以及过程变量进行构建
         self.user_prompt_base = ""  # 用户提示词基础部分
@@ -84,9 +86,12 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         for attempt in range(max_attempts):
             print(f"{self.role_name}正在进行第 {attempt + 1} 次尝试...")
         
+            base_sys_prompt = self.sys_prompt_manager.get_prompt(self.role_name)
+            retry_sys_prompt = self.sys_prompt_manager.get_prompt('retry_sys_prompt')
+        
             if attempt == 0:
                 # 第一次尝试：直接使用基础提示词
-                current_sys_prompt = self.sys_prompt
+                current_sys_prompt = base_sys_prompt
                 current_user_prompt = self.user_prompt_base
         
                 response_content, success = asyncio.run(self.chat_handler.get_role_response(
@@ -147,7 +152,10 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
                 # 第二步：根据修复建议重新组织用户提示词，发起修复请求
                 self.user_prompt_retry_part = self._build_user_prompt_retry_part(fix_suggestion)
         
-                current_sys_prompt = self.sys_prompt + "\n\n" + self.sys_prompt_retry_part
+                if retry_sys_prompt:
+                    current_sys_prompt = base_sys_prompt + "\n\n" + retry_sys_prompt
+                else:
+                    current_sys_prompt = base_sys_prompt
                 current_user_prompt = self.user_prompt_base + "\n\n" + self.user_prompt_retry_part
         
                 response_content, success = asyncio.run(self.chat_handler.get_role_response(
@@ -236,25 +244,19 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         file_paths = DirJsonFuncs.get_all_file_paths(self.old_json_dict.get("proj_root_dict", {}))
         file_paths_text = "\n".join(file_paths)
 
-        # 读取用户提示词模板
-        app_data_store = get_app_data_store()
-        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'depend_analysis_user.md')
-        try:
-            with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
-                user_prompt_template_str = f.read()
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+        # 使用用户提示词模板管理器构建基础用户提示词
+        placeholder_mapping = {
+            'IMPLEMENTATION_PLAN_PLACEHOLDER': implementation_plan_str,
+            'JSON_STRUCTURE_PLACEHOLDER': dir_with_files_str,
+            'FILE_PATHS_PLACEHOLDER': file_paths_text,
+        }
+        user_prompt_str = self.user_prompt_manager.build_prompt_from_template(
+            template_name='depend_analysis_user',
+            placeholder_mapping=placeholder_mapping,
+        )
+        if not user_prompt_str:
+            print(f"  {Colors.FAIL}错误: 依赖分析用户提示词模板构建失败{Colors.ENDC}")
             return ""
-        
-        if not user_prompt_template_str:
-            print(f"  {Colors.FAIL}错误: 用户提示词模板内容为空{Colors.ENDC}")
-            return ""
-            
-        # 填充占位符
-        user_prompt_str = user_prompt_template_str
-        user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', implementation_plan_str)
-        user_prompt_str = user_prompt_str.replace('JSON_STRUCTURE_PLACEHOLDER', dir_with_files_str)
-        user_prompt_str = user_prompt_str.replace('FILE_PATHS_PLACEHOLDER', file_paths_text)
         
         return user_prompt_str
     
@@ -376,8 +378,17 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
             return False
         
         # 检查系统提示词是否加载
-        if not self.sys_prompt:
+        if not self.sys_prompt_manager.has_prompt(self.role_name):
             print(f"  {Colors.FAIL}错误: 系统提示词 {self.role_name} 未加载{Colors.ENDC}")
+            return False
+
+        if not self.sys_prompt_manager.has_prompt('retry_sys_prompt'):
+            print(f"  {Colors.FAIL}错误: 重试系统提示词 retry_sys_prompt 未加载{Colors.ENDC}")
+            return False
+
+        # 检查依赖分析用户提示词模板
+        if not self.user_prompt_manager.has_template('depend_analysis_user'):
+            print(f"  {Colors.FAIL}错误: 用户提示词模板 depend_analysis_user 未加载{Colors.ENDC}")
             return False
             
         return True

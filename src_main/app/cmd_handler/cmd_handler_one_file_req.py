@@ -4,7 +4,8 @@ import os
 import sys
 from typing import Any, Dict, List
 
-from data_store.app_data_store import get_instance as get_app_data_store
+from app.sys_prompt_manager import get_instance as get_sys_prompt_manager
+from app.user_prompt_manager import get_instance as get_user_prompt_manager
 from data_store.user_data_store import get_instance as get_user_data_store
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.text_funcs import ChatResponseCleaner
@@ -28,6 +29,8 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             description="在文件系统中创建src_staging目录结构以及one_file_req.txt文件",
             help_text="根据已有的dir_content.json文件的内容在src_staging目录结构下创建单文件的编程需求描述, 为IBC的生成做准备",
         )
+        # 关联系统提示词角色名
+        self.role_name = "6_one_file_req_gen"
         # 路径配置
         proj_run_time_cfg = get_proj_run_time_cfg()
         self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
@@ -38,12 +41,10 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         # 获取coder_handler单例
         self.chat_handler = ICPChatInsts.get_instance(handler_key='coder_handler')
 
-        # 系统提示词加载
-        app_data_store = get_app_data_store()
-        self.role_name = "6_one_file_req_gen"
-        self.sys_prompt = app_data_store.get_sys_prompt_by_name(self.role_name)
-        self.sys_prompt_retry_part = app_data_store.get_sys_prompt_by_name('retry_sys_prompt')
-        
+        # 提示词管理器
+        self.sys_prompt_manager = get_sys_prompt_manager()
+        self.user_prompt_manager = get_user_prompt_manager()
+
         # 用户提示词在命令运行过程中，经由模板以及过程变量进行构建
         self.user_prompt_base = ""  # 用户提示词基础部分
         self.user_prompt_retry_part = ""  # 用户提示词重试部分
@@ -182,14 +183,20 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         for attempt in range(max_attempts):
             print(f"    {self.role_name}正在进行第 {attempt + 1} 次尝试...")
             
+            base_sys_prompt = self.sys_prompt_manager.get_prompt(self.role_name)
+            retry_sys_prompt = self.sys_prompt_manager.get_prompt('retry_sys_prompt')
+            
             # 根据是否是重试来组合提示词
             if attempt == 0:
                 # 第一次尝试,使用基础提示词
-                current_sys_prompt = self.sys_prompt
+                current_sys_prompt = base_sys_prompt
                 current_user_prompt = self.user_prompt_base
             else:
                 # 重试时,添加重试部分
-                current_sys_prompt = self.sys_prompt + "\n\n" + self.sys_prompt_retry_part
+                if retry_sys_prompt:
+                    current_sys_prompt = base_sys_prompt + "\n\n" + retry_sys_prompt
+                else:
+                    current_sys_prompt = base_sys_prompt
                 current_user_prompt = self.user_prompt_base + "\n\n" + self.user_prompt_retry_part
             
             # 调用AI生成单文件需求描述
@@ -286,27 +293,23 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             
             accumulated_related_desc.append(formatted)
 
-        # 读取用户提示词模板
-        app_data_store = get_app_data_store()
-        app_user_prompt_file_path = os.path.join(app_data_store.get_user_prompt_dir(), 'one_file_req_gen_user.md')
-        try:
-            with open(app_user_prompt_file_path, 'r', encoding='utf-8') as f:
-                user_prompt_template_str = f.read()
-        except Exception as e:
-            print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败: {e}{Colors.ENDC}")
+        # 读取用户提示词模板并填充占位符
+        app_file_desc_text = '\n\n'.join(accumulated_related_desc) if accumulated_related_desc else '暂无依赖的文件需求描述'
+        placeholder_mapping = {
+            'USER_REQUIREMENTS_PLACEHOLDER': self.user_requirements_str,
+            'IMPLEMENTATION_PLAN_PLACEHOLDER': self.implementation_plan_str,
+            'FILE_DESCRIPTION_PLACEHOLDER': file_description,
+            'RELATED_FILE_DESCRIPTIONS_PLACEHOLDER': app_file_desc_text,
+            'EXTERNAL_LIB_ALLOWLIST_PLACEHOLDER': self.allowed_libs_text,
+            'MODULE_DEPENDENCY_SUGGESTIONS_PLACEHOLDER': self.module_suggestions_text,
+        }
+        user_prompt_str = self.user_prompt_manager.build_prompt_from_template(
+            template_name='one_file_req_gen_user',
+            placeholder_mapping=placeholder_mapping,
+        )
+        if not user_prompt_str:
+            print(f"  {Colors.FAIL}错误: 单文件需求用户提示词模板构建失败{Colors.ENDC}")
             return ""
-        
-        # 填充与文件描述相关的占位符
-        user_prompt_str = user_prompt_template_str
-        user_prompt_str = user_prompt_str.replace('USER_REQUIREMENTS_PLACEHOLDER', self.user_requirements_str)
-        user_prompt_str = user_prompt_str.replace('IMPLEMENTATION_PLAN_PLACEHOLDER', self.implementation_plan_str)
-        user_prompt_str = user_prompt_str.replace('FILE_DESCRIPTION_PLACEHOLDER', file_description)
-        user_prompt_str = user_prompt_str.replace('RELATED_FILE_DESCRIPTIONS_PLACEHOLDER', 
-                                        '\n\n'.join(accumulated_related_desc) if accumulated_related_desc else '暂无依赖的文件需求描述')
-        
-        # 填充与第三方库相关的占位符
-        user_prompt_str = user_prompt_str.replace('EXTERNAL_LIB_ALLOWLIST_PLACEHOLDER', self.allowed_libs_text)
-        user_prompt_str = user_prompt_str.replace('MODULE_DEPENDENCY_SUGGESTIONS_PLACEHOLDER', self.module_suggestions_text)
         
         return user_prompt_str
     
@@ -319,26 +322,24 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
         if not self.issue_recorder.has_issues() or not self.last_generated_content:
             return ""
         
-        # 读取重试提示词模板
-        app_data_store = get_app_data_store()
-        retry_template_path = os.path.join(app_data_store.get_user_prompt_dir(), 'retry_prompt_template.md')
-        
-        try:
-            with open(retry_template_path, 'r', encoding='utf-8') as f:
-                retry_template = f.read()
-        except Exception as e:
-            print(f"{Colors.FAIL}错误: 读取重试模板失败: {e}{Colors.ENDC}")
-            return ""
-        
         # 格式化上一次生成的内容(不用代码块包裹)
         formatted_content = self.last_generated_content
         
         # 格式化问题列表
         issues_list = "\n".join([f"- {issue.issue_content}" for issue in self.issue_recorder.get_issues()])
         
-        # 替换占位符
-        retry_prompt = retry_template.replace('PREVIOUS_CONTENT_PLACEHOLDER', formatted_content)
-        retry_prompt = retry_prompt.replace('ISSUES_LIST_PLACEHOLDER', issues_list)
+        # 使用用户提示词模板管理器构建重试提示词
+        placeholder_mapping = {
+            'PREVIOUS_CONTENT_PLACEHOLDER': formatted_content,
+            'ISSUES_LIST_PLACEHOLDER': issues_list,
+        }
+        retry_prompt = self.user_prompt_manager.build_prompt_from_template(
+            template_name='retry_prompt_template',
+            placeholder_mapping=placeholder_mapping,
+        )
+        if not retry_prompt:
+            print(f"{Colors.FAIL}错误: 重试提示词模板构建失败{Colors.ENDC}")
+            return ""
         
         return retry_prompt
 
@@ -483,8 +484,22 @@ class CmdHandlerOneFileReq(BaseCmdHandler):
             return False
         
         # 检查系统提示词是否加载
-        if not self.sys_prompt:
+        if not self.sys_prompt_manager.has_prompt(self.role_name):
             print(f"  {Colors.FAIL}错误: 系统提示词 {self.role_name} 未加载{Colors.ENDC}")
             return False
+
+        if not self.sys_prompt_manager.has_prompt('retry_sys_prompt'):
+            print(f"  {Colors.FAIL}错误: 重试系统提示词 retry_sys_prompt 未加载{Colors.ENDC}")
+            return False
+
+        # 检查用户提示词模板
+        required_templates = [
+            'one_file_req_gen_user',
+            'retry_prompt_template',
+        ]
+        for template_name in required_templates:
+            if not self.user_prompt_manager.has_template(template_name):
+                print(f"  {Colors.FAIL}错误: 用户提示词模板 {template_name} 未加载{Colors.ENDC}")
+                return False
             
         return True

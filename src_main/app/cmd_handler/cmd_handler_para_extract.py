@@ -4,7 +4,7 @@ import os
 import sys
 from typing import Tuple
 
-from data_store.app_data_store import get_instance as get_app_data_store
+from app.sys_prompt_manager import get_instance as get_sys_prompt_manager
 from data_store.user_data_store import get_instance as get_user_data_store
 from libs.text_funcs import ChatResponseCleaner
 from run_time_cfg.proj_run_time_cfg import \
@@ -27,6 +27,9 @@ class CmdHandlerParaExtract(BaseCmdHandler):
             description="从用户初始编程需求中提取参数",
             help_text="对用户需求进行解析，并且从中提取出关键的参数，供后续步骤使用",
         )
+        # 关联系统提示词角色名
+        self.role_name = "1_param_extractor"
+
         # 路径配置
         proj_run_time_cfg = get_proj_run_time_cfg()
         self.work_dir_path = proj_run_time_cfg.get_work_dir_path()
@@ -36,12 +39,10 @@ class CmdHandlerParaExtract(BaseCmdHandler):
 
         # 获取coder_handler单例
         self.chat_handler = ICPChatInsts.get_instance(handler_key='coder_handler')
-        
-        # 系统提示词加载
-        app_data_store = get_app_data_store()
-        self.role_name = "1_param_extractor"
-        self.sys_prompt = app_data_store.get_sys_prompt_by_name(self.role_name)
-        
+
+        # 提示词管理器
+        self.sys_prompt_manager = get_sys_prompt_manager()
+
         # issue recorder
         self.issue_recorder = TextIssueRecorder()
         self.last_error_msg = ""  # 记录最近一次验证失败的原因
@@ -64,6 +65,8 @@ class CmdHandlerParaExtract(BaseCmdHandler):
         for attempt in range(max_attempts):
             print(f"{self.role_name}正在进行第 {attempt + 1}/{max_attempts} 次尝试...")
 
+            base_sys_prompt = self.sys_prompt_manager.get_prompt(self.role_name)
+
             # 根据是否是重试来构造用户提示词
             current_user_prompt = requirement_content
             if attempt > 0 and self.last_error_msg:
@@ -76,7 +79,7 @@ class CmdHandlerParaExtract(BaseCmdHandler):
 
             response_content, success = asyncio.run(self.chat_handler.get_role_response(
                 role_name=self.role_name,
-                sys_prompt=self.sys_prompt,
+                sys_prompt=base_sys_prompt,
                 user_prompt=current_user_prompt
             ))
 
@@ -223,9 +226,9 @@ class CmdHandlerParaExtract(BaseCmdHandler):
         if not self.chat_handler.is_initialized():
             print(f"  {Colors.FAIL}错误: ChatInterface 未正确初始化{Colors.ENDC}")
             return False
-        
+
         # 检查系统提示词是否加载
-        if not self.sys_prompt:
+        if not self.sys_prompt_manager.has_prompt(self.role_name):
             print(f"  {Colors.FAIL}错误: 系统提示词 {self.role_name} 未加载{Colors.ENDC}")
             return False
             

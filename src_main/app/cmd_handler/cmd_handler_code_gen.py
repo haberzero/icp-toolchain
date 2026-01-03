@@ -3,6 +3,8 @@ import json
 import os
 from typing import Any, Dict, List
 
+from app.sys_prompt_manager import get_instance as get_sys_prompt_manager
+from app.user_prompt_manager import get_instance as get_user_prompt_manager
 from data_store.app_data_store import get_instance as get_app_data_store
 from data_store.ibc_data_store import get_instance as get_ibc_data_store
 from libs.dir_json_funcs import DirJsonFuncs
@@ -42,11 +44,10 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         # 获取coder_handler单例
         self.chat_handler = ICPChatInsts.get_instance(handler_key='coder_handler')
 
-        # 系统提示词加载
-        app_data_store = get_app_data_store()
+        # 提示词管理器
+        self.sys_prompt_manager = get_sys_prompt_manager()
+        self.user_prompt_manager = get_user_prompt_manager()
         self.role_code_gen = "9_target_code_gen"
-        self.sys_prompt_code_gen = app_data_store.get_sys_prompt_by_name(self.role_code_gen)
-        self.sys_prompt_retry_part = app_data_store.get_sys_prompt_by_name('retry_sys_prompt')
         
         # 用户提示词在命令运行过程中，经由模板以及过程变量进行构建
         self.user_prompt_base = ""  # 用户提示词基础部分
@@ -324,14 +325,20 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         for attempt in range(max_attempts):
             print(f"    {Colors.OKBLUE}正在进行第 {attempt + 1}/{max_attempts} 次尝试...{Colors.ENDC}")
             
+            base_sys_prompt = self.sys_prompt_manager.get_prompt(self.role_code_gen)
+            retry_sys_prompt = self.sys_prompt_manager.get_prompt('retry_sys_prompt')
+            
             # 根据是否是重试来组合提示词
             if attempt == 0:
                 # 第一次尝试,使用基础提示词
-                current_sys_prompt = self.sys_prompt_code_gen
+                current_sys_prompt = base_sys_prompt
                 current_user_prompt = self.user_prompt_base
             else:
                 # 重试时,添加重试部分
-                current_sys_prompt = self.sys_prompt_code_gen + "\n\n" + self.sys_prompt_retry_part
+                if retry_sys_prompt:
+                    current_sys_prompt = base_sys_prompt + "\n\n" + retry_sys_prompt
+                else:
+                    current_sys_prompt = base_sys_prompt
                 current_user_prompt = self.user_prompt_base + "\n\n" + self.user_prompt_retry_part
             
             # 调用AI进行代码生成
@@ -462,8 +469,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
         dependency_target_code = self._build_dependency_target_code(icp_json_file_path)
         
         # 读取提示词模板
-        app_data_store = get_app_data_store()
-        user_prompt_template_str = app_data_store.get_user_prompt_by_name('target_code_gen_user')
+        user_prompt_template_str = self.user_prompt_manager.get_template('target_code_gen_user')
         if not user_prompt_template_str:
             print(f"  {Colors.FAIL}错误: 读取用户提示词模板失败{Colors.ENDC}")
             return ""
@@ -586,8 +592,7 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             return ""
         
         # 读取重试提示词模板
-        app_data_store = get_app_data_store()
-        retry_template = app_data_store.get_user_prompt_by_name('retry_prompt_template')
+        retry_template = self.user_prompt_manager.get_template('retry_prompt_template')
         if not retry_template:
             print(f"{Colors.FAIL}错误: 读取重试模板失败{Colors.ENDC}")
             return ""
@@ -683,8 +688,21 @@ class CmdHandlerCodeGen(BaseCmdHandler):
             return False
         
         # 检查系统提示词是否加载
-        if not self.sys_prompt_code_gen:
+        if not self.sys_prompt_manager.has_prompt(self.role_code_gen):
             print(f"  {Colors.FAIL}错误: 系统提示词 {self.role_code_gen} 未加载{Colors.ENDC}")
+            return False
+
+        if not self.sys_prompt_manager.has_prompt('retry_sys_prompt'):
+            print(f"  {Colors.FAIL}错误: 重试系统提示词 retry_sys_prompt 未加载{Colors.ENDC}")
+            return False
+
+        # 检查用户提示词模板
+        if not self.user_prompt_manager.has_template('target_code_gen_user'):
+            print(f"  {Colors.FAIL}错误: 用户提示词模板 target_code_gen_user 未加载{Colors.ENDC}")
+            return False
+
+        if not self.user_prompt_manager.has_template('retry_prompt_template'):
+            print(f"  {Colors.FAIL}错误: 用户提示词模板 retry_prompt_template 未加载{Colors.ENDC}")
             return False
             
         return True
