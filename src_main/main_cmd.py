@@ -43,7 +43,8 @@ def main():
             root.destroy()
             return
 
-    if not proj_run_time_cfg.set_work_dir_path(work_dir):
+    proj_run_time_cfg.set_work_dir_path(work_dir)
+    if not os.path.exists(work_dir):
         print(f"错误: 无法设置工作目录为 {work_dir}")
         if root:
             root.destroy()
