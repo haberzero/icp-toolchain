@@ -3,8 +3,8 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
-from app.sys_prompt_manager import get_instance as get_sys_prompt_manager
-from app.user_prompt_manager import get_instance as get_user_prompt_manager
+from data_store.sys_prompt_manager import get_instance as get_sys_prompt_manager
+from data_store.user_prompt_manager import get_instance as get_user_prompt_manager
 from data_store.ibc_data_store import get_instance as get_ibc_data_store
 from data_store.user_data_store import get_instance as get_user_data_store
 from libs.dir_json_funcs import DirJsonFuncs
@@ -20,7 +20,6 @@ from utils.ibc_analyzer.ibc_analyzer import analyze_ibc_content
 from utils.ibc_analyzer.ibc_symbol_ref_resolver import SymbolRefResolver
 from utils.ibc_analyzer.ibc_visible_symbol_builder import VisibleSymbolBuilder
 from utils.icp_ai_utils.icp_chat_inst import ICPChatInsts
-from utils.icp_ai_utils.retry_prompt_helper import RetryPromptHelper
 from utils.issue_recorder import IbcIssueRecorder
 
 from .base_cmd_handler import BaseCmdHandler
@@ -867,13 +866,20 @@ class CmdHandlerIbcGen(BaseCmdHandler):
             [f"- 第{issue.line_num}行: {issue.message} (代码: {issue.line_content})" for issue in ibc_issues]
         )
         
-        # 交给通用的 RetryPromptHelper 构建「输出修复」阶段的附加提示词
-        retry_prompt = RetryPromptHelper.build_fix_user_prompt_part(
-            previous_content=self.last_generated_ibc_content,
-            issues_text=issues_text,
-            fix_suggestion=fix_suggestion,
-            code_block_type="intent_behavior_code",
-        )
+        # 替代 RetryPromptHelper.build_fix_user_prompt_part
+        # 格式化上一次生成的内容
+        formatted_content = f"```intent_behavior_code\n{self.last_generated_ibc_content}\n```"
+        
+        retry_mapping = {
+            "PREVIOUS_CONTENT_PLACEHOLDER": formatted_content,
+            "ISSUES_LIST_PLACEHOLDER": issues_text or ""
+        }
+        
+        retry_prompt = self.user_prompt_manager.build_prompt_from_template("retry_prompt_template", retry_mapping)
+        
+        # 追加修复建议
+        retry_prompt += "\n\n【修复建议】\n"
+        retry_prompt += (fix_suggestion or "(无修复建议)")
         
         return retry_prompt
 

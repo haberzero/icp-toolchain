@@ -4,8 +4,8 @@ import os
 import sys
 from typing import Any, Dict, List
 
-from app.sys_prompt_manager import get_instance as get_sys_prompt_manager
-from app.user_prompt_manager import get_instance as get_user_prompt_manager
+from data_store.sys_prompt_manager import get_instance as get_sys_prompt_manager
+from data_store.user_prompt_manager import get_instance as get_user_prompt_manager
 from data_store.user_data_store import get_instance as get_user_data_store
 from libs.dir_json_funcs import DirJsonFuncs
 from libs.text_funcs import ChatResponseCleaner
@@ -14,7 +14,6 @@ from run_time_cfg.proj_run_time_cfg import \
 from typedef.ai_data_types import ChatApiConfig
 from typedef.cmd_data_types import CmdProcStatus, Colors, CommandInfo
 from utils.icp_ai_utils.icp_chat_inst import ICPChatInsts
-from utils.icp_ai_utils.retry_prompt_helper import RetryPromptHelper
 from utils.issue_recorder import TextIssueRecorder
 
 from .base_cmd_handler import BaseCmdHandler
@@ -130,13 +129,20 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
                 issues_list = "\n".join([f"- {issue.issue_content}" for issue in self.issue_recorder.get_issues()])
         
                 # 第一步：根据上一次提示词 / 输出 / 问题列表，生成修复建议
-                analysis_sys_prompt, analysis_user_prompt = RetryPromptHelper.build_retry_analysis_prompts(
-                    previous_sys_prompt=self.last_sys_prompt_used,
-                    previous_user_prompt=self.last_user_prompt_used,
-                    previous_content=self.last_generated_content,
-                    issues_text=issues_list,
+                # 替代 RetryPromptHelper.build_retry_analysis_prompts
+                analysis_sys_prompt = self.sys_prompt_manager.get_prompt("retry_analysis_sys_prompt")
+                
+                analysis_mapping = {
+                    "PREVIOUS_SYS_PROMPT_PLACEHOLDER": self.last_sys_prompt_used or "(无)",
+                    "PREVIOUS_USER_PROMPT_PLACEHOLDER": self.last_user_prompt_used or "(无)",
+                    "PREVIOUS_CONTENT_PLACEHOLDER": self.last_generated_content or "(无输出)",
+                    "ISSUES_LIST_PLACEHOLDER": issues_list or "(未检测到问题描述)"
+                }
+                analysis_user_prompt = self.user_prompt_manager.build_prompt_from_template(
+                    "retry_analysis_prompt_template", 
+                    analysis_mapping
                 )
-        
+
                 fix_suggestion_raw, success = asyncio.run(self.chat_handler.get_role_response(
                     role_name=self.role_name,
                     sys_prompt=analysis_sys_prompt,
@@ -275,13 +281,20 @@ class CmdHandlerDependAnalysis(BaseCmdHandler):
         # 将 issue_recorder 中的问题整理为文本列表
         issues_list = "\n".join([f"- {issue.issue_content}" for issue in self.issue_recorder.get_issues()])
         
-        # 交给通用的 RetryPromptHelper 构建「输出修复」阶段的附加提示词
-        retry_prompt = RetryPromptHelper.build_fix_user_prompt_part(
-            previous_content=self.last_generated_content,
-            issues_text=issues_list,
-            fix_suggestion=fix_suggestion,
-            code_block_type="json",
-        )
+        # 替代 RetryPromptHelper.build_fix_user_prompt_part
+        # 格式化上一次生成的内容
+        formatted_content = f"```json\n{self.last_generated_content}\n```"
+        
+        retry_mapping = {
+            "PREVIOUS_CONTENT_PLACEHOLDER": formatted_content,
+            "ISSUES_LIST_PLACEHOLDER": issues_list or ""
+        }
+        
+        retry_prompt = self.user_prompt_manager.build_prompt_from_template("retry_prompt_template", retry_mapping)
+        
+        # 追加修复建议
+        retry_prompt += "\n\n【修复建议】\n"
+        retry_prompt += (fix_suggestion or "(无修复建议)")
         
         return retry_prompt
 

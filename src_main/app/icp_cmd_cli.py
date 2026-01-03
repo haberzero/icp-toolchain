@@ -8,8 +8,8 @@ import time
 from enum import Enum
 from typing import Optional
 
-from app.sys_prompt_manager import get_instance as get_sys_prompt_manager
-from app.user_prompt_manager import get_instance as get_user_prompt_manager
+from data_store.sys_prompt_manager import get_instance as get_sys_prompt_manager
+from data_store.user_prompt_manager import get_instance as get_user_prompt_manager
 from data_store.app_data_store import get_instance as get_app_data_store
 from run_time_cfg.proj_run_time_cfg import \
     get_instance as get_proj_run_time_cfg
